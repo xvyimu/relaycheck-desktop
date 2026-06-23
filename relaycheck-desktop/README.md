@@ -4,6 +4,15 @@ RelayCheck Desktop is the official implementation in this workspace. It is a loc
 
 Official display name: `RelayCheck Desktop v1.0`.
 
+## Core Documents
+
+| Document | Purpose |
+|----------|---------|
+| `PRODUCT_RESEARCH_AND_REQUIREMENTS.md` | Online research synthesis, product boundary, detailed requirements, roadmap, and risk register. |
+| `DESIGN_SYSTEM.md` | Control Room visual direction and UI rules. |
+| `PROMPT_CHECKLIST.md` | Execution checklist derived from the original optimization prompt. |
+| `AGENT_HANDOFF.md` | Resume packet and operational handoff notes for future agents. |
+
 ## Runtime
 
 | Layer | Technology |
