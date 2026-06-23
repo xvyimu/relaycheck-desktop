@@ -1,0 +1,49 @@
+# Local agent/runtime state
+.agents/
+.claude/
+.npm-cache/
+
+# Secrets and environment
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Runtime data and databases
+data/
+**/data/
+*.db
+*.sqlite
+*.sqlite3
+*.db-*
+
+# Dependencies and caches
+node_modules/
+**/node_modules/
+.vite/
+**/.vite/
+
+# Local recovery archives
+**/_archive/
+
+# Build/test output
+dist/
+**/dist/
+build/
+**/build/
+coverage/
+**/coverage/
+*.tsbuildinfo
+.pipeline/test-results/
+**/.pipeline/test-results/
+
+# Logs and local OS artifacts
+*.log
+*.tmp
+*.bak
+Thumbs.db
+.DS_Store
+nul

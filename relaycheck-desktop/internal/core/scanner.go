@@ -1,0 +1,577 @@
+package core
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+)
+
+var defaultScanTargets = []string{
+	"http://127.0.0.1:3000",
+	"http://localhost:3000",
+	"http://127.0.0.1:3001",
+	"http://localhost:3001",
+	"http://127.0.0.1:8080",
+	"http://localhost:8080",
+	"http://127.0.0.1:9999",
+	"http://localhost:9999",
+	"http://127.0.0.1:3010",
+	"http://localhost:3010",
+}
+
+var localProbePaths = []string{
+	"/", "/login", "/api/status", "/api/user/self", "/api/user/token", "/api/user/models",
+	"/api/channel/", "/api/channel/models", "/api/token/",
+}
+var upstreamProbePaths = []string{
+	"/", "/login", "/v1/models", "/v1/usage",
+	"/api/status", "/api/user/self", "/api/user/token", "/api/user/models", "/api/user/quota",
+	"/api/user/login", "/api/auth/login", "/api/login", "/api/user/register",
+	"/api/user/checkin", "/api/checkin", "/api/user/check_in",
+	"/api/pricing", "/api/option", "/api/group", "/api/redemption",
+	"/api/channel/", "/api/channel/models", "/api/token/", "/api/log/token",
+	"/api/v1/status", "/api/v1/user", "/api/v1/user/profile", "/api/v1/tokens", "/api/v1/accounts",
+}
+
+type ProbeResult struct {
+	BaseURL        string   `json:"baseUrl"`
+	Status         string   `json:"status"`
+	Reachable      bool     `json:"reachable"`
+	MatchedSignals []string `json:"matchedSignals"`
+	Score          int      `json:"score"`
+}
+
+type UpstreamDetection struct {
+	BaseURL             string   `json:"baseUrl"`
+	HomepageURL         string   `json:"homepageUrl"`
+	LoginURL            string   `json:"loginUrl"`
+	Kind                string   `json:"kind"`
+	HealthStatus        string   `json:"healthStatus"`
+	DetectionConfidence float64  `json:"detectionConfidence"`
+	SupportsCheckin     bool     `json:"supportsCheckin"`
+	SupportsBalance     bool     `json:"supportsBalance"`
+	SupportsModels      bool     `json:"supportsModels"`
+	SupportsPricing     bool     `json:"supportsPricing"`
+	MatchedSignals      []string `json:"matchedSignals"`
+}
+
+type probeSpec struct {
+	Method    string
+	Path      string
+	StatusKey string
+	Checkin   bool
+}
+
+type probeFetchResult struct {
+	Spec   probeSpec
+	Status int
+	Body   string
+}
+
+func (a *App) handleScanLocalNewAPI(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodPost) {
+		return
+	}
+	results := a.scanTargets(r.Context(), defaultScanTargets)
+	found := []ProbeResult{}
+	for _, result := range results {
+		if result.Reachable && result.Score > 0 {
+			found = append(found, result)
+			_, _ = a.db.ExecContext(r.Context(), `
+				INSERT INTO local_newapi_instances (id, name, base_url, detected_from, status, last_scanned_at, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				ON CONFLICT(base_url) DO UPDATE SET status=excluded.status, last_scanned_at=excluded.last_scanned_at, updated_at=excluded.updated_at
+			`, newID(), "Local "+hostLabel(result.BaseURL), result.BaseURL, "port_scan", result.Status, now(), now(), now())
+		}
+	}
+	if len(found) > 0 {
+		a.notify("local_newapi_discovered", "success", "本地 NewAPI 扫描完成", "发现可识别实例。", "", "")
+	}
+	writeJSON(w, http.StatusOK, found)
+}
+
+func (a *App) scanTargets(ctx context.Context, targets []string) []ProbeResult {
+	results := make([]ProbeResult, len(targets))
+	var wg sync.WaitGroup
+	for index, target := range targets {
+		wg.Add(1)
+		go func(i int, raw string) {
+			defer wg.Done()
+			results[i] = a.probeLocal(ctx, raw)
+		}(index, target)
+	}
+	wg.Wait()
+	return results
+}
+
+func (a *App) probeLocal(ctx context.Context, raw string) ProbeResult {
+	baseURL, err := safeNormalizeBaseURL(ctx, raw, outboundURLPolicy{AllowLocal: true})
+	if err != nil {
+		return ProbeResult{BaseURL: normalizeBaseURL(raw), Status: "unreachable", Reachable: false, Score: 0}
+	}
+	signals := map[string]bool{}
+	reachable := false
+	specs := make([]probeSpec, 0, len(localProbePaths))
+	for _, path := range localProbePaths {
+		specs = append(specs, probeSpec{Method: http.MethodGet, Path: path, StatusKey: path})
+	}
+	for _, result := range a.fetchProbeBatch(ctx, baseURL, specs, 6) {
+		if result.Status > 0 {
+			reachable = true
+		}
+		inspectSignals(result.Spec.Path, result.Status, result.Body, signals)
+	}
+	score := len(signals)
+	status := "unknown"
+	if !reachable {
+		status = "unreachable"
+	} else if score >= 2 {
+		status = "healthy"
+	} else if score > 0 {
+		status = "degraded"
+	}
+	return ProbeResult{BaseURL: baseURL, Status: status, Reachable: reachable, Score: score, MatchedSignals: signalList(signals)}
+}
+
+func (a *App) detectUpstream(ctx context.Context, raw string) UpstreamDetection {
+	baseURL, err := safeNormalizeBaseURL(ctx, raw, a.externalURLPolicy())
+	if err != nil {
+		return UpstreamDetection{
+			BaseURL:      normalizeBaseURL(raw),
+			HomepageURL:  normalizeBaseURL(raw),
+			LoginURL:     strings.TrimRight(normalizeBaseURL(raw), "/") + "/login",
+			Kind:         "unknown",
+			HealthStatus: "blocked",
+			MatchedSignals: []string{
+				"blocked-unsafe-url",
+			},
+		}
+	}
+	signals := map[string]bool{}
+	reachable := false
+	statusByPath := map[string]int{}
+	specs := make([]probeSpec, 0, len(upstreamProbePaths)+len(checkinCandidates))
+	for _, path := range upstreamProbePaths {
+		specs = append(specs, probeSpec{Method: http.MethodGet, Path: path, StatusKey: path})
+	}
+	for _, candidate := range checkinCandidates {
+		specs = append(specs, probeSpec{Method: candidate.Method, Path: candidate.Path, StatusKey: candidate.Method + " " + candidate.Path, Checkin: true})
+	}
+	checkin := false
+	for _, result := range a.fetchProbeBatch(ctx, baseURL, specs, 8) {
+		statusByPath[result.Spec.StatusKey] = result.Status
+		if result.Status > 0 {
+			reachable = true
+		}
+		if result.Spec.Checkin && isPotentialCheckinEndpoint(result.Status, result.Body) {
+			checkin = true
+		}
+		inspectSignals(result.Spec.Path, result.Status, result.Body, signals)
+	}
+
+	kind := "unknown"
+	officialProvider := isOfficialProviderBaseURL(baseURL)
+	panelSignals := countSignals(signals,
+		"api-user-self", "api-user-token", "api-user-models", "api-user-quota",
+		"api-user-login", "api-auth-login", "api-login", "api-user-register", "api-user-checkin",
+		"api-token", "api-channel", "api-log-token", "api-pricing", "api-option",
+		"api-group", "api-redemption", "newapi-login", "oneapi-login",
+		"panel-login", "panel-json", "json-version", "api-status",
+	)
+	sub2apiSignals := countSignals(signals, "sub2api-text", "sub2api-api", "sub2api-ui", "sub2api-gateway", "api-v1-panel")
+	switch {
+	case officialProvider:
+		kind = "official_provider"
+	case sub2apiSignals >= 2 || signals["sub2api-text"] || signals["sub2api-api"]:
+		kind = "sub2api"
+	case signals["oneapi-text"] || signals["oneapi-login"]:
+		kind = "oneapi"
+	case looksLikeModifiedNewAPI(signals, panelSignals):
+		kind = "modified_relay"
+	case signals["newapi-text"] || signals["newapi-login"] || (panelSignals >= 2 && signals["api-channel"]):
+		kind = "newapi"
+	case statusByPath["/v1/models"] > 0 && statusByPath["/v1/models"] != http.StatusNotFound:
+		kind = "openai_compatible"
+	}
+	health := "unknown"
+	if !reachable {
+		health = "unreachable"
+	} else if statusByPath["/api/user/self"] == http.StatusUnauthorized || statusByPath["/api/user/self"] == http.StatusForbidden {
+		health = "auth_required"
+	} else if len(signals) >= 2 || kind != "unknown" {
+		health = "healthy"
+	} else {
+		health = "degraded"
+	}
+
+	if signals["checkin-disabled"] {
+		checkin = false
+	}
+	if officialProvider || kind == "openai_compatible" {
+		checkin = false
+	}
+	models := endpointLooksPresent(statusByPath["/v1/models"]) || endpointLooksPresent(statusByPath["/api/channel/models"]) || endpointLooksPresent(statusByPath["/api/user/models"])
+	pricing := endpointLooksPresent(statusByPath["/api/pricing"]) || signals["pricing-json"]
+	balance := endpointLooksPresent(statusByPath["/v1/usage"]) || endpointLooksPresent(statusByPath["/api/user/self"]) || endpointLooksPresent(statusByPath["/api/user/quota"])
+	confidence := detectionConfidence(kind, signals, panelSignals, sub2apiSignals)
+
+	return UpstreamDetection{
+		BaseURL: baseURL, HomepageURL: baseURL, LoginURL: baseURL + "/login",
+		Kind: kind, HealthStatus: health, DetectionConfidence: confidence,
+		SupportsCheckin: checkin, SupportsBalance: balance, SupportsModels: models, SupportsPricing: pricing,
+		MatchedSignals: signalList(signals),
+	}
+}
+
+func looksLikeModifiedNewAPI(signals map[string]bool, panelSignals int) bool {
+	if panelSignals < 2 {
+		return false
+	}
+	hasLoginAPI := signals["api-user-login"] || signals["api-auth-login"] || signals["api-login"]
+	hasNewAPIStyleAPI := signals["api-user-self"] || signals["api-user-token"] || signals["api-user-models"] || signals["api-token"] || signals["panel-json"]
+	return hasLoginAPI && hasNewAPIStyleAPI
+}
+
+func isOfficialProviderBaseURL(raw string) bool {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "" {
+		return false
+	}
+	officialDomains := []string{
+		"api.openai.com",
+		"api.anthropic.com",
+		"api.mistral.ai",
+		"generativelanguage.googleapis.com",
+		"aiplatform.googleapis.com",
+		"dashscope.aliyuncs.com",
+		"open.bigmodel.cn",
+		"api.moonshot.cn",
+		"api.deepseek.com",
+		"api.siliconflow.cn",
+		"api.minimax.chat",
+		"ark.cn-beijing.volces.com",
+		"maas-api.ml-platform-cn-beijing.volces.com",
+		"token.sensenova.cn",
+	}
+	for _, domain := range officialDomains {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+	officialSuffixes := []string{
+		".sensenova.cn",
+		".sensecore.cn",
+	}
+	for _, suffix := range officialSuffixes {
+		if strings.HasSuffix(host, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) fetchText(ctx context.Context, target string) (int, string) {
+	return a.fetchTextWithMethod(ctx, http.MethodGet, target)
+}
+
+func (a *App) fetchProbeBatch(ctx context.Context, baseURL string, specs []probeSpec, concurrency int) []probeFetchResult {
+	if concurrency <= 0 {
+		concurrency = 4
+	}
+	results := make([]probeFetchResult, len(specs))
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	for index, spec := range specs {
+		wg.Add(1)
+		go func(i int, item probeSpec) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			status, body := a.fetchTextWithMethod(ctx, item.Method, baseURL+item.Path)
+			results[i] = probeFetchResult{Spec: item, Status: status, Body: body}
+		}(index, spec)
+	}
+	wg.Wait()
+	return results
+}
+
+func (a *App) fetchTextWithMethod(ctx context.Context, method string, target string) (int, string) {
+	req, err := http.NewRequestWithContext(ctx, method, target, nil)
+	if err != nil {
+		return 0, ""
+	}
+	req.Header.Set("user-agent", "RelayCheck-Desktop/0.1")
+	resp, err := a.doHTTP(req)
+	if err != nil {
+		return 0, ""
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
+	return resp.StatusCode, string(body)
+}
+
+func inspectSignals(path string, status int, body string, signals map[string]bool) {
+	text := strings.ToLower(body)
+	if strings.Contains(text, "new api") || strings.Contains(text, "newapi") || strings.Contains(text, "new-api") || strings.Contains(text, "new_api") {
+		signals["newapi-text"] = true
+	}
+	if strings.Contains(text, "one api") || strings.Contains(text, "oneapi") || strings.Contains(text, "one-api") || strings.Contains(text, "one_api") {
+		signals["oneapi-text"] = true
+	}
+	if strings.Contains(text, "sub2api") || strings.Contains(text, "sub2 api") || strings.Contains(text, "sub-to-api") || strings.Contains(text, "sub_to_api") {
+		signals["sub2api-text"] = true
+	}
+	if strings.Contains(text, "用户登录") ||
+		(strings.Contains(text, "登录") && (strings.Contains(text, "令牌") || strings.Contains(text, "额度") || strings.Contains(text, "渠道"))) ||
+		strings.Contains(text, "new-api") {
+		signals["newapi-login"] = true
+	}
+	if strings.Contains(text, "one api") && (strings.Contains(text, "login") || strings.Contains(text, "登录")) {
+		signals["oneapi-login"] = true
+	}
+	if strings.Contains(text, "api key") && (strings.Contains(text, "quota") || strings.Contains(text, "subscription") || strings.Contains(text, "billing")) {
+		signals["sub2api-gateway"] = true
+	}
+	if strings.Contains(text, "subscription") && strings.Contains(text, "api gateway") {
+		signals["sub2api-ui"] = true
+	}
+	if strings.Contains(text, "渠道管理") || strings.Contains(text, "令牌管理") || strings.Contains(text, "用户管理") ||
+		strings.Contains(text, "模型倍率") || strings.Contains(text, "充值") && strings.Contains(text, "额度") ||
+		strings.Contains(text, "token quota") || strings.Contains(text, "model ratio") {
+		signals["panel-login"] = true
+	}
+	if isCheckinDisabledText(body) {
+		signals["checkin-disabled"] = true
+	}
+	if status == http.StatusOK || status == http.StatusUnauthorized || status == http.StatusForbidden {
+		switch path {
+		case "/api/user/self":
+			signals["api-user-self"] = true
+		case "/api/user/token":
+			signals["api-user-token"] = true
+		case "/api/user/models":
+			signals["api-user-models"] = true
+		case "/api/user/quota":
+			signals["api-user-quota"] = true
+		case "/api/channel/", "/api/channel/models":
+			signals["api-channel"] = true
+		case "/api/token/":
+			signals["api-token"] = true
+		case "/api/status":
+			signals["api-status"] = true
+		case "/v1/models":
+			signals["openai-models"] = true
+		case "/api/pricing":
+			signals["api-pricing"] = true
+		case "/api/option":
+			signals["api-option"] = true
+		case "/api/group":
+			signals["api-group"] = true
+		case "/api/redemption":
+			signals["api-redemption"] = true
+		case "/api/log/token":
+			signals["api-log-token"] = true
+		case "/api/v1/status", "/api/v1/user", "/api/v1/user/profile", "/api/v1/tokens", "/api/v1/accounts":
+			signals["api-v1-panel"] = true
+		}
+	}
+	if endpointLooksLikePanelAPI(path, status) {
+		switch path {
+		case "/api/user/login":
+			signals["api-user-login"] = true
+		case "/api/auth/login":
+			signals["api-auth-login"] = true
+		case "/api/login":
+			signals["api-login"] = true
+		case "/api/user/register":
+			signals["api-user-register"] = true
+		case "/api/user/checkin", "/api/checkin", "/api/user/check_in":
+			signals["api-user-checkin"] = true
+		}
+	}
+	var js map[string]interface{}
+	if json.Unmarshal([]byte(body), &js) == nil {
+		if _, ok := js["version"]; ok {
+			signals["json-version"] = true
+		}
+		value := strings.ToLower(fmt.Sprint(js))
+		if strings.Contains(value, "sub2api") || strings.Contains(value, "sub2 api") {
+			signals["sub2api-api"] = true
+		}
+		if hasAnyJSONKey(js, "success", "message", "data") && hasAnyNestedJSONKey(js, "quota", "used_quota", "request_count", "token_name", "channel_count", "group_ratio", "model_ratio") {
+			signals["panel-json"] = true
+		}
+		if hasAnyNestedJSONKey(js, "price", "pricing", "model_ratio", "group_ratio") {
+			signals["pricing-json"] = true
+		}
+		if hasAnyNestedJSONKey(js, "subscription", "upstream", "provider", "account_id") && hasAnyNestedJSONKey(js, "api_key", "apikey", "quota", "rate_limit") {
+			signals["sub2api-api"] = true
+		}
+	}
+}
+
+func endpointLooksLikePanelAPI(path string, status int) bool {
+	if status == 0 || status == http.StatusNotFound {
+		return false
+	}
+	switch path {
+	case "/api/user/login", "/api/auth/login", "/api/login", "/api/user/register", "/api/user/checkin", "/api/checkin", "/api/user/check_in":
+		return status == http.StatusOK ||
+			status == http.StatusBadRequest ||
+			status == http.StatusUnauthorized ||
+			status == http.StatusForbidden ||
+			status == http.StatusMethodNotAllowed
+	default:
+		return false
+	}
+}
+
+func endpointLooksPresent(status int) bool {
+	return status > 0 && status != http.StatusNotFound && status != http.StatusMethodNotAllowed
+}
+
+func detectionConfidence(kind string, signals map[string]bool, panelSignals int, sub2apiSignals int) float64 {
+	if kind == "unknown" {
+		return float64(min(4, len(signals))) / 10
+	}
+	if kind == "official_provider" {
+		return 0.96
+	}
+	if kind == "openai_compatible" {
+		if len(signals) <= 1 {
+			return 0.55
+		}
+		return 0.7
+	}
+	score := 0.36
+	score += float64(min(5, panelSignals)) * 0.09
+	score += float64(min(3, sub2apiSignals)) * 0.08
+	if signals["newapi-text"] || signals["oneapi-text"] || signals["sub2api-text"] {
+		score += 0.16
+	}
+	if signals["api-channel"] {
+		score += 0.08
+	}
+	if signals["api-user-self"] {
+		score += 0.06
+	}
+	if score > 0.98 {
+		return 0.98
+	}
+	return score
+}
+
+func hasAnyJSONKey(payload map[string]interface{}, keys ...string) bool {
+	for _, wanted := range keys {
+		for key := range payload {
+			if strings.EqualFold(key, wanted) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasAnyNestedJSONKey(value interface{}, keys ...string) bool {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for _, wanted := range keys {
+			for key, child := range typed {
+				if strings.EqualFold(key, wanted) {
+					return true
+				}
+				if hasAnyNestedJSONKey(child, wanted) {
+					return true
+				}
+			}
+		}
+	case []interface{}:
+		for _, child := range typed {
+			if hasAnyNestedJSONKey(child, keys...) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isPotentialCheckinEndpoint(status int, body string) bool {
+	if status == 0 || status == http.StatusNotFound || status == http.StatusMethodNotAllowed {
+		return false
+	}
+	if isCheckinDisabledText(body) {
+		return false
+	}
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return true
+	}
+	text := strings.ToLower(body)
+	if strings.Contains(text, "<html") &&
+		!strings.Contains(text, "checkin") &&
+		!strings.Contains(text, "sign") &&
+		!strings.Contains(body, "签到") {
+		return false
+	}
+	return status >= 200 && status < 500
+}
+
+func isCheckinDisabledText(body string) bool {
+	text := strings.ToLower(body)
+	return strings.Contains(body, "签到功能未启用") ||
+		strings.Contains(body, "未开启签到") ||
+		strings.Contains(body, "未启用签到") ||
+		strings.Contains(body, "不支持签到") ||
+		strings.Contains(text, "checkin disabled") ||
+		strings.Contains(text, "check-in disabled") ||
+		strings.Contains(text, "signin disabled") ||
+		strings.Contains(text, "sign-in disabled") ||
+		strings.Contains(text, "checkin not enabled") ||
+		strings.Contains(text, "sign in not enabled") ||
+		strings.Contains(text, "signin not enabled")
+}
+
+func countSignals(signals map[string]bool, names ...string) int {
+	count := 0
+	for _, name := range names {
+		if signals[name] {
+			count++
+		}
+	}
+	return count
+}
+
+func normalizeBaseURL(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return strings.TrimRight(raw, "/")
+	}
+	parsed.Path = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return strings.TrimRight(parsed.String(), "/")
+}
+
+func hostLabel(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	return parsed.Host
+}
+
+func signalList(signals map[string]bool) []string {
+	items := make([]string, 0, len(signals))
+	for key := range signals {
+		items = append(items, key)
+	}
+	return items
+}
