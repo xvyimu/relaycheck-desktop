@@ -867,3 +867,14 @@
 - [x] Re-run frontend build and Go regression after cleanup.
 - [x] Record final cleanup verification results.
 - **Status:** complete
+
+### Phase 89: Unsupported-check-in cleanup batch visibility
+- [x] Extend `POST /api/accounts/delete-unsupported-checkins` response with `limit`, `hasMore`, and `includeLastUnsupported`.
+- [x] Fetch `limit + 1` cleanup candidates server-side so the UI can know whether another batch remains without running a separate count query.
+- [x] Keep dry-run as the first-class path and preserve the API-mediated delete-only flow.
+- [x] Add Go coverage for a 12-account cleanup case: dry-run leaves data intact, first delete reports `hasMore=true`, next preview returns the remaining batch, final delete reaches zero.
+- [x] Update Accounts cleanup UI to show batch limit, next-batch hints, and a "continue preview next batch" workflow after deletion.
+- [x] Update frontend cleanup result types.
+- [x] Verify targeted Go tests, frontend build, npm audit, full Go regression, Windows GUI build, and browser smoke on a temporary runtime.
+- [x] Stop and remove temporary smoke runtime artifacts; keep real `data/relaycheck.db` untouched.
+- **Status:** complete

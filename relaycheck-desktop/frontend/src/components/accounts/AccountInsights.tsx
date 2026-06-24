@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { isLocalURL } from "@/components/accounts/helpers";
 
 const API_KEY_STALE_MS = 24 * 60 * 60 * 1000;
+const UNSUPPORTED_CLEANUP_LIMIT = 10;
 
 function isStaleAPIKeyCheck(account: Account) {
   if (!account.apiKeyFingerprint) return false;
@@ -115,6 +116,20 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
   const [cleanupPreview, setCleanupPreview] = useState<UnsupportedCheckinCleanupResult | null>(null);
   const [cleanupBusy, setCleanupBusy] = useState(false);
   const [cleanupIncludeLastUnsupported, setCleanupIncludeLastUnsupported] = useState(true);
+  const cleanupBatchLimit = cleanupPreview?.limit || UNSUPPORTED_CLEANUP_LIMIT;
+  const cleanupCanDelete = Boolean(cleanupPreview?.matched && cleanupPreview.deleted === 0);
+  const cleanupPreviewButtonLabel = cleanupBusy
+    ? "处理中"
+    : cleanupPreview?.deleted
+      ? cleanupPreview.hasMore ? "继续预览下一批" : "再次检查"
+      : cleanupPreview ? "重新预览" : "预览清理";
+  const cleanupStatusLabel = cleanupPreview
+    ? cleanupPreview.deleted
+      ? cleanupPreview.hasMore ? "还有下一批" : "已清理"
+      : cleanupPreview.matched
+        ? cleanupPreview.hasMore ? "等待确认+" : "等待确认"
+        : "无需清理"
+    : "先预览";
 
   useEffect(() => {
     let cancelled = false;
@@ -242,10 +257,10 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
     try {
       const result = await api<UnsupportedCheckinCleanupResult>("/api/accounts/delete-unsupported-checkins", {
         method: "POST",
-        body: JSON.stringify({ limit: 10, dryRun: true, includeLastUnsupported: cleanupIncludeLastUnsupported }),
+        body: JSON.stringify({ limit: UNSUPPORTED_CLEANUP_LIMIT, dryRun: true, includeLastUnsupported: cleanupIncludeLastUnsupported }),
       });
       setCleanupPreview(result);
-      setMessage(result.matched ? "预览到 " + result.matched + " 个不支持签到账号。本次最多处理 10 个，请确认后再删除。" : "没有发现需要清理的不支持签到账号。");
+      setMessage(result.matched ? "预览到 " + result.matched + " 个不支持签到账号。本批最多处理 " + result.limit + " 个。" + (result.hasMore ? "删除后可继续预览下一批。" : "当前没有更多批次。") : "没有发现需要清理的不支持签到账号。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "预览不支持签到账号失败");
     } finally {
@@ -263,10 +278,10 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
     try {
       const result = await api<UnsupportedCheckinCleanupResult>("/api/accounts/delete-unsupported-checkins", {
         method: "POST",
-        body: JSON.stringify({ limit: 10, dryRun: false, includeLastUnsupported: cleanupIncludeLastUnsupported }),
+        body: JSON.stringify({ limit: UNSUPPORTED_CLEANUP_LIMIT, dryRun: false, includeLastUnsupported: cleanupIncludeLastUnsupported }),
       });
       setCleanupPreview(result);
-      setMessage("已删除 " + result.deleted + " 个不支持签到账号。真实清理只通过 API 执行，未直接改数据库。");
+      setMessage("已删除 " + result.deleted + " 个不支持签到账号。真实清理只通过 API 执行，未直接改数据库。" + (result.hasMore ? "仍有下一批，请继续预览后再删除。" : "可再次预览确认是否归零。"));
       await onDone();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "删除不支持签到账号失败");
@@ -479,7 +494,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
               <span>签到清理</span>
               <strong>{cleanupPreview?.matched ?? unsupportedCheckinAccounts.length}</strong>
             </div>
-            <em>{cleanupPreview ? (cleanupPreview.deleted ? "已删除 " + cleanupPreview.deleted : cleanupPreview.matched ? "等待确认" : "无需清理") : "先预览"}</em>
+            <em>{cleanupStatusLabel}</em>
           </div>
           <label className="cleanup-option">
             <input
@@ -502,16 +517,18 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
                 <b>{item.lastCheckinStatus || "site"}</b>
               </div>
             ))}
-            {cleanupPreview && cleanupPreview.items.length > 5 ? <span className="capability-empty">还有 {cleanupPreview.items.length - 5} 个账号未展开；本次接口最多处理 10 个。</span> : null}
+            {cleanupPreview && cleanupPreview.items.length > 5 ? <span className="capability-empty">还有 {cleanupPreview.items.length - 5} 个账号未展开；本批接口最多处理 {cleanupBatchLimit} 个。</span> : null}
+            {cleanupPreview?.hasMore ? <span className="capability-empty">后面还有下一批候选账号；当前批次上限 {cleanupBatchLimit} 个，删除后请继续预览。</span> : null}
+            {cleanupPreview && cleanupPreview.deleted > 0 ? <span className="capability-empty">本批已通过 API 删除 {cleanupPreview.deleted} 个账号；再次预览会读取下一批或确认已归零。</span> : null}
             {!cleanupPreview ? <span className="capability-empty">先预览将要删除的账号；预览模式不会写入数据库。</span> : null}
             {cleanupPreview && !cleanupPreview.items.length ? <span className="capability-empty">当前没有匹配的不支持签到账号。</span> : null}
           </div>
           <div className="mini-action-row">
             <button type="button" className="ghost" disabled={cleanupBusy} onClick={() => void previewUnsupportedCheckinCleanup()}>
-              {cleanupBusy ? "处理中" : "预览清理"}
+              {cleanupPreviewButtonLabel}
             </button>
-            <button type="button" className="danger" disabled={cleanupBusy || !cleanupPreview?.matched || cleanupPreview.deleted > 0} onClick={() => void deleteUnsupportedCheckinCleanup()}>
-              确认删除
+            <button type="button" className="danger" disabled={cleanupBusy || !cleanupCanDelete} onClick={() => void deleteUnsupportedCheckinCleanup()}>
+              删除本批
             </button>
           </div>
         </div>

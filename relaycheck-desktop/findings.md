@@ -286,3 +286,11 @@
 - Generated archive caches such as Next `.next`, `node_modules`, local `data`, and Python `__pycache__` provide no source value after archival and can be deleted to avoid Git traversal warnings and reduce clutter.
 - Post-cleanup verification passed with `npm run build`, `npm audit --audit-level=low`, `go test -mod=vendor ./...`, and `go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .`.
 - The Windows reserved-name `nul` entries could not be removed through normal PowerShell path APIs, but were successfully deleted with Node's long-path file API.
+
+## 2026-06-24 Cleanup finding: destructive batches need server-side "has more" truth
+
+- A fixed `limit=10` cleanup is safe, but not enough operationally: after deleting one batch the operator needs to know whether another preview is expected.
+- Returning `hasMore` from the same candidate query is lower risk than adding an exact total count. The cleanup query already knows whether row 11 exists, and the UI only needs a continuation hint rather than an expensive exact total.
+- `matched` remains the current batch count, not the global match count. This keeps delete confirmation text honest: the user confirms the visible batch, then repeats preview/delete if `hasMore=true`.
+- The dry-run-first rule still stands. Real cleanup should continue to be backup -> dry-run preview -> explicit confirmation -> API delete, and never direct SQL against `data/relaycheck.db`.
+- Browser smoke is useful for this surface because the cleanup card is dense. The latest smoke verified that the added batch hints do not create horizontal overflow on desktop or 390px mobile.

@@ -2562,3 +2562,28 @@
   - `go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .`: pass.
 - Final cleanup note:
   - Windows reserved-name `nul` entries were removed with Node's long-path file API after PowerShell failed to delete them through normal path APIs.
+
+## 2026-06-24 Unsupported-check-in cleanup batch visibility
+
+- Status: complete.
+- Backend:
+  - `POST /api/accounts/delete-unsupported-checkins` now returns `limit`, `hasMore`, and `includeLastUnsupported` in addition to `matched`, `deleted`, `dryRun`, and `items`.
+  - Candidate loading now requests `limit + 1` rows and trims back to the batch limit. This exposes "more batches remain" without adding a heavier total-count query.
+  - Audit metadata for real deletes now records `limit` and `hasMore`.
+- Tests:
+  - Added `TestDeleteUnsupportedCheckinAccountsReportsBatchProgress`.
+  - The test seeds 12 unsupported-check-in accounts, verifies dry-run safety, deletes the first 10 with `hasMore=true`, previews the remaining 2, and deletes them.
+- Frontend:
+  - `UnsupportedCheckinCleanupResult` type now includes the new metadata fields.
+  - Accounts cleanup panel now shows current batch limit, next-batch hints, and a safer post-delete path: after deleting one batch, the primary non-destructive action becomes previewing the next batch or checking that the queue is empty.
+  - Button copy changed from a generic confirm flow to "删除本批" plus "继续预览下一批/再次检查" so large cleanups remain explicit and incremental.
+- Verification:
+  - `go test -mod=vendor ./internal/core -run TestDeleteUnsupportedCheckinAccounts`: pass.
+  - `npm run build`: pass.
+  - `npm audit --audit-level=low`: pass, found 0 vulnerabilities.
+  - `go test -mod=vendor ./...`: pass.
+  - `go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .`: pass.
+  - Browser smoke against temporary runtime `http://127.0.0.1:3214`: pass on desktop and 390px mobile; no horizontal overflow; Accounts cleanup panel rendered.
+- Safety boundary:
+  - Real `data/relaycheck.db` was not deleted, mutated, or used for destructive cleanup.
+  - Temporary smoke runtime and screenshots were removed after verification.

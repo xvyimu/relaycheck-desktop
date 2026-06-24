@@ -395,7 +395,10 @@ export type UnsupportedCheckinAccountItem = {
 export type UnsupportedCheckinCleanupResult = {
   matched: number;
   deleted: number;
+  limit: number;
+  hasMore: boolean;
   dryRun: boolean;
+  includeLastUnsupported: boolean;
   items: UnsupportedCheckinAccountItem[];
 };
 export type CheckinLog = {
