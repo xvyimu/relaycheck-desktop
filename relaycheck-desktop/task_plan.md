@@ -823,3 +823,36 @@
 ## 备注
 - 做重大决策前重新读取此计划。
 - 避免把访问令牌、密码、Cookie 写进源码或临时文件。
+
+
+---
+
+### Phase 85: P1 active domain panels and check-in cleanup backend
+- [x] Extract Sites page into frontend/src/components/sites/SitesPanel.tsx.
+- [x] Extract Check-ins page into frontend/src/components/checkins/CheckinsPanel.tsx.
+- [x] Extract Notifications page into frontend/src/components/notifications/NotificationsPanel.tsx.
+- [x] Wire the new panels from frontend/src/main.tsx.
+- [x] Extend smoke coverage for desktop and 390px mobile tab navigation / overflow checks.
+- [x] Add backend cleanup route POST /api/accounts/delete-unsupported-checkins.
+- [x] Add backend dry-run/delete logic for accounts that cannot run check-ins.
+- [x] Add Go tests for cleanup behavior and strengthened upstream detection.
+- [x] Record targeted test pass for cleanup and detection tests.
+- [x] Add Accounts UI entry for previewing and confirming unsupported-check-in account cleanup.
+- [x] Run full frontend build, Go test suite, Windows GUI build, and browser smoke after UI hookup.
+- [x] Run sensitive-information scan after final changes.
+
+### Phase 86: Stronger NewAPI / OneAPI / Sub2API recognition
+- [x] Add New API /api/about and check-in JSON response signals.
+- [x] Treat disabled check-in messages as supportsCheckin=false.
+- [x] Add One API model/self API signals without inferring check-in support.
+- [x] Add Sub2API /api/v1 and /v1beta gateway route signals.
+- [x] Prevent Sub2API / OneAPI / OpenAI-compatible from being treated as check-in-capable by default.
+- [x] Re-run full regression after frontend cleanup entry lands.
+- [x] Keep future upstream claims tied to official source or captured real response samples.
+
+### Phase 87: Final cleanup-entry verification and handoff
+- [x] Fix Accounts capability-card nesting so Key export and check-in cleanup are sibling panels.
+- [x] Add smoke assertion that the Accounts page renders .unsupported-cleanup-panel.
+- [x] Verify frontend build, targeted cleanup/detection tests, full Go regression, npm audit, Windows GUI build, browser smoke, and sensitive scan.
+- [x] Stop temporary smoke-test RelayCheck process and keep real data/relaycheck.db untouched.
+- **Status:** complete

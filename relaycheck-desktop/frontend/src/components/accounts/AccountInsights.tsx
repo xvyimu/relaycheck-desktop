@@ -2,7 +2,7 @@
 import { api } from "@/api/client";
 import { formatPriceComparisonBadge, formatPriceComparisonMeta, formatPricingSource } from "@/lib/format";
 import { apiKeyStatusLabel, formatAPIKeyTestMessage, priceLevelLabel, priceLevelShort, pricingCacheStatusLabel, pricingSourceBadge } from "@/lib/labels";
-import type { Account, APIKeyTestResult, BulkBrowserOpenResponse, BulkBrowserSaveResponse, BulkPasswordLoginResponse, KeyExportPreview, ModelOverview, ModelPricingOverview } from "@/types";
+import type { Account, APIKeyTestResult, BulkBrowserOpenResponse, BulkBrowserSaveResponse, BulkPasswordLoginResponse, KeyExportPreview, ModelOverview, ModelPricingOverview, UnsupportedCheckinCleanupResult } from "@/types";
 import { EmptyState } from "@/components/ui/empty-state";
 import { isLocalURL } from "@/components/accounts/helpers";
 
@@ -45,6 +45,16 @@ function buildModelCoverage(accounts: Account[]) {
     .sort((left, right) => right.accountCount - left.accountCount || left.model.localeCompare(right.model));
 }
 
+function cleanupReasonLabel(reason: string) {
+  switch (reason) {
+    case "site_not_support_checkin":
+      return "站点不支持签到";
+    case "last_checkin_unsupported":
+      return "上次签到不支持";
+    default:
+      return reason || "不支持签到";
+  }
+}
 function keyIssueLabel(account: Account) {
   if (account.apiKeyStatus && !["valid", "unchecked"].includes(account.apiKeyStatus)) {
     return apiKeyStatusLabel(account.apiKeyStatus);
@@ -72,6 +82,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
   const pendingAuth = accounts.filter((account) => account.lastCheckinStatus === "auth_expired");
   const localSuspects = accounts.filter((account) => isLocalURL(account.upstreamSiteBaseUrl || ""));
   const successful = accounts.filter((account) => account.lastCheckinStatus === "success");
+  const unsupportedCheckinAccounts = accounts.filter((account) => account.lastCheckinStatus === "unsupported");
   const keyAccounts = accounts.filter((account) => account.apiKeyFingerprint);
   const validKeyAccounts = keyAccounts.filter((account) => account.apiKeyStatus === "valid");
   const problemKeyAccounts = keyAccounts.filter((account) => account.apiKeyStatus && !["valid", "unchecked"].includes(account.apiKeyStatus));
@@ -101,6 +112,9 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
   const [pricingSyncBusy, setPricingSyncBusy] = useState(false);
   const [keyExportPreview, setKeyExportPreview] = useState<KeyExportPreview | null>(null);
   const [keyExportBusy, setKeyExportBusy] = useState(false);
+  const [cleanupPreview, setCleanupPreview] = useState<UnsupportedCheckinCleanupResult | null>(null);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [cleanupIncludeLastUnsupported, setCleanupIncludeLastUnsupported] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,6 +234,45 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
     }
     downloadJSON("relaycheck-key-export-preview.json", JSON.stringify(keyExportPreview, null, 2));
     setMessage("已下载脱敏 Key 清单 JSON。");
+  }
+  async function previewUnsupportedCheckinCleanup() {
+    if (cleanupBusy) return;
+    setCleanupBusy(true);
+    setMessage("正在预览不支持签到账号，预览不会修改数据...");
+    try {
+      const result = await api<UnsupportedCheckinCleanupResult>("/api/accounts/delete-unsupported-checkins", {
+        method: "POST",
+        body: JSON.stringify({ limit: 10, dryRun: true, includeLastUnsupported: cleanupIncludeLastUnsupported }),
+      });
+      setCleanupPreview(result);
+      setMessage(result.matched ? "预览到 " + result.matched + " 个不支持签到账号。本次最多处理 10 个，请确认后再删除。" : "没有发现需要清理的不支持签到账号。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "预览不支持签到账号失败");
+    } finally {
+      setCleanupBusy(false);
+    }
+  }
+
+  async function deleteUnsupportedCheckinCleanup() {
+    if (cleanupBusy || !cleanupPreview?.matched) return;
+    const samples = cleanupPreview.items.slice(0, 3).map((item) => item.upstreamSiteName + " / " + item.accountName).join("、");
+    const confirmed = window.confirm("确认删除 " + cleanupPreview.matched + " 个不支持签到的账号？这会同步删除这些账号的签到日志和余额快照。" + (samples ? "\n样例：" + samples : ""));
+    if (!confirmed) return;
+    setCleanupBusy(true);
+    setMessage("正在删除不支持签到账号...");
+    try {
+      const result = await api<UnsupportedCheckinCleanupResult>("/api/accounts/delete-unsupported-checkins", {
+        method: "POST",
+        body: JSON.stringify({ limit: 10, dryRun: false, includeLastUnsupported: cleanupIncludeLastUnsupported }),
+      });
+      setCleanupPreview(result);
+      setMessage("已删除 " + result.deleted + " 个不支持签到账号。真实清理只通过 API 执行，未直接改数据库。");
+      await onDone();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "删除不支持签到账号失败");
+    } finally {
+      setCleanupBusy(false);
+    }
   }
 
   return (
@@ -418,6 +471,48 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
             <button type="button" className="ghost" disabled={!keyAccounts.length || keyExportBusy} onClick={() => void loadKeyExportPreview()}>{keyExportBusy ? "生成中" : "预览"}</button>
             <button type="button" className="ghost" disabled={!keyAccounts.length} onClick={() => void copyKeyExportPreview()}>复制脱敏</button>
             <button type="button" className="ghost" disabled={!keyExportPreview} onClick={downloadKeyExportPreview}>下载</button>
+          </div>
+        </div>
+        <div className="account-capability-panel unsupported-cleanup-panel is-actionable">
+          <div className="capability-panel-head">
+            <div>
+              <span>签到清理</span>
+              <strong>{cleanupPreview?.matched ?? unsupportedCheckinAccounts.length}</strong>
+            </div>
+            <em>{cleanupPreview ? (cleanupPreview.deleted ? "已删除 " + cleanupPreview.deleted : cleanupPreview.matched ? "等待确认" : "无需清理") : "先预览"}</em>
+          </div>
+          <label className="cleanup-option">
+            <input
+              type="checkbox"
+              checked={cleanupIncludeLastUnsupported}
+              onChange={(event) => {
+                setCleanupIncludeLastUnsupported(event.currentTarget.checked);
+                setCleanupPreview(null);
+              }}
+            />
+            包含上次签到返回“不支持”的账号
+          </label>
+          <div className="capability-list cleanup-preview-list">
+            {(cleanupPreview?.items || []).slice(0, 5).map((item) => (
+              <div className="capability-row issue-row" key={"cleanup-" + item.accountId}>
+                <div>
+                  <strong title={item.accountName}>{item.accountName}</strong>
+                  <span title={item.upstreamSiteName + " · " + item.upstreamSiteKind}>{item.upstreamSiteName} · {cleanupReasonLabel(item.reason)}</span>
+                </div>
+                <b>{item.lastCheckinStatus || "site"}</b>
+              </div>
+            ))}
+            {cleanupPreview && cleanupPreview.items.length > 5 ? <span className="capability-empty">还有 {cleanupPreview.items.length - 5} 个账号未展开；本次接口最多处理 10 个。</span> : null}
+            {!cleanupPreview ? <span className="capability-empty">先预览将要删除的账号；预览模式不会写入数据库。</span> : null}
+            {cleanupPreview && !cleanupPreview.items.length ? <span className="capability-empty">当前没有匹配的不支持签到账号。</span> : null}
+          </div>
+          <div className="mini-action-row">
+            <button type="button" className="ghost" disabled={cleanupBusy} onClick={() => void previewUnsupportedCheckinCleanup()}>
+              {cleanupBusy ? "处理中" : "预览清理"}
+            </button>
+            <button type="button" className="danger" disabled={cleanupBusy || !cleanupPreview?.matched || cleanupPreview.deleted > 0} onClick={() => void deleteUnsupportedCheckinCleanup()}>
+              确认删除
+            </button>
           </div>
         </div>
       </div>

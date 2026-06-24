@@ -5,9 +5,12 @@ import { AccountCard } from "@/components/accounts/AccountCard";
 import { AccountDetailContent } from "@/components/accounts/AccountDetailContent";
 import { AccountForm } from "@/components/accounts/AccountForm";
 import { AccountInsights } from "@/components/accounts/AccountInsights";
+import { CheckinsPanel } from "@/components/checkins/CheckinsPanel";
 import { ChannelTable } from "@/components/channels/ChannelTable";
 import { HubRadar } from "@/components/dashboard/HubRadar";
+import { NotificationsPanel } from "@/components/notifications/NotificationsPanel";
 import { Settings as SettingsPanel } from "@/components/settings/Settings";
+import { SitesPanel } from "@/components/sites/SitesPanel";
 import { useChannelActions } from "@/hooks/useChannelActions";
 import { useChannelFilters } from "@/hooks/useChannelFilters";
 import { formatTime } from "@/lib/format";
@@ -205,10 +208,10 @@ function App() {
           />
         ) : null}
         {tab === "channels" ? <Channels onRefresh={loadData} /> : null}
-        {tab === "sites" ? <Sites sites={sites} onRefresh={loadData} /> : null}
+        {tab === "sites" ? <SitesPanel sites={sites} onRefresh={loadData} /> : null}
         {tab === "accounts" ? <Accounts accounts={accounts} sites={sites} onRefresh={loadData} /> : null}
-        {tab === "checkins" ? <Checkins checkins={checkins} onRefresh={loadData} /> : null}
-        {tab === "notifications" ? <Notifications items={notifications} onRefresh={loadData} /> : null}
+        {tab === "checkins" ? <CheckinsPanel checkins={checkins} onRefresh={loadData} /> : null}
+        {tab === "notifications" ? <NotificationsPanel items={notifications} onRefresh={loadData} /> : null}
         {tab === "settings" ? (
           status ? <SettingsPanel status={status} onDone={loadData} /> : <Empty message="Loading settings..." />
         ) : null}
@@ -471,43 +474,6 @@ function Channels({ onRefresh }: { onRefresh: () => Promise<void> }) {
   );
 }
 
-function Sites({ sites, onRefresh }: { sites: UpstreamSite[]; onRefresh: () => Promise<void> }) {
-  const [busyId, setBusyId] = useState("");
-  async function detect(site: UpstreamSite) {
-    setBusyId(site.id);
-    try {
-      await api(`/api/upstream-sites/${site.id}/detect`, { method: "POST" });
-      await onRefresh();
-    } finally {
-      setBusyId("");
-    }
-  }
-  return (
-    <Card title="Upstream sites">
-      <Table
-        empty="No upstream sites yet."
-        rows={sites}
-        render={(site) => (
-          <div className="list-row" key={site.id}>
-            <div>
-              <strong>{site.name}</strong>
-              <span>{site.baseUrl}</span>
-            </div>
-            <div className="row-actions">
-              <Badge value={site.kind} />
-              <Badge value={site.healthStatus} />
-              <span>{site.accountCount || 0} accounts</span>
-              <button disabled={busyId === site.id} onClick={() => void detect(site)}>
-                {busyId === site.id ? "Detecting..." : "Detect"}
-              </button>
-            </div>
-          </div>
-        )}
-      />
-    </Card>
-  );
-}
-
 function Accounts({
   accounts,
   sites,
@@ -545,79 +511,6 @@ function Accounts({
   );
 }
 
-function Checkins({ checkins, onRefresh }: { checkins: CheckinStatus | null; onRefresh: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  async function runAll() {
-    setBusy(true);
-    try {
-      await api("/api/checkins/run-all", { method: "POST" });
-      await onRefresh();
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <section className="card-grid">
-      <Card title="Today">
-        <div className="stack">
-          <Row label="Due accounts" value={checkins?.today.dueAccounts ?? 0} />
-          <Row label="Success" value={checkins?.today.successCount ?? 0} />
-          <Row label="Failed" value={checkins?.today.failedCount ?? 0} />
-          <Row label="Auth expired" value={checkins?.today.authExpiredCount ?? 0} />
-        </div>
-        <button className="wide" disabled={busy || checkins?.running} onClick={() => void runAll()}>
-          {busy || checkins?.running ? "Running..." : "Run all check-ins"}
-        </button>
-      </Card>
-      <Card title="Schedule">
-        <dl className="kv">
-          <dt>Enabled</dt>
-          <dd>{checkins?.schedule.enabled ? "Yes" : "No"}</dd>
-          <dt>Time</dt>
-          <dd>{checkins?.schedule.time || "-"}</dd>
-          <dt>Next run</dt>
-          <dd>{formatTime(checkins?.schedule.nextRunAt || "")}</dd>
-          <dt>Message</dt>
-          <dd>{checkins?.schedule.message || "-"}</dd>
-        </dl>
-      </Card>
-    </section>
-  );
-}
-
-function Notifications({ items, onRefresh }: { items: NotificationItem[]; onRefresh: () => Promise<void> }) {
-  async function markAllRead() {
-    await api("/api/notifications/mark-all-read", { method: "POST" });
-    await onRefresh();
-  }
-  async function clearRead() {
-    await api("/api/notifications/clear-read", { method: "POST" });
-    await onRefresh();
-  }
-  return (
-    <Card title="Notifications">
-      <div className="toolbar">
-        <button onClick={() => void markAllRead()}>Mark all read</button>
-        <button className="ghost" onClick={() => void clearRead()}>Clear read</button>
-      </div>
-      <Table
-        empty="No notifications."
-        rows={items}
-        render={(item) => (
-          <div className={`list-row ${item.read ? "" : "unread"}`} key={item.id}>
-            <div>
-              <strong>{item.title}</strong>
-              <span>{item.content}</span>
-              <small>{formatTime(item.createdAt)}</small>
-            </div>
-            <Badge value={item.level} />
-          </div>
-        )}
-      />
-    </Card>
-  );
-}
-
 function Metric({ title, value }: { title: string; value?: number }) {
   return (
     <div className="metric-card">
@@ -634,11 +527,6 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
       {children}
     </section>
   );
-}
-
-function Table<T>({ rows, render, empty }: { rows: T[]; render: (row: T) => React.ReactNode; empty: string }) {
-  if (!rows.length) return <Empty message={empty} />;
-  return <div className="list">{rows.map(render)}</div>;
 }
 
 function Row({ label, value }: { label: string; value: number | string }) {

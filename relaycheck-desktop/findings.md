@@ -239,3 +239,40 @@
 ---
 *每执行2次查看/浏览器/搜索操作后更新此文件*
 *防止视觉信息丢失*
+
+
+---
+
+## 2026-06-24 调研与实现发现：签到支持识别、Sub2API 识别、账号清理
+
+- 外部项目调研来源：QuantumNous/new-api、songquanpeng/one-api、Wei-Shaw/sub2api 官方仓库源码。结论只作为识别策略依据，不复制外部项目代码。
+- New API 识别结论：
+  - 可使用 /api/about、/api/status、/api/user/self 等后台 API 信号辅助识别。
+  - 签到相关接口以 /api/user/checkin 为核心候选；JSON 字段如 checked_in_today、quota_awarded、checkin_date、min_quota、max_quota、total_checkins 可作为“这是签到接口”的强信号。
+  - 若返回“签到功能未启用 / 未开启签到 / 未启用签到 / 不支持签到”，应识别为 NewAPI 面板但 supportsCheckin=false。
+- One API 识别结论：
+  - 主要信号来自 /api/user/self、/api/user/available_models、登录和模型相关 API。
+  - 默认不应因为 One API 面板存在而推断支持签到。
+- Sub2API 识别结论：
+  - Sub2API 更像订阅转 OpenAI/Gemini 网关和 /api/v1 后台，不应误判为支持签到。
+  - 即使页面没有 sub2api 品牌文本，也可通过 /api/v1/auth/login、/api/v1/settings/public、/api/v1/user/profile、/v1/models、/v1beta/models 等路由组合识别。
+  - Sub2API 可支持模型/余额类能力探测，但签到支持默认保持 false，除非未来发现明确且可验证的签到接口。
+- 产品决策：
+  - “删除不支持签到的账号”必须先提供 dry-run 预览，不直接操作真实库。
+  - 后端删除范围默认包含站点级 supports_checkin=0，也支持包含账号上次签到状态为 unsupported 的记录。
+  - 删除账号时同步删除该账号的 checkin_logs 和 balance_snapshots，避免列表和统计残留。
+  - 真实数据清理必须走备份、预览、确认、执行四步，不允许直接 SQL 删除真实库。
+- 当前风险：
+  - 前端入口尚未接入，用户暂时无法在 UI 中确认预览/执行。
+  - 当前接口按批量 limit 执行，适合分批清理；如果真实库中有大量账号，需要 UI 明确展示“本次最多清理 N 个”。
+  - 上游项目接口可能继续变化；后续新增识别规则必须以官方仓库或真实响应样本交叉验证。
+
+
+---
+
+## 2026-06-24 Implementation finding: cleanup UI must stay dry-run first
+
+- Accounts cleanup is now reachable from the Accounts capability area, but the first-class path remains preview-first. This matches the product decision that unsupported-check-in account deletion is irreversible enough to require explicit confirmation.
+- Browser smoke now includes a structural assertion for .unsupported-cleanup-panel, so future refactors that accidentally remove the cleanup entry should fail fast.
+- Full Go regression exposed a known Windows sqlite/temp-directory cleanup flake once; the affected test passed in isolation and the final full run passed. Treat this as environment-level flakiness unless it repeats in three consecutive runs or starts failing assertions.
+- Sensitive scan result remains clean for active source and docs except the deliberate fake key fixture in internal/core/secrets_security_test.go.

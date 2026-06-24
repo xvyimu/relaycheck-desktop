@@ -908,3 +908,112 @@ Invoke-RestMethod -Uri http://127.0.0.1:3001/api/auth/login -Method Post -Conten
   - Keep `Dashboard` and other pages in `main.tsx` for that slice.
   - Preserve navigation behavior by either passing `actionNavigationIntent` as a prop or exporting/importing a helper with no behavior change.
   - Run `cd E:\zidqiandao\relaycheck-desktop\frontend; npm run build`.
+
+
+---
+
+## 35. 2026-06-24 Handoff: unsupported check-in cleanup and detection hardening
+
+Current user direction:
+
+- Continue the project.
+- Delete accounts that cannot support check-in, but do not directly touch the real data/relaycheck.db without backup, preview, and confirmation.
+- Strengthen NewAPI / OneAPI / Sub2API upstream recognition.
+- Strengthen check-in support detection.
+
+Completed and on disk:
+
+- P1 frontend domain panels:
+  - frontend/src/components/sites/SitesPanel.tsx
+  - frontend/src/components/checkins/CheckinsPanel.tsx
+  - frontend/src/components/notifications/NotificationsPanel.tsx
+  - frontend/src/main.tsx now mounts these panels.
+  - frontend/src/recovery.css has the related responsive styles.
+  - frontend/scripts/smoke.mjs checks desktop and 390px mobile tab surfaces.
+- Backend cleanup API:
+  - Route: POST /api/accounts/delete-unsupported-checkins
+  - Handler: handleDeleteUnsupportedCheckinAccounts
+  - Core: deleteUnsupportedCheckinAccounts, loadUnsupportedCheckinAccounts
+  - Request fields: limit, dryRun, includeLastUnsupported
+  - Response: matched, deleted, dryRun, items[]
+  - Delete side effects: removes matching channel_accounts, plus related checkin_logs and balance_snapshots; writes notification and audit only for non-dry-run deletes.
+- Detection hardening:
+  - NewAPI: /api/about, /api/home_page_content, /api/user/available_models, /api/user/dashboard, check-in JSON fields.
+  - OneAPI: self/models signals, but check-in support remains false by default.
+  - Sub2API: /api/v1/auth/login, /api/v1/settings/public, /api/v1/auth/me, /api/v1/user/profile, /api/v1/keys, /api/v1/groups/available, /api/v1/channels/available, /api/v1/subscriptions/active, /api/v1/user/platform-quotas, /v1beta/models, OpenAI-style gateway route signals.
+  - Disabled check-in text sets checkin-disabled and prevents supportsCheckin.
+- Tests added/updated:
+  - internal/core/accounts_cleanup_test.go
+  - internal/core/scanner_test.go
+
+Validation already recorded before this handoff:
+
+- P1 full verification had passed:
+  - node --check scripts\smoke.mjs
+  - npm run build
+  - npm audit --audit-level=low
+  - go test -mod=vendor ./...
+  - go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .
+  - Browser smoke against a temporary data directory.
+- Targeted backend tests passed:
+  - go test -mod=vendor ./internal/core -run "TestDeleteUnsupportedCheckinAccounts|TestDetectUpstreamRecognizesNewAPICheckinStatusJSON|TestDetectUpstreamDoesNotSupportDisabledCheckin|TestDetectUpstreamRecognizesSub2APIGatewayRoutesWithoutBrandText"
+
+Not done yet:
+
+- Accounts UI does not yet expose preview/confirm cleanup for unsupported-check-in accounts.
+- Full regression has not yet been rerun after the cleanup/detection backend changes.
+- Real database cleanup has not been executed.
+- No commit has been made.
+
+Next safest implementation slice:
+
+1. Add a compact cleanup panel/section on the Accounts surface.
+2. First action calls POST /api/accounts/delete-unsupported-checkins with dryRun: true.
+3. Show matched accounts with site, kind, last check-in status, and reason.
+4. Require explicit confirmation before calling the same endpoint with dryRun: false.
+5. Refresh data after delete and show deleted count.
+6. Run npm run build, targeted Go tests, then full Go tests and smoke.
+
+Safety constraints:
+
+- Do not directly edit or delete data/relaycheck.db.
+- Do not log or document real passwords, cookies, access tokens, API keys, or account secrets.
+- Keep cleanup batched through the API and keep dry-run as the default UI path.
+- Ignore unrelated root-level untracked files unless the user explicitly asks to organize them.
+
+
+---
+
+## 36. 2026-06-24 Handoff: cleanup UI landed and verified
+
+Current state: the unsupported-check-in account cleanup slice is complete and verified.
+
+Completed after the previous handoff:
+
+- Accounts UI now exposes a compact "签到清理" panel in frontend/src/components/accounts/AccountInsights.tsx.
+- The panel supports dry-run preview, includeLastUnsupported toggle, sample account display, explicit confirm, API delete, and refresh after deletion.
+- The cleanup panel is a sibling card in the account capability board; a JSX nesting issue was fixed.
+- frontend/scripts/smoke.mjs now fails if the Accounts page does not render .unsupported-cleanup-panel.
+- frontend/src/types/index.ts contains UnsupportedCheckinAccountItem and UnsupportedCheckinCleanupResult.
+- frontend/src/styles.css and frontend/src/recovery.css contain the cleanup option/preview styles.
+
+Final validation completed:
+
+- node --check scripts\smoke.mjs: pass.
+- npm run build: pass.
+- npm audit --audit-level=low: pass, 0 vulnerabilities.
+- targeted cleanup/detection Go tests: pass.
+- go test -mod=vendor ./...: final pass. One earlier full run hit Windows TempDir RemoveAll cleanup flake in TestAuditStoresMetadataWithoutSecrets; isolated rerun and final full rerun passed.
+- go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .: pass.
+- npm run smoke against temporary runtime http://127.0.0.1:3212: pass on desktop and 390px mobile; no horizontal overflow; cleanup panel assertion passed.
+- sensitive scan: only the deliberate fake API-key fixture in internal/core/secrets_security_test.go matched.
+
+Important safety boundary:
+
+- Real data/relaycheck.db was not cleaned or directly modified.
+- Temporary smoke runtime used .pipeline/smoke-runtime-2; process PID 22104 was stopped.
+- If the user asks to delete real unsupported-check-in accounts, first create a backup, then use the UI/API dry-run preview, show matched accounts, and only execute non-dry-run after explicit confirmation.
+
+Suggested next slice:
+
+- Start a real-data cleanup operation only if the user explicitly confirms the backup/preview/delete flow, or move to the next product task: operational polish around cleanup history, batch pagination beyond the current limit=10, or adding UI tests with seeded fixture accounts.

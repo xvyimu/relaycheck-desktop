@@ -559,3 +559,28 @@ Local source files checked before writing:
 - `frontend/package.json`
 - `frontend/src/main.tsx`
 
+
+
+## 12. 2026-06-24 Implementation Delta
+
+Status: in progress.
+
+Completed:
+
+- P1 active domain surfaces are now split into dedicated frontend components for Sites, Check-ins, and Notifications.
+- Browser smoke has been expanded to cover the main tab surfaces on desktop and 390px mobile widths.
+- Backend now has a dry-run-first cleanup endpoint for accounts that cannot run check-ins: POST /api/accounts/delete-unsupported-checkins.
+- Cleanup deletes related check-in logs and balance snapshots only when the user executes the non-dry-run path.
+- Upstream recognition now uses stronger NewAPI, OneAPI, and Sub2API route/signature signals.
+- Check-in detection now recognizes NewAPI-style check-in JSON and disabled-check-in messages.
+
+Pending:
+
+- Add Accounts UI for previewing and confirming unsupported-check-in cleanup.
+- Run full regression after UI hookup.
+- Keep real database cleanup manual, backed up, previewed, and confirmed.
+
+
+## 13. 2026-06-24 Acceptance Update
+
+The unsupported-check-in cleanup requirement is now implemented as a dry-run-first Accounts UI workflow backed by POST /api/accounts/delete-unsupported-checkins. Acceptance for this slice requires: preview before delete, explicit confirmation, batch limit visibility, no direct database mutation from the UI, cleanup of related check-in logs and balance snapshots through the backend, and full local regression including browser smoke. All acceptance checks passed on 2026-06-24 against a temporary runtime directory; the real data/relaycheck.db was not modified.

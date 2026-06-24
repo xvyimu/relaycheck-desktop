@@ -46,7 +46,9 @@ async function captureState(page, label, options = {}) {
   const result = await page.evaluate(() => ({
     hasRelayCheck: document.body.innerText.includes("RelayCheck"),
     active: document.querySelector(".sidebar nav button.active")?.textContent?.trim() || "",
-    cards: document.querySelectorAll(".card, .metric-card").length,
+    cards: document.querySelectorAll(
+      ".card, .metric-card, .channel-card, .account-card, .site-card, .checkin-card, .notification-card, .channel-summary > div, .channels-panel, .accounts-panel, .sites-panel, .checkin-panel, .notifications-panel, .settings-grid",
+    ).length,
     scrollWidth: document.body.scrollWidth,
     clientWidth: document.documentElement.clientWidth,
     widthOverflow: document.body.scrollWidth > document.documentElement.clientWidth + 2,
@@ -59,7 +61,7 @@ async function captureState(page, label, options = {}) {
   return result;
 }
 
-async function openTab(page, name) {
+async function openTab(page, name, label = name) {
   await page.getByRole("button", { name }).click();
   await page.locator(".topbar h1", { hasText: name }).waitFor({
     state: "visible",
@@ -67,15 +69,21 @@ async function openTab(page, name) {
   });
   await page.waitForTimeout(500);
   const requiredSelectors = {
-    Accounts: ".account-card",
-    Channels: ".channel-card",
+    Accounts: ".accounts-panel",
+    Channels: ".channels-panel",
+    Sites: ".sites-panel",
+    "Check-ins": ".checkin-panel",
+    Notifications: ".notifications-panel",
     Settings: ".settings-grid",
   };
   const selector = requiredSelectors[name];
   if (selector && !(await page.locator(selector).count())) {
-    throw new Error(`${name} did not render expected selector: ${selector}`);
+    throw new Error(`${label} did not render expected selector: ${selector}`);
   }
-  return captureState(page, name, { minCards: 1 });
+  if (name === "Accounts" && !(await page.locator(".unsupported-cleanup-panel").count())) {
+    throw new Error(`${label} did not render unsupported check-in cleanup panel.`);
+  }
+  return captureState(page, label, { minCards: 1 });
 }
 
 await mkdir(outDir, { recursive: true });
@@ -131,6 +139,10 @@ try {
   const mobilePath = path.join(outDir, "app-shell-mobile-smoke.png");
   await page.screenshot({ path: mobilePath, fullPage: true });
   const mobile = await captureState(page, "mobile");
+  const mobileTabs = {};
+  for (const tabName of ["Channels", "Sites", "Accounts", "Check-ins", "Notifications", "Settings", "Dashboard"]) {
+    mobileTabs[tabName] = await openTab(page, tabName, `mobile ${tabName}`);
+  }
 
   if (consoleErrors.length || pageErrors.length) {
     throw new Error(`Browser errors detected: ${JSON.stringify({ consoleErrors, pageErrors })}`);
@@ -143,6 +155,7 @@ try {
     desktop,
     tabs,
     mobile,
+    mobileTabs,
     screenshots: [desktopPath, settingsPath, mobilePath],
   }, null, 2));
 } finally {

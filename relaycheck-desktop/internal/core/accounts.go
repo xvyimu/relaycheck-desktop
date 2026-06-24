@@ -1680,6 +1680,136 @@ func (a *App) deleteAccount(w http.ResponseWriter, r *http.Request, id string) {
 	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
 }
 
+type unsupportedCheckinAccountItem struct {
+	AccountID         string `json:"accountId"`
+	AccountName       string `json:"accountName"`
+	UpstreamSiteID    string `json:"upstreamSiteId"`
+	UpstreamSiteName  string `json:"upstreamSiteName"`
+	UpstreamSiteKind  string `json:"upstreamSiteKind"`
+	LastCheckinStatus string `json:"lastCheckinStatus,omitempty"`
+	Reason            string `json:"reason"`
+}
+
+type unsupportedCheckinCleanupResult struct {
+	Matched int                             `json:"matched"`
+	Deleted int                             `json:"deleted"`
+	DryRun  bool                            `json:"dryRun"`
+	Items   []unsupportedCheckinAccountItem `json:"items"`
+}
+
+func (a *App) handleDeleteUnsupportedCheckinAccounts(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodPost) {
+		return
+	}
+	var input struct {
+		Limit                  int   `json:"limit"`
+		DryRun                 bool  `json:"dryRun"`
+		IncludeLastUnsupported *bool `json:"includeLastUnsupported"`
+	}
+	_ = decodeJSON(r, &input)
+	includeLastUnsupported := true
+	if input.IncludeLastUnsupported != nil {
+		includeLastUnsupported = *input.IncludeLastUnsupported
+	}
+	result, err := a.deleteUnsupportedCheckinAccounts(r.Context(), input.Limit, includeLastUnsupported, input.DryRun)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !result.DryRun && result.Deleted > 0 {
+		a.notify("unsupported_checkin_accounts_deleted", "warning", "Unsupported check-in accounts deleted", fmt.Sprintf("Deleted %d accounts that cannot run check-ins.", result.Deleted), "account", "")
+		a.audit("account.bulk_deleted_unsupported_checkin", "warning", "", "account", "", "Deleted unsupported check-in accounts.", map[string]interface{}{
+			"matched":                result.Matched,
+			"deleted":                result.Deleted,
+			"includeLastUnsupported": includeLastUnsupported,
+		})
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *App) deleteUnsupportedCheckinAccounts(ctx context.Context, limit int, includeLastUnsupported bool, dryRun bool) (unsupportedCheckinCleanupResult, error) {
+	limit = clampBatchLimit(limit, 10)
+	items, err := a.loadUnsupportedCheckinAccounts(ctx, limit, includeLastUnsupported)
+	if err != nil {
+		return unsupportedCheckinCleanupResult{}, err
+	}
+	result := unsupportedCheckinCleanupResult{
+		Matched: len(items),
+		DryRun:  dryRun,
+		Items:   items,
+	}
+	if dryRun || len(items) == 0 {
+		return result, nil
+	}
+
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return result, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	for _, item := range items {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM checkin_logs WHERE account_id = ?`, item.AccountID); err != nil {
+			return result, err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM balance_snapshots WHERE account_id = ?`, item.AccountID); err != nil {
+			return result, err
+		}
+		deleted, err := tx.ExecContext(ctx, `DELETE FROM channel_accounts WHERE id = ?`, item.AccountID)
+		if err != nil {
+			return result, err
+		}
+		if affected, _ := deleted.RowsAffected(); affected > 0 {
+			result.Deleted++
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return result, err
+	}
+	committed = true
+	a.invalidateReadCache()
+	return result, nil
+}
+
+func (a *App) loadUnsupportedCheckinAccounts(ctx context.Context, limit int, includeLastUnsupported bool) ([]unsupportedCheckinAccountItem, error) {
+	limit = clampBatchLimit(limit, 10)
+	where := `s.supports_checkin = 0`
+	if includeLastUnsupported {
+		where = `(` + where + ` OR lower(COALESCE(a.last_checkin_status,'')) = 'unsupported')`
+	}
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT a.id, a.display_name, s.id, s.name, s.kind, COALESCE(a.last_checkin_status,''),
+		       CASE
+		         WHEN s.supports_checkin = 0 THEN 'site_not_support_checkin'
+		         ELSE 'last_checkin_unsupported'
+		       END
+		FROM channel_accounts a
+		JOIN upstream_sites s ON s.id = a.upstream_site_id
+		WHERE `+where+`
+		ORDER BY CASE WHEN s.supports_checkin = 0 THEN 0 ELSE 1 END, a.updated_at DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := []unsupportedCheckinAccountItem{}
+	for rows.Next() {
+		var item unsupportedCheckinAccountItem
+		if err := rows.Scan(&item.AccountID, &item.AccountName, &item.UpstreamSiteID, &item.UpstreamSiteName, &item.UpstreamSiteKind, &item.LastCheckinStatus, &item.Reason); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func auditUpdatedAccountFields(siteName, baseURL, loginURL, kind, displayName, email, username, password string, clearPassword bool, apiKey string, clearAPIKey bool, cookie string, clearCookie bool, accessToken string, refreshToken string) []string {
 	fields := []string{}
 	add := func(name string, changed bool) {

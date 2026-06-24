@@ -29,13 +29,18 @@ var localProbePaths = []string{
 	"/api/channel/", "/api/channel/models", "/api/token/",
 }
 var upstreamProbePaths = []string{
-	"/", "/login", "/v1/models", "/v1/usage",
-	"/api/status", "/api/user/self", "/api/user/token", "/api/user/models", "/api/user/quota",
+	"/", "/login", "/v1/models", "/v1/usage", "/v1beta/models",
+	"/api/status", "/api/about", "/api/home_page_content",
+	"/api/user/self", "/api/user/self/groups", "/api/user/token", "/api/user/models",
+	"/api/user/available_models", "/api/user/dashboard", "/api/user/quota", "/api/user/topup/info",
 	"/api/user/login", "/api/auth/login", "/api/login", "/api/user/register",
 	"/api/user/checkin", "/api/checkin", "/api/user/check_in",
 	"/api/pricing", "/api/option", "/api/group", "/api/redemption",
 	"/api/channel/", "/api/channel/models", "/api/token/", "/api/log/token",
-	"/api/v1/status", "/api/v1/user", "/api/v1/user/profile", "/api/v1/tokens", "/api/v1/accounts",
+	"/api/subscription/self",
+	"/api/v1/status", "/api/v1/settings/public", "/api/v1/auth/me", "/api/v1/user", "/api/v1/user/profile",
+	"/api/v1/keys", "/api/v1/tokens", "/api/v1/accounts", "/api/v1/groups/available",
+	"/api/v1/channels/available", "/api/v1/subscriptions/active", "/api/v1/user/platform-quotas",
 }
 
 type ProbeResult struct {
@@ -159,6 +164,11 @@ func (a *App) detectUpstream(ctx context.Context, raw string) UpstreamDetection 
 	for _, path := range upstreamProbePaths {
 		specs = append(specs, probeSpec{Method: http.MethodGet, Path: path, StatusKey: path})
 	}
+	specs = append(specs,
+		probeSpec{Method: http.MethodPost, Path: "/api/v1/auth/login", StatusKey: "POST /api/v1/auth/login"},
+		probeSpec{Method: http.MethodPost, Path: "/chat/completions", StatusKey: "POST /chat/completions"},
+		probeSpec{Method: http.MethodPost, Path: "/responses", StatusKey: "POST /responses"},
+	)
 	for _, candidate := range checkinCandidates {
 		specs = append(specs, probeSpec{Method: candidate.Method, Path: candidate.Path, StatusKey: candidate.Method + " " + candidate.Path, Checkin: true})
 	}
@@ -178,12 +188,16 @@ func (a *App) detectUpstream(ctx context.Context, raw string) UpstreamDetection 
 	officialProvider := isOfficialProviderBaseURL(baseURL)
 	panelSignals := countSignals(signals,
 		"api-user-self", "api-user-token", "api-user-models", "api-user-quota",
-		"api-user-login", "api-auth-login", "api-login", "api-user-register", "api-user-checkin",
+		"api-user-available-models", "api-user-dashboard", "api-user-login", "api-auth-login",
+		"api-login", "api-user-register", "api-user-checkin", "api-about", "api-home-page-content",
 		"api-token", "api-channel", "api-log-token", "api-pricing", "api-option",
-		"api-group", "api-redemption", "newapi-login", "oneapi-login",
+		"api-group", "api-redemption", "api-subscription", "newapi-login", "oneapi-login", "newapi-api",
 		"panel-login", "panel-json", "json-version", "api-status",
 	)
-	sub2apiSignals := countSignals(signals, "sub2api-text", "sub2api-api", "sub2api-ui", "sub2api-gateway", "api-v1-panel")
+	sub2apiSignals := countSignals(signals,
+		"sub2api-text", "sub2api-api", "sub2api-ui", "sub2api-gateway", "api-v1-panel",
+		"sub2api-auth", "sub2api-settings", "sub2api-user", "sub2api-v1beta-models", "sub2api-openai-route",
+	)
 	switch {
 	case officialProvider:
 		kind = "official_provider"
@@ -193,7 +207,7 @@ func (a *App) detectUpstream(ctx context.Context, raw string) UpstreamDetection 
 		kind = "oneapi"
 	case looksLikeModifiedNewAPI(signals, panelSignals):
 		kind = "modified_relay"
-	case signals["newapi-text"] || signals["newapi-login"] || (panelSignals >= 2 && signals["api-channel"]):
+	case signals["newapi-api"] || signals["newapi-text"] || signals["newapi-login"] || (panelSignals >= 2 && signals["api-channel"]):
 		kind = "newapi"
 	case statusByPath["/v1/models"] > 0 && statusByPath["/v1/models"] != http.StatusNotFound:
 		kind = "openai_compatible"
@@ -212,12 +226,12 @@ func (a *App) detectUpstream(ctx context.Context, raw string) UpstreamDetection 
 	if signals["checkin-disabled"] {
 		checkin = false
 	}
-	if officialProvider || kind == "openai_compatible" {
+	if officialProvider || kind == "openai_compatible" || kind == "sub2api" || kind == "oneapi" {
 		checkin = false
 	}
-	models := endpointLooksPresent(statusByPath["/v1/models"]) || endpointLooksPresent(statusByPath["/api/channel/models"]) || endpointLooksPresent(statusByPath["/api/user/models"])
+	models := endpointLooksPresent(statusByPath["/v1/models"]) || endpointLooksPresent(statusByPath["/v1beta/models"]) || endpointLooksPresent(statusByPath["/api/channel/models"]) || endpointLooksPresent(statusByPath["/api/user/models"]) || endpointLooksPresent(statusByPath["/api/user/available_models"])
 	pricing := endpointLooksPresent(statusByPath["/api/pricing"]) || signals["pricing-json"]
-	balance := endpointLooksPresent(statusByPath["/v1/usage"]) || endpointLooksPresent(statusByPath["/api/user/self"]) || endpointLooksPresent(statusByPath["/api/user/quota"])
+	balance := endpointLooksPresent(statusByPath["/v1/usage"]) || endpointLooksPresent(statusByPath["/api/user/self"]) || endpointLooksPresent(statusByPath["/api/user/quota"]) || endpointLooksPresent(statusByPath["/api/v1/subscriptions/active"]) || endpointLooksPresent(statusByPath["/api/v1/user/platform-quotas"])
 	confidence := detectionConfidence(kind, signals, panelSignals, sub2apiSignals)
 
 	return UpstreamDetection{
@@ -344,6 +358,17 @@ func inspectSignals(path string, status int, body string, signals map[string]boo
 	if strings.Contains(text, "subscription") && strings.Contains(text, "api gateway") {
 		signals["sub2api-ui"] = true
 	}
+	if strings.Contains(text, "用户登录") ||
+		(strings.Contains(text, "登录") && (strings.Contains(text, "令牌") || strings.Contains(text, "额度") || strings.Contains(text, "渠道"))) {
+		signals["newapi-login"] = true
+	}
+	if strings.Contains(text, "one api") && strings.Contains(text, "登录") {
+		signals["oneapi-login"] = true
+	}
+	if strings.Contains(text, "渠道管理") || strings.Contains(text, "令牌管理") || strings.Contains(text, "用户管理") ||
+		strings.Contains(text, "模型倍率") || (strings.Contains(text, "充值") && strings.Contains(text, "额度")) {
+		signals["panel-login"] = true
+	}
 	if strings.Contains(text, "渠道管理") || strings.Contains(text, "令牌管理") || strings.Contains(text, "用户管理") ||
 		strings.Contains(text, "模型倍率") || strings.Contains(text, "充值") && strings.Contains(text, "额度") ||
 		strings.Contains(text, "token quota") || strings.Contains(text, "model ratio") {
@@ -354,14 +379,26 @@ func inspectSignals(path string, status int, body string, signals map[string]boo
 	}
 	if status == http.StatusOK || status == http.StatusUnauthorized || status == http.StatusForbidden {
 		switch path {
+		case "/api/about":
+			signals["api-about"] = true
+		case "/api/home_page_content":
+			signals["api-home-page-content"] = true
 		case "/api/user/self":
 			signals["api-user-self"] = true
+		case "/api/user/self/groups":
+			signals["api-user-groups"] = true
 		case "/api/user/token":
 			signals["api-user-token"] = true
 		case "/api/user/models":
 			signals["api-user-models"] = true
+		case "/api/user/available_models":
+			signals["api-user-available-models"] = true
+		case "/api/user/dashboard":
+			signals["api-user-dashboard"] = true
 		case "/api/user/quota":
 			signals["api-user-quota"] = true
+		case "/api/subscription/self":
+			signals["api-subscription"] = true
 		case "/api/channel/", "/api/channel/models":
 			signals["api-channel"] = true
 		case "/api/token/":
@@ -380,8 +417,17 @@ func inspectSignals(path string, status int, body string, signals map[string]boo
 			signals["api-redemption"] = true
 		case "/api/log/token":
 			signals["api-log-token"] = true
-		case "/api/v1/status", "/api/v1/user", "/api/v1/user/profile", "/api/v1/tokens", "/api/v1/accounts":
+		case "/api/v1/status", "/api/v1/user", "/api/v1/user/profile", "/api/v1/tokens", "/api/v1/accounts", "/api/v1/keys", "/api/v1/groups/available", "/api/v1/channels/available", "/api/v1/subscriptions/active", "/api/v1/user/platform-quotas":
 			signals["api-v1-panel"] = true
+			signals["sub2api-user"] = true
+		case "/api/v1/settings/public":
+			signals["api-v1-panel"] = true
+			signals["sub2api-settings"] = true
+		case "/api/v1/auth/me":
+			signals["api-v1-panel"] = true
+			signals["sub2api-auth"] = true
+		case "/v1beta/models":
+			signals["sub2api-v1beta-models"] = true
 		}
 	}
 	if endpointLooksLikePanelAPI(path, status) {
@@ -396,6 +442,11 @@ func inspectSignals(path string, status int, body string, signals map[string]boo
 			signals["api-user-register"] = true
 		case "/api/user/checkin", "/api/checkin", "/api/user/check_in":
 			signals["api-user-checkin"] = true
+		case "/api/v1/auth/login":
+			signals["api-v1-panel"] = true
+			signals["sub2api-auth"] = true
+		case "/chat/completions", "/responses":
+			signals["sub2api-openai-route"] = true
 		}
 	}
 	var js map[string]interface{}
@@ -404,8 +455,18 @@ func inspectSignals(path string, status int, body string, signals map[string]boo
 			signals["json-version"] = true
 		}
 		value := strings.ToLower(fmt.Sprint(js))
+		if path == "/api/about" && (strings.Contains(value, "new api") || strings.Contains(value, "new-api") || strings.Contains(value, "newapi")) {
+			signals["newapi-api"] = true
+		}
+		if strings.Contains(value, "one api") || strings.Contains(value, "one-api") || strings.Contains(value, "oneapi") {
+			signals["oneapi-text"] = true
+		}
 		if strings.Contains(value, "sub2api") || strings.Contains(value, "sub2 api") {
 			signals["sub2api-api"] = true
+		}
+		if isCheckinPath(path) && hasAnyNestedJSONKey(js, "checked_in_today", "quota_awarded", "checkin_date", "min_quota", "max_quota", "total_checkins") {
+			signals["api-user-checkin"] = true
+			signals["checkin-json"] = true
 		}
 		if hasAnyJSONKey(js, "success", "message", "data") && hasAnyNestedJSONKey(js, "quota", "used_quota", "request_count", "token_name", "channel_count", "group_ratio", "model_ratio") {
 			signals["panel-json"] = true
@@ -422,6 +483,15 @@ func inspectSignals(path string, status int, body string, signals map[string]boo
 func endpointLooksLikePanelAPI(path string, status int) bool {
 	if status == 0 || status == http.StatusNotFound {
 		return false
+	}
+	switch path {
+	case "/api/v1/auth/login", "/chat/completions", "/responses":
+		return status == http.StatusOK ||
+			status == http.StatusBadRequest ||
+			status == http.StatusUnauthorized ||
+			status == http.StatusForbidden ||
+			status == http.StatusMethodNotAllowed ||
+			status == http.StatusUnsupportedMediaType
 	}
 	switch path {
 	case "/api/user/login", "/api/auth/login", "/api/login", "/api/user/register", "/api/user/checkin", "/api/checkin", "/api/user/check_in":
@@ -504,6 +574,14 @@ func hasAnyNestedJSONKey(value interface{}, keys ...string) bool {
 	return false
 }
 
+func isCheckinPath(path string) bool {
+	return strings.Contains(path, "checkin") ||
+		strings.Contains(path, "check_in") ||
+		strings.Contains(path, "signin") ||
+		strings.Contains(path, "sign_in") ||
+		strings.Contains(path, "sign-in")
+}
+
 func isPotentialCheckinEndpoint(status int, body string) bool {
 	if status == 0 || status == http.StatusNotFound || status == http.StatusMethodNotAllowed {
 		return false
@@ -513,6 +591,12 @@ func isPotentialCheckinEndpoint(status int, body string) bool {
 	}
 	if status == http.StatusUnauthorized || status == http.StatusForbidden {
 		return true
+	}
+	var js map[string]interface{}
+	if json.Unmarshal([]byte(body), &js) == nil {
+		if hasAnyNestedJSONKey(js, "checked_in_today", "quota_awarded", "checkin_date", "min_quota", "max_quota", "total_checkins") {
+			return status >= 200 && status < 500
+		}
 	}
 	text := strings.ToLower(body)
 	if strings.Contains(text, "<html") &&
@@ -526,6 +610,12 @@ func isPotentialCheckinEndpoint(status int, body string) bool {
 
 func isCheckinDisabledText(body string) bool {
 	text := strings.ToLower(body)
+	if strings.Contains(body, "签到功能未启用") ||
+		strings.Contains(body, "未开启签到") ||
+		strings.Contains(body, "未启用签到") ||
+		strings.Contains(body, "不支持签到") {
+		return true
+	}
 	return strings.Contains(body, "签到功能未启用") ||
 		strings.Contains(body, "未开启签到") ||
 		strings.Contains(body, "未启用签到") ||

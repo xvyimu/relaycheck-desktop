@@ -7846,3 +7846,28 @@ body {
     min-height: 44px;
   }
 }
+
+.cleanup-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.cleanup-option input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+
+.cleanup-preview-list .capability-row b {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

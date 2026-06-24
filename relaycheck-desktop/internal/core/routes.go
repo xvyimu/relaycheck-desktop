@@ -53,6 +53,7 @@ func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/accounts/bulk-password-login", a.requireSession(a.handleBulkPasswordLogin))
 	mux.HandleFunc("/api/accounts/bulk-test-api-keys", a.requireSession(a.handleBulkTestAPIKeys))
 	mux.HandleFunc("/api/accounts/bulk-refresh-balances", a.requireSession(a.handleBulkRefreshBalances))
+	mux.HandleFunc("/api/accounts/delete-unsupported-checkins", a.requireSession(a.handleDeleteUnsupportedCheckinAccounts))
 	mux.HandleFunc("/api/accounts/import-legacy-config", a.requireSession(a.handleLegacyConfigImport))
 	mux.HandleFunc("/api/accounts/import-chrome-passwords/preview", a.requireSession(a.handleChromePasswordImportPreview))
 	mux.HandleFunc("/api/accounts/import-chrome-passwords/import", a.requireSession(a.handleChromePasswordImport))

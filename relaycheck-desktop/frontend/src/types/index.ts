@@ -382,6 +382,22 @@ export type Account = {
   lastValidatedAt?: string;
 };
 
+export type UnsupportedCheckinAccountItem = {
+  accountId: string;
+  accountName: string;
+  upstreamSiteId: string;
+  upstreamSiteName: string;
+  upstreamSiteKind: string;
+  lastCheckinStatus?: string;
+  reason: string;
+};
+
+export type UnsupportedCheckinCleanupResult = {
+  matched: number;
+  deleted: number;
+  dryRun: boolean;
+  items: UnsupportedCheckinAccountItem[];
+};
 export type CheckinLog = {
   id: string;
   accountName: string;

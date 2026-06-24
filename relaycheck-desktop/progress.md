@@ -2434,3 +2434,91 @@
 | 移动端设置 | 390x844 | 无横向溢出 | overflow=false | pass |
 | 浏览器错误 | console/pageerror | 无错误 | consoleErrors=[]，pageErrors=[] | pass |
 | 敏感信息扫描 | rg 用户给过的密码/token/邮箱片段 | 不命中源码和文档 | 不命中 | pass |
+
+
+---
+
+## 2026-06-24 暂停点进度补录：P1 面板收尾 + 签到支持清理/识别增强
+
+- 状态：开发继续前补写进度。当前只记录已经落盘的源码变更和上一轮已完成验证，不执行真实数据清理。
+- P1 前端域面板已完成：
+  - 新增 frontend/src/components/sites/SitesPanel.tsx，接管上游站点页。
+  - 新增 frontend/src/components/checkins/CheckinsPanel.tsx，接管签到页。
+  - 新增 frontend/src/components/notifications/NotificationsPanel.tsx，接管通知页。
+  - frontend/src/main.tsx 已改为挂载三个新面板，并移除旧的内联 Sites / Checkins / Notifications / Table。
+  - frontend/src/recovery.css 已补充 Sites、Check-ins、Notifications 相关样式和移动端断点。
+  - frontend/scripts/smoke.mjs 已扩展桌面和 390px 移动端主标签页巡检，覆盖无横向溢出检查。
+- P1 上一轮验证记录：
+  - node --check scripts\smoke.mjs 通过。
+  - npm run build 通过。
+  - npm audit --audit-level=low 通过。
+  - go test -mod=vendor ./... 通过。
+  - go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe . 通过。
+  - 使用临时数据目录启动浏览器 smoke 通过；未改动真实 data/relaycheck.db。
+- 新任务：删除不支持签到账号、加强 NewAPI / OneAPI / Sub2API 识别和签到检测，已完成后端第一切片：
+  - 新增后端路由 POST /api/accounts/delete-unsupported-checkins。
+  - 新增 deleteUnsupportedCheckinAccounts / loadUnsupportedCheckinAccounts，支持 dryRun 预览、limit 限制、includeLastUnsupported 选项。
+  - 删除范围当前限定为：绑定到 supports_checkin=0 站点的账号，或可选包含 last_checkin_status=unsupported 的账号。
+  - 执行删除时同步清理 checkin_logs 和 balance_snapshots，并写入通知与审计；预览模式不写库。
+  - 新增 internal/core/accounts_cleanup_test.go 覆盖预览、删除、保留支持签到账号、清理签到日志和余额快照。
+- 识别和签到检测增强已落盘：
+  - scanner.go 增加 /api/about、/api/home_page_content、/api/user/available_models、/api/user/dashboard、/api/subscription/self、/v1beta/models、Sub2API /api/v1/* 等探测路径。
+  - New API JSON 签到响应会识别 checked_in_today、quota_awarded、checkin_date、min_quota、max_quota、total_checkins 等字段。
+  - “签到功能未启用 / 未开启签到 / 不支持签到”等文本会标记 checkin-disabled，并将 supportsCheckin=false。
+  - One API、Sub2API、纯 OpenAI-compatible、官方 provider 默认不推断为支持签到，降低误删/误跑签到风险。
+  - Sub2API 即使页面没有品牌文本，也可通过 /api/v1/auth/login、/api/v1/settings/public、/api/v1/user/profile、/v1beta/models 等网关/后台路由识别。
+  - scanner_test.go 已新增 NewAPI 签到 JSON、禁用签到、Sub2API 无品牌文本路由识别测试。
+- 已运行的目标测试记录：
+  - go test -mod=vendor ./internal/core -run "TestDeleteUnsupportedCheckinAccounts|TestDetectUpstreamRecognizesNewAPICheckinStatusJSON|TestDetectUpstreamDoesNotSupportDisabledCheckin|TestDetectUpstreamRecognizesSub2APIGatewayRoutesWithoutBrandText" 通过。
+- 尚未完成：
+  - 前端账号页还未接入“不支持签到账号清理”的预览、确认、结果展示入口。
+  - 本轮后端新增接口尚未跑完整 go test -mod=vendor ./...、前端 npm run build、桌面 go build 和浏览器 smoke。
+  - 未对真实 data/relaycheck.db 执行清理；后续如需清理真实账号，必须先预览、备份、再由用户确认执行。
+
+
+---
+
+## 2026-06-24 Final verification: unsupported-check-in cleanup UI and detection hardening
+
+- Status: complete for the current implementation slice. Real data cleanup was not executed.
+- Source changes completed:
+  - Added Accounts page cleanup UI in frontend/src/components/accounts/AccountInsights.tsx.
+  - Added UnsupportedCheckinAccountItem and UnsupportedCheckinCleanupResult frontend types.
+  - Added cleanup panel styling in frontend/src/styles.css and frontend/src/recovery.css.
+  - Added smoke coverage that asserts .unsupported-cleanup-panel exists on the Accounts page.
+  - Fixed a JSX nesting issue so the cleanup panel is a sibling of the Key export panel, not nested inside it.
+- Cleanup UI behavior:
+  - Preview button calls POST /api/accounts/delete-unsupported-checkins with dryRun=true, limit=10, includeLastUnsupported configurable.
+  - Confirmation button requires window.confirm and calls the same endpoint with dryRun=false.
+  - UI shows matched/deleted counts, account/site samples, reason labels, and notes that preview mode does not write the database.
+- Verification results:
+  - node --check scripts\smoke.mjs: pass.
+  - npm run build: pass, Vite built dist with JS gzip about 89.11 KB and CSS gzip about 3.86 KB.
+  - npm audit --audit-level=low: pass, found 0 vulnerabilities.
+  - go test -mod=vendor ./internal/core -run "TestDeleteUnsupportedCheckinAccounts|TestDetectUpstreamRecognizesNewAPICheckinStatusJSON|TestDetectUpstreamDoesNotSupportDisabledCheckin|TestDetectUpstreamRecognizesSub2APIGatewayRoutesWithoutBrandText": pass.
+  - go test -mod=vendor ./...: first run hit Windows TempDir RemoveAll cleanup flake in TestAuditStoresMetadataWithoutSecrets; single-test rerun passed; final full rerun passed.
+  - go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .: pass.
+  - Browser smoke against temporary data directory on http://127.0.0.1:3212: pass for desktop and 390px mobile, no horizontal overflow, Accounts cleanup panel assertion passed.
+  - Sensitive scan excluding vendor/dist/data/node_modules/.pipeline screenshots: only matched the deliberate fake API-key fixture in internal/core/secrets_security_test.go.
+- Safety notes:
+  - Did not directly modify or delete data/relaycheck.db.
+  - Temporary smoke runtime used .pipeline/smoke-runtime-2 with RELAYCHECK_BOOTSTRAP_PASSWORD=smoke-pass and RELAYCHECK_PORT=3212; temporary process PID 22104 was stopped.
+  - Future real cleanup must still follow backup -> dry-run preview -> user confirmation -> API delete.
+
+## 2026-06-24 Commit-readiness verification for P1 domain surface slice
+
+- Re-read task_plan.md, progress.md, and current worktree state before committing.
+- Confirmed P1 domain surface files exist and are wired from frontend/src/main.tsx:
+  - frontend/src/components/sites/SitesPanel.tsx
+  - frontend/src/components/checkins/CheckinsPanel.tsx
+  - frontend/src/components/notifications/NotificationsPanel.tsx
+- Re-ran verification:
+  - node --check scripts\smoke.mjs: pass.
+  - npm run build: pass.
+  - npm audit --audit-level=low: pass, found 0 vulnerabilities.
+  - targeted cleanup/detection Go tests: pass.
+  - go test -mod=vendor ./...: pass.
+  - go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .: pass.
+  - Browser smoke against temporary data directory on http://127.0.0.1:3213: pass for desktop and 390px mobile, no horizontal overflow.
+  - Sensitive scan still only matches the deliberate fake API-key fixture in internal/core/secrets_security_test.go.
+- Temporary smoke runtime .pipeline/smoke-runtime-goal was used; PID 55876 was stopped.
