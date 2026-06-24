@@ -2522,3 +2522,43 @@
   - Browser smoke against temporary data directory on http://127.0.0.1:3213: pass for desktop and 390px mobile, no horizontal overflow.
   - Sensitive scan still only matches the deliberate fake API-key fixture in internal/core/secrets_security_test.go.
 - Temporary smoke runtime .pipeline/smoke-runtime-goal was used; PID 55876 was stopped.
+
+## 2026-06-24 Workspace cleanup and project structure整理
+
+- Status: complete.
+- Archived inactive root-level material to `_archive/2026-06-24-workspace-cleanup/`:
+  - old standalone `frontend/`
+  - frozen `legacy/` and `newapi_signin/`
+  - experimental `relaycheck-hub/`
+  - old root-level notes and planning files
+  - `目标/` prompt assets
+- Preserved the active project and user launchers:
+  - `relaycheck-desktop/`
+  - `启动RelayCheck.bat`
+  - `静默启动RelayCheck.vbs`
+- Moved dated reports into `docs/reports/`:
+  - `P0_PROGRESS_20260623.md`
+  - `PROJECT_PROGRESS_REPORT_2026-06-24.md`
+- Removed generated or temporary material:
+  - `.pipeline/smoke-runtime*`
+  - `.pipeline/test-results/`
+  - `dist/relaycheck-next.exe`
+  - `frontend/tsconfig.tsbuildinfo`
+  - root `.npm-cache`
+  - generated `.next`, `node_modules`, `data`, and `__pycache__` folders from archived legacy material
+- Added/updated structure docs:
+  - root `README.md`
+  - `README.md`
+  - `docs/PROJECT_STRUCTURE.md`
+- Safety boundary:
+  - Did not delete or mutate `data/relaycheck.db`.
+  - Kept `frontend/dist/` because `main.go` embeds it.
+  - Kept `frontend/node_modules/` for local developer readiness.
+  - Kept `frontend/src/_archive/` recovery snapshots outside builds and Git.
+- Verification after cleanup:
+  - `npm run build`: pass.
+  - `npm audit --audit-level=low`: pass, found 0 vulnerabilities.
+  - `go test -mod=vendor ./...`: pass.
+  - `go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .`: pass.
+- Final cleanup note:
+  - Windows reserved-name `nul` entries were removed with Node's long-path file API after PowerShell failed to delete them through normal path APIs.

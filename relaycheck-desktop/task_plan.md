@@ -856,3 +856,14 @@
 - [x] Verify frontend build, targeted cleanup/detection tests, full Go regression, npm audit, Windows GUI build, browser smoke, and sensitive scan.
 - [x] Stop temporary smoke-test RelayCheck process and keep real data/relaycheck.db untouched.
 - **Status:** complete
+
+### Phase 88: Workspace cleanup and project structure整理
+- [x] Archive inactive root-level implementations and old workspace notes to `_archive/2026-06-24-workspace-cleanup/`.
+- [x] Preserve root launchers `启动RelayCheck.bat` and `静默启动RelayCheck.vbs` as the user-facing desktop entry points.
+- [x] Move dated progress reports to `docs/reports/`.
+- [x] Remove generated smoke runtimes, screenshot test-results, old `dist/relaycheck-next.exe`, frontend `tsconfig.tsbuildinfo`, root npm cache, and generated archive caches.
+- [x] Add root `README.md` cleanup boundary and active project entry.
+- [x] Add `docs/PROJECT_STRUCTURE.md` and link it from `README.md`.
+- [x] Re-run frontend build and Go regression after cleanup.
+- [x] Record final cleanup verification results.
+- **Status:** complete

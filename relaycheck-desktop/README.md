@@ -8,10 +8,12 @@ Official display name: `RelayCheck Desktop v1.0`.
 
 | Document | Purpose |
 |----------|---------|
+| `docs/PROJECT_STRUCTURE.md` | Current source tree, generated paths, archive boundary, and verification order. |
 | `PRODUCT_RESEARCH_AND_REQUIREMENTS.md` | Online research synthesis, product boundary, detailed requirements, roadmap, and risk register. |
 | `DESIGN_SYSTEM.md` | Control Room visual direction and UI rules. |
 | `PROMPT_CHECKLIST.md` | Execution checklist derived from the original optimization prompt. |
 | `AGENT_HANDOFF.md` | Resume packet and operational handoff notes for future agents. |
+| `docs/reports/` | Dated progress reports and recovery records. |
 
 ## Runtime
 
@@ -90,6 +92,8 @@ Run from `E:\zidqiandao\relaycheck-desktop`.
 | `go test -mod=vendor ./...` | Run Go test suite using vendored dependencies, including security, audit, health, and SSRF checks. |
 | `go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .` | Build the Windows desktop executable. |
 
+Run `npm run build` before Go compilation if `frontend/dist/` is missing; `main.go` embeds that directory at compile time.
+
 ## Race / cgo Note
 
 The Windows Go environment used for this workspace currently does not enable cgo. Because Go's race detector requires cgo on this platform, `go test -race ./internal/core` is documented as blocked here with `-race requires cgo`. Use `go test -mod=vendor ./...` as the required local regression gate unless cgo is explicitly enabled in a future toolchain setup.
@@ -115,6 +119,7 @@ The Windows Go environment used for this workspace currently does not enable cgo
 
 - Keep changes focused on this directory unless a task explicitly targets the legacy Python or experimental Next.js implementations.
 - Preserve the existing SQLite data file unless a migration task includes a backup and rollback plan.
+- Use `docs/PROJECT_STRUCTURE.md` as the source-tree map before deleting or moving files.
 - Follow `DESIGN_SYSTEM.md` when changing visual surfaces.
 - Update `AGENT_HANDOFF.md`, `progress.md`, and `task_plan.md` after substantial implementation work.
 - Use `PROMPT_CHECKLIST.md` as the master checklist for the original optimization prompt; mark each item complete there as work lands.

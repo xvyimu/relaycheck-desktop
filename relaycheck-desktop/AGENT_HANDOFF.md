@@ -1017,3 +1017,37 @@ Important safety boundary:
 Suggested next slice:
 
 - Start a real-data cleanup operation only if the user explicitly confirms the backup/preview/delete flow, or move to the next product task: operational polish around cleanup history, batch pagination beyond the current limit=10, or adding UI tests with seeded fixture accounts.
+
+---
+
+## 37. 2026-06-24 Handoff: workspace cleanup and structure docs
+
+Current state: inactive workspace material has been archived and the active project structure has been documented.
+
+Cleanup performed:
+
+- Archived old root-level implementations and notes to `_archive/2026-06-24-workspace-cleanup/`.
+- Kept root launchers `启动RelayCheck.bat` and `静默启动RelayCheck.vbs`.
+- Moved dated reports into `docs/reports/`.
+- Removed smoke runtime folders, screenshot test-results, old `dist/relaycheck-next.exe`, frontend `tsconfig.tsbuildinfo`, root npm cache, and generated caches inside the archive.
+- Rewrote root `README.md`.
+- Added `docs/PROJECT_STRUCTURE.md`.
+- Updated `README.md` to reference the project structure map and report directory.
+
+Safety boundary:
+
+- Real `data/relaycheck.db` was not deleted or modified.
+- `frontend/dist/` was kept because Go embed compilation depends on it.
+- `frontend/node_modules/` was kept for local developer readiness.
+- `frontend/src/_archive/` was kept as local recovery material and remains ignored/excluded from builds.
+
+Verification after cleanup:
+
+- `cd frontend; npm run build`: pass.
+- `cd frontend; npm audit --audit-level=low`: pass, 0 vulnerabilities.
+- `go test -mod=vendor ./...`: pass.
+- `go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .`: pass.
+
+Final cleanup note:
+
+- Windows reserved-name `nul` files were removed with Node's long-path file API after PowerShell failed to delete them through normal path APIs.

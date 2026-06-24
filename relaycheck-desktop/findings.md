@@ -276,3 +276,13 @@
 - Browser smoke now includes a structural assertion for .unsupported-cleanup-panel, so future refactors that accidentally remove the cleanup entry should fail fast.
 - Full Go regression exposed a known Windows sqlite/temp-directory cleanup flake once; the affected test passed in isolation and the final full run passed. Treat this as environment-level flakiness unless it repeats in three consecutive runs or starts failing assertions.
 - Sensitive scan result remains clean for active source and docs except the deliberate fake key fixture in internal/core/secrets_security_test.go.
+
+## 2026-06-24 Cleanup finding: archive inactive implementations, keep active runtime data
+
+- The active product boundary is now explicit: `relaycheck-desktop/` is the maintained implementation; old Python, old standalone Vite, and Next.js experiment material is archived under `_archive/2026-06-24-workspace-cleanup/`.
+- Root launchers are not junk: both point at `relaycheck-desktop/dist/relaycheck.exe`, so they remain as user-facing convenience entry points.
+- `frontend/dist/` is generated but operationally important for Go compilation because `main.go` uses `//go:embed frontend/dist`; do not remove it unless the next step is to run `npm run build` before Go compilation.
+- `data/relaycheck.db` remains outside cleanup. Any destructive real-data operation still needs backup, dry-run preview, explicit confirmation, and API-mediated execution.
+- Generated archive caches such as Next `.next`, `node_modules`, local `data`, and Python `__pycache__` provide no source value after archival and can be deleted to avoid Git traversal warnings and reduce clutter.
+- Post-cleanup verification passed with `npm run build`, `npm audit --audit-level=low`, `go test -mod=vendor ./...`, and `go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .`.
+- The Windows reserved-name `nul` entries could not be removed through normal PowerShell path APIs, but were successfully deleted with Node's long-path file API.
