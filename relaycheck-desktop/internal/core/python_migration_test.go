@@ -1,8 +1,12 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -149,9 +153,9 @@ func TestPythonMigrationDryRun(t *testing.T) {
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM system_settings`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	// 6 default settings (including notification.channels), none from migration
-	if count != 6 {
-		t.Fatalf("expected 6 default settings (no migration writes), got %d", count)
+	// 7 default settings (including notification.channels and version_check_url), none from migration
+	if count != 7 {
+		t.Fatalf("expected 7 default settings (no migration writes), got %d", count)
 	}
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM upstream_sites`).Scan(&count); err != nil {
 		t.Fatal(err)
@@ -219,8 +223,8 @@ func TestPythonMigrationLive(t *testing.T) {
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM system_settings`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 6 {
-		t.Fatalf("expected 6 settings (all defaults), got %d", count)
+	if count != 7 {
+		t.Fatalf("expected 7 settings (all defaults), got %d", count)
 	}
 
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM upstream_sites`).Scan(&count); err != nil {
@@ -709,5 +713,172 @@ func TestPythonMigrationVerifyTables(t *testing.T) {
 	_, err = app.migrateFromPythonDB(context.Background(), pythonDBPath, "live")
 	if err == nil {
 		t.Fatal("expected error for missing tables")
+	}
+}
+
+// TestHandleMigratePythonDBLive verifies the /api/system/migrate-python-db
+// handler accepts {"sourcePath": "..."} and performs an idempotent live migration.
+func TestHandleMigratePythonDBLive(t *testing.T) {
+	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
+	createTestPythonDB(t, pythonDBPath)
+
+	app, err := NewApp(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Close()
+
+	body, _ := json.Marshal(map[string]string{"sourcePath": pythonDBPath})
+	req := httptest.NewRequest(http.MethodPost, "/api/system/migrate-python-db", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	app.handleMigratePythonDB(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		OK   bool                `json:"ok"`
+		Data pythonMigrateReport `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Fatalf("expected ok=true, got false: %s", rec.Body.String())
+	}
+	if resp.Data.Mode != "live" {
+		t.Fatalf("expected mode live (default), got %s", resp.Data.Mode)
+	}
+	if resp.Data.SitesImported != 2 {
+		t.Fatalf("expected 2 sites, got %d", resp.Data.SitesImported)
+	}
+	if resp.Data.AccountsImported != 2 {
+		t.Fatalf("expected 2 accounts, got %d", resp.Data.AccountsImported)
+	}
+	if resp.Data.LogsImported != 3 {
+		t.Fatalf("expected 3 logs, got %d", resp.Data.LogsImported)
+	}
+	if resp.Data.BackupFileName == "" {
+		t.Fatal("expected backup file in live mode")
+	}
+}
+
+// TestHandleMigratePythonDBDryRun verifies the handler honors mode=dry_run.
+func TestHandleMigratePythonDBDryRun(t *testing.T) {
+	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
+	createTestPythonDB(t, pythonDBPath)
+
+	app, err := NewApp(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Close()
+
+	body, _ := json.Marshal(map[string]string{"sourcePath": pythonDBPath, "mode": "dry_run"})
+	req := httptest.NewRequest(http.MethodPost, "/api/system/migrate-python-db", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	app.handleMigratePythonDB(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		OK   bool                `json:"ok"`
+		Data pythonMigrateReport `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Data.Mode != "dry_run" {
+		t.Fatalf("expected mode dry_run, got %s", resp.Data.Mode)
+	}
+	if resp.Data.BackupFileName != "" {
+		t.Fatalf("expected no backup in dry_run, got %s", resp.Data.BackupFileName)
+	}
+
+	// dry_run must not write any data
+	var count int
+	if err := app.db.QueryRow(`SELECT COUNT(*) FROM upstream_sites`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 upstream_sites after dry_run, got %d", count)
+	}
+}
+
+// TestHandleMigratePythonDBMissingSourcePath verifies the handler rejects
+// requests without a sourcePath parameter.
+func TestHandleMigratePythonDBMissingSourcePath(t *testing.T) {
+	app, err := NewApp(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Close()
+
+	body, _ := json.Marshal(map[string]string{"mode": "live"})
+	req := httptest.NewRequest(http.MethodPost, "/api/system/migrate-python-db", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	app.handleMigratePythonDB(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing sourcePath, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "sourcePath") {
+		t.Fatalf("expected error mentioning sourcePath, got %s", rec.Body.String())
+	}
+}
+
+// TestHandleMigratePythonDBIdempotent verifies that calling the handler twice
+// does not create duplicate data.
+func TestHandleMigratePythonDBIdempotent(t *testing.T) {
+	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
+	createTestPythonDB(t, pythonDBPath)
+
+	app, err := NewApp(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Close()
+
+	// First call
+	body, _ := json.Marshal(map[string]string{"sourcePath": pythonDBPath})
+	req := httptest.NewRequest(http.MethodPost, "/api/system/migrate-python-db", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	app.handleMigratePythonDB(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first call expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Second call
+	req2 := httptest.NewRequest(http.MethodPost, "/api/system/migrate-python-db", bytes.NewReader(body))
+	rec2 := httptest.NewRecorder()
+	app.handleMigratePythonDB(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("second call expected 200, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+
+	var count int
+	if err := app.db.QueryRow(`SELECT COUNT(*) FROM upstream_sites`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 upstream_sites (no duplicates), got %d", count)
+	}
+	if err := app.db.QueryRow(`SELECT COUNT(*) FROM channel_accounts`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 channel_accounts (no duplicates), got %d", count)
+	}
+	if err := app.db.QueryRow(`SELECT COUNT(*) FROM checkin_logs`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 3 {
+		t.Fatalf("expected 3 checkin_logs (no duplicates), got %d", count)
 	}
 }

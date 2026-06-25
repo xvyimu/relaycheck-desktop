@@ -52,7 +52,7 @@ export function useChannelActions(): ChannelActionsResult {
 
   const syncChannelModels = useCallback(async () => {
     setModelSyncing(true);
-    setMessage("正在同步渠道模型...");
+    setMessage("正在同步渠道模型…");
     try {
       const overview = await api<ChannelModelOverview>("/api/channels/models/sync", {
         method: "POST",
@@ -75,7 +75,7 @@ export function useChannelActions(): ChannelActionsResult {
         );
         if (!confirmed) return;
       }
-      setMessage(`${channel.name} 正在${nextLabel}...`);
+      setMessage(`${channel.name} 正在${nextLabel}…`);
       await api(`/api/channels/${channel.id}/${action}`, { method: "POST" });
       setMessage(`${channel.name} 已${nextLabel}`);
       await refresh();
@@ -90,7 +90,7 @@ export function useChannelActions(): ChannelActionsResult {
       const statusLabel = fromStatus === "missing" ? "源端已移除" : "已归档";
       const confirmed = window.confirm(`确认${actionLabel}全部"${statusLabel}"渠道？这只会修改本地状态，不会删除任何账号、余额或日志。`);
       if (!confirmed) return;
-      setMessage(`正在批量${actionLabel} ${statusLabel} 渠道...`);
+      setMessage(`正在批量${actionLabel} ${statusLabel} 渠道…`);
       const result = await api<{ affected: number }>("/api/channels/bulk-source-status", {
         method: "POST",
         body: JSON.stringify({ fromStatus, toStatus }),

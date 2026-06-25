@@ -38,41 +38,41 @@ export function NotificationsPanel({ items, onRefresh }: NotificationsPanelProps
     try {
       await action();
       await onRefresh();
-      setMessage(`${label} completed.`);
+      setMessage(`${label}完成。`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : `${label} failed.`);
+      setMessage(error instanceof Error ? error.message : `${label}失败。`);
     } finally {
       setBusy("");
     }
   }
 
   async function markAllRead() {
-    await runAction("Mark all read", () => api("/api/notifications/mark-all-read", { method: "POST" }));
+    await runAction("全部标记已读", () => api("/api/notifications/mark-all-read", { method: "POST" }));
   }
 
   async function clearRead() {
-    const confirmed = window.confirm(`Clear ${summary.read} read notification${summary.read === 1 ? "" : "s"}?`);
+    const confirmed = window.confirm(`确认清除 ${summary.read} 条已读通知？`);
     if (!confirmed) return;
-    await runAction("Clear read", () => api("/api/notifications/clear-read", { method: "POST" }));
+    await runAction("清除已读", () => api("/api/notifications/clear-read", { method: "POST" }));
   }
 
   return (
     <section className="notifications-panel">
       <div className="channel-summary notification-summary compact-summary">
         <div>
-          <span>Total</span>
+          <span>总数</span>
           <strong>{summary.total}</strong>
         </div>
         <div>
-          <span>Unread</span>
+          <span>未读</span>
           <strong>{summary.unread}</strong>
         </div>
         <div>
-          <span>Important</span>
+          <span>重要</span>
           <strong>{summary.important}</strong>
         </div>
         <div>
-          <span>Read</span>
+          <span>已读</span>
           <strong>{summary.read}</strong>
         </div>
       </div>
@@ -83,7 +83,7 @@ export function NotificationsPanel({ items, onRefresh }: NotificationsPanelProps
           onClick={() => void markAllRead()}
           type="button"
         >
-          {busy === "Mark all read" ? "Marking..." : "Mark all read"}
+          {busy === "全部标记已读" ? "标记中…" : "全部标记已读"}
         </button>
         <button
           className="ghost"
@@ -91,7 +91,7 @@ export function NotificationsPanel({ items, onRefresh }: NotificationsPanelProps
           onClick={() => void clearRead()}
           type="button"
         >
-          {busy === "Clear read" ? "Clearing..." : "Clear read"}
+          {busy === "清除已读" ? "清除中…" : "清除已读"}
         </button>
       </div>
 
@@ -107,14 +107,14 @@ export function NotificationsPanel({ items, onRefresh }: NotificationsPanelProps
             >
               <div className="notification-card-head">
                 <div>
-                  <span>{item.type || "system"}</span>
+                  <span>{item.type || "系统"}</span>
                   <strong>{item.title}</strong>
                 </div>
-                <span className={`badge ${tone}`}>{item.level || "info"}</span>
+                <span className={`badge ${tone}`}>{item.level || "信息"}</span>
               </div>
               <p>{item.content}</p>
               <div className="notification-meta">
-                <span>{item.read ? "Read" : "Unread"}</span>
+                <span>{item.read ? "已读" : "未读"}</span>
                 <span>{formatTime(item.createdAt)}</span>
               </div>
             </article>
@@ -124,8 +124,8 @@ export function NotificationsPanel({ items, onRefresh }: NotificationsPanelProps
         {!items.length ? (
           <div className="empty-state">
             <div className="empty-mark">RC</div>
-            <strong>No notifications</strong>
-            <span>Operational events, warnings, and batch results will appear here.</span>
+            <strong>暂无通知</strong>
+            <span>运营事件、警告和批量结果会显示在这里。</span>
           </div>
         ) : null}
       </div>

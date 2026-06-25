@@ -48,6 +48,8 @@ export type StatusPayload = {
   databasePath: string;
   backupDir: string;
   port: number;
+  preferredPort?: number;
+  portConflict?: boolean;
   networkProxy?: NetworkProxyStatus;
   scheduler?: SchedulerStatus;
   lastDiagnostics?: {
@@ -56,6 +58,45 @@ export type StatusPayload = {
     itemCount: number;
   };
   summary: Summary;
+};
+
+export type VersionCheckResult = {
+  currentVersion: string;
+  latestVersion?: string;
+  updateAvailable: boolean;
+  releaseUrl?: string;
+  releaseNotes?: string;
+  checkedAt: string;
+  error?: string;
+};
+
+export type ExportResult = {
+  fileName: string;
+  sizeBytes: number;
+  manifest: {
+    version: string;
+    exportedAt: string;
+    productVersion: string;
+    includes: { database: boolean; settings: boolean };
+    databaseSize: number;
+    settingCount: number;
+  };
+};
+
+export type PortCheckResult = {
+  port: number;
+  available: boolean;
+  inUse: boolean;
+  inUseByPid?: number;
+  error?: string;
+};
+
+export type AutoStartStatus = {
+  enabled: boolean;
+  supported: boolean;
+  shortcutPath?: string;
+  targetPath?: string;
+  error?: string;
 };
 
 export type NetworkProxyStatus = {
@@ -380,6 +421,8 @@ export type Account = {
   browserProfilePath?: string;
   lastLoginAt?: string;
   lastValidatedAt?: string;
+  cookieExpiryAt?: string;
+  storageStateExpiryAt?: string;
 };
 
 export type UnsupportedCheckinAccountItem = {

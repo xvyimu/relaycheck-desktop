@@ -1,11 +1,13 @@
 import { formatBalanceValue, formatTime } from "@/lib/format";
 import { apiKeyStatusLabel, loginStatusLabel, statusLabel } from "@/lib/labels";
 import type { Account } from "@/types";
+import { TwoFactorGuide } from "@/components/ui/TwoFactorGuide";
 
 export function AccountDetailContent({ account, onClose }: { account: Account; onClose: () => void }) {
   const identity = account.email || account.username || account.authType;
-  const checkinState = account.lastCheckinStatus || "unknown";
+  const checkinState = account.lastCheckinStatus || "";
   const keyState = account.apiKeyFingerprint ? apiKeyStatusLabel(account.apiKeyStatus || "unchecked") : "未保存";
+  const needsTwoFactor = account.loginStatus === "two_factor_required";
   return (
     <>
       <div className="detail-header">
@@ -53,7 +55,15 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
         <section className="detail-card">
           <h3>建议动作</h3>
           <div className="detail-stack">
-            {account.loginStatus !== "valid" ? <div className="problem-hint detail-hint">登录态不是有效状态，优先执行网页登录或保存授权，再重新签到。</div> : null}
+            {needsTwoFactor ? (
+              <TwoFactorGuide
+                variant="inline"
+                siteName={account.upstreamSiteName}
+                baseUrl={account.upstreamSiteBaseUrl}
+                loginUrl={account.upstreamSiteLoginUrl}
+              />
+            ) : null}
+            {account.loginStatus !== "valid" && !needsTwoFactor ? <div className="problem-hint detail-hint">登录态不是有效状态，优先执行网页登录或保存授权，再重新签到。</div> : null}
             {!["success", "already_checked"].includes(checkinState) ? <div className="problem-hint detail-hint">最近签到未确认成功，建议在签到页查看返回消息，避免误判为成功。</div> : null}
             {account.apiKeyFingerprint && account.apiKeyStatus !== "valid" ? <div className="problem-hint detail-hint">API Key 需要重新检测，模型列表和价格判断可能不完整。</div> : null}
             {account.balance === undefined ? <div className="problem-hint detail-hint">还没有余额快照，刷新余额后才能做低余额和消耗趋势判断。</div> : null}

@@ -144,7 +144,7 @@ export function AccountForm({ sites, onDone }: { sites: UpstreamSite[]; onDone: 
       </div>
 
       <div className="toolbar">
-        <button type="submit" disabled={!canSubmit || busy}>{busy ? "添加中..." : "添加账号"}</button>
+        <button type="submit" disabled={!canSubmit || busy}>{busy ? "添加中…" : "添加账号"}</button>
         <span className="muted">{isCustomSite ? "只允许添加识别为 NewAPI / OneAPI / Sub2API 的面板型中转站。" : "已有站点会直接绑定新账号，不覆盖旧账号。"}</span>
       </div>
       {message ? <div className={message.includes("失败") || message.includes("未识别") ? "error" : "note"}>{message}</div> : null}

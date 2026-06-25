@@ -89,6 +89,7 @@ func (a *App) systemDiagnostics(r *http.Request) (SystemDiagnostics, error) {
 		"invalidAccounts":     `SELECT COUNT(*) FROM channel_accounts WHERE login_status IN ('expired','manual_required','captcha_required','two_factor_required')`,
 		"failedCheckinsToday": `SELECT COUNT(*) FROM checkin_logs WHERE status NOT IN ('success','already_checked') AND substr(started_at,1,10)=substr(datetime('now'),1,10)`,
 		"unreadNotifications": `SELECT COUNT(*) FROM app_notifications WHERE read=0`,
+		"cookieExpiringSoon": `SELECT COUNT(*) FROM channel_accounts WHERE cookie_expiry_at != '' AND cookie_expiry_at != '' AND datetime(cookie_expiry_at) BETWEEN datetime('now') AND datetime('now','+7 days')`,
 	}
 	for key, query := range queries {
 		var count int
@@ -150,6 +151,12 @@ func (a *App) systemDiagnostics(r *http.Request) (SystemDiagnostics, error) {
 		"进入通知中心，优先查看失败、授权失效、低余额类通知。",
 		"根据通知跳转到账号、站点或签到页处理对应问题。",
 		"处理完成后点击一键已读，避免旧通知继续干扰自检判断。",
+	}))
+
+	items = append(items, thresholdDiagnostic("cookie-expiring", counts["cookieExpiringSoon"], "warning", "存在 Cookie 临近过期账号", "Cookie 未临近过期", "去账号页重新登录或刷新授权，避免签到因 Cookie 过期失败。", []string{
+		"在账号页筛选 Cookie 临近过期的账号。",
+		"点击重新登录或保存新的浏览器授权会话。",
+		"刷新后确认 cookie_expiry_at 已更新到较远的未来时间。",
 	}))
 
 	return SystemDiagnostics{

@@ -1,0 +1,42 @@
+# Binaries
+dist/
+distrelaycheck.exe
+*.exe
+
+# Runtime data (credentials, DB, keys)
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Build artifacts
+frontend/src/*.css.map
+frontend/tsconfig.tsbuildinfo
+frontend/tsconfig.app.tsbuildinfo
+
+# Screenshots
+screenshots/
+frontend/screenshots/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Pipeline artifacts
+.pipeline/
+
+# Session artifacts
+*.jsonl
+
+# Agent work artifacts
+../.workbuddy/
+../deliverables/

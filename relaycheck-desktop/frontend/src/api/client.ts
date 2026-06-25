@@ -2,7 +2,7 @@ import type { ApiResult, ClientReadCacheEntry, GlobalApiError } from "@/types";
 
 const clientReadCacheTTL = 1500;
 const clientReadCache = new Map<string, ClientReadCacheEntry>();
-const uncachedReadPrefixes = ["/api/checkins/status", "/api/auth/session"];
+const uncachedReadPrefixes = ["/api/checkins/status"];
 
 const apiErrorListeners = new Set<(error: GlobalApiError) => void>();
 

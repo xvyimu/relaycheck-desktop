@@ -44,6 +44,56 @@ var checkinCandidates = []apiCandidate{
 	{http.MethodGet, "/api/daily-checkin"},
 }
 
+// siteTypeCheckinPaths maps site kind to the preferred checkin endpoint.
+// Based on AI API Hub research: NewAPI family uses /api/user/checkin,
+// Veloera uses /api/user/check_in, etc.
+var siteTypeCheckinPaths = map[string][]apiCandidate{
+	"newapi": {
+		{http.MethodPost, "/api/user/checkin"},
+	},
+	"oneapi": {
+		{http.MethodPost, "/api/user/checkin"},
+	},
+	"modified_relay": {
+		{http.MethodPost, "/api/user/checkin"},
+		{http.MethodPost, "/api/user/check_in"},
+	},
+}
+
+// compatUserIDHeaders maps site kind to the custom user-ID header name.
+var compatUserIDHeaders = map[string]string{
+	"newapi":         "New-Api-User",
+	"oneapi":         "New-Api-User",
+	"modified_relay": "New-Api-User",
+}
+
+// checkinCandidatesForSite returns site-type-specific candidates first, then fallbacks.
+func checkinCandidatesForSite(siteKind string, customRules []apiCandidate) []apiCandidate {
+	var candidates []apiCandidate
+	// Custom rules always take top priority.
+	candidates = append(candidates, customRules...)
+	// Site-type-specific paths come next.
+	if preferred, ok := siteTypeCheckinPaths[siteKind]; ok {
+		candidates = append(candidates, preferred...)
+	}
+	// Global fallbacks last.
+	candidates = append(candidates, checkinCandidates...)
+	return dedupeCandidates(candidates)
+}
+
+func dedupeCandidates(candidates []apiCandidate) []apiCandidate {
+	seen := map[string]bool{}
+	result := []apiCandidate{}
+	for _, c := range candidates {
+		key := c.Method + " " + c.Path
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, c)
+		}
+	}
+	return result
+}
+
 var balanceCandidates = []string{
 	"/v1/dashboard/billing/subscription",
 	"/v1/usage",
@@ -64,6 +114,7 @@ type accountAuthContext struct {
 	AccountName     string
 	UpstreamSiteID  string
 	UpstreamSite    string
+	SiteKind        string
 	ChannelID       string
 	BaseURL         string
 	LoginPath       string
@@ -625,8 +676,7 @@ func (a *App) runAccountCheckin(ctx context.Context, id string) (checkinResult, 
 
 	startedAt := now()
 	lastUnsupported := checkinResult{Status: "unsupported", Message: "未找到可用签到接口。"}
-	candidates := append([]apiCandidate{}, auth.CheckinRules...)
-	candidates = append(candidates, checkinCandidates...)
+	candidates := checkinCandidatesForSite(auth.SiteKind, auth.CheckinRules)
 	for _, candidate := range candidates {
 		status, body, retries, err := a.callCheckinAPIWithRetry(ctx, auth, candidate)
 		if err != nil {
@@ -683,8 +733,13 @@ func (a *App) callCheckinAPIWithRetry(ctx context.Context, auth accountAuthConte
 	if attempts < 1 {
 		attempts = 1
 	}
+	// Send empty JSON body for POST requests (AI API Hub convention).
+	var postBody []byte
+	if candidate.Method == http.MethodPost {
+		postBody = []byte("{}")
+	}
 	for attempt := 1; attempt <= attempts; attempt++ {
-		status, body, err = a.callAccountAPI(ctx, auth, candidate.Method, candidate.Path, nil)
+		status, body, err = a.callAccountAPI(ctx, auth, candidate.Method, candidate.Path, postBody)
 		if !shouldRetryCheckinAttempt(status, err) || attempt == attempts {
 			return status, body, attempt - 1, err
 		}
@@ -748,17 +803,83 @@ func classifyCheckinResponse(status int, body string) checkinResult {
 		return checkinResult{Status: "auth_expired", Message: firstNonEmpty(message, "登录态已失效。")}
 	case isCheckinDisabledText(body):
 		return checkinResult{Status: "unsupported", Message: firstNonEmpty(message, "该站点未开启签到。")}
+	case isTurnstileRequired(body):
+		return checkinResult{Status: "manual_required", Message: firstNonEmpty(message, "该站点签到需要人机验证（Turnstile），请手动签到。")}
 	case status < 200 || status >= 300:
 		return checkinResult{Status: "failed", Message: firstNonEmpty(message, fmt.Sprintf("签到接口返回 HTTP %d。", status))}
-	case strings.Contains(text, "already") || strings.Contains(text, "today") || strings.Contains(body, "已签到") || strings.Contains(body, "重复"):
+	case isAlreadyCheckedIn(text, body):
 		return checkinResult{Status: "already_checked", Message: firstNonEmpty(message, "今日已签到。")}
 	case strings.Contains(text, "login") && strings.Contains(text, "<html"):
 		return checkinResult{Status: "auth_expired", Message: "接口返回登录页，请重新保存授权。"}
 	case strings.Contains(text, `"success":false`) || strings.Contains(text, `"ok":false`):
 		return checkinResult{Status: "failed", Message: firstNonEmpty(message, "签到失败。")}
 	default:
-		return checkinResult{Status: "success", Message: firstNonEmpty(message, "签到成功。")}
+		reward := extractCheckinReward(body)
+		msg := firstNonEmpty(message, "签到成功。")
+		if reward != "" {
+			msg = msg + " 奖励：" + reward
+		}
+		return checkinResult{Status: "success", Message: msg, Reward: reward}
 	}
+}
+
+// isAlreadyCheckedIn detects "already checked in" responses with broader keyword coverage.
+func isAlreadyCheckedIn(text, body string) bool {
+	alreadyKeywords := []string{
+		"already", "today", "checked_in_today", "已经签到", "已签到",
+		"今日已签", "今天已签", "不可重复", "重复签到", "已领取",
+	}
+	for _, kw := range alreadyKeywords {
+		if strings.Contains(text, strings.ToLower(kw)) || strings.Contains(body, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// isTurnstileRequired detects Turnstile/Cloudflare challenge responses.
+func isTurnstileRequired(body string) bool {
+	text := strings.ToLower(body)
+	turnstileKeywords := []string{
+		"turnstile", "cf-turnstile", "cloudflare",
+		"人机验证", "验证码", "captcha", "challenge",
+	}
+	for _, kw := range turnstileKeywords {
+		if strings.Contains(text, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// extractCheckinReward parses reward amount from checkin response.
+func extractCheckinReward(body string) string {
+	var payload map[string]interface{}
+	if json.Unmarshal([]byte(body), &payload) != nil {
+		return ""
+	}
+	// Try common reward field names.
+	for _, key := range []string{"reward", "quota", "amount", "bonus", "gift"} {
+		if val, ok := payload[key]; ok {
+			if num, ok := toFloat(val); ok && num > 0 {
+				return fmt.Sprintf("%.2f", num)
+			}
+			if str, ok := val.(string); ok && str != "" {
+				return str
+			}
+		}
+	}
+	// Try nested data.reward.
+	if data, ok := payload["data"].(map[string]interface{}); ok {
+		for _, key := range []string{"reward", "quota", "amount", "bonus"} {
+			if val, ok := data[key]; ok {
+				if num, ok := toFloat(val); ok && num > 0 {
+					return fmt.Sprintf("%.2f", num)
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func (a *App) saveCheckinResult(ctx context.Context, auth accountAuthContext, result checkinResult, startedAt string, finishedAt string) error {
@@ -911,8 +1032,9 @@ func (a *App) loadAccountAuth(ctx context.Context, id string) (accountAuthContex
 	var auth accountAuthContext
 	var email, username, cookieEncrypted, accessEncrypted, apiKeyEncrypted, passwordEncrypted, loginURL, checkinConfigJSON string
 	var supportsCheckin, supportsBalance int
+	var siteKind sql.NullString
 	err := a.db.QueryRowContext(ctx, `
-		SELECT a.id, a.display_name, s.id, s.name, COALESCE(s.channel_id,''), s.base_url,
+		SELECT a.id, a.display_name, s.id, s.name, COALESCE(s.kind,''), COALESCE(s.channel_id,''), s.base_url,
 		       COALESCE(s.login_url,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
 		       COALESCE(a.password_encrypted,''), COALESCE(a.cookie_encrypted,''),
 		       COALESCE(a.access_token_encrypted,''), COALESCE(a.api_key_encrypted,''),
@@ -921,7 +1043,7 @@ func (a *App) loadAccountAuth(ctx context.Context, id string) (accountAuthContex
 		FROM channel_accounts a
 		JOIN upstream_sites s ON s.id = a.upstream_site_id
 		WHERE a.id = ?
-	`, id).Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &auth.ChannelID, &auth.BaseURL, &loginURL, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON)
+	`, id).Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON)
 	if err == sql.ErrNoRows {
 		return auth, errorsText("账号不存在。")
 	}
@@ -929,6 +1051,7 @@ func (a *App) loadAccountAuth(ctx context.Context, id string) (accountAuthContex
 		return auth, err
 	}
 	auth.LoginName = firstNonEmpty(email, username)
+	auth.SiteKind = siteKind.String
 	auth.LoginPath = pathFromMaybeURL(loginURL)
 	auth.Password, _ = a.decryptText(passwordEncrypted)
 	auth.Cookie, _ = a.decryptText(cookieEncrypted)
@@ -1220,7 +1343,11 @@ func (a *App) callAccountAPI(ctx context.Context, auth accountAuthContext, metho
 		req.Header.Set("cookie", auth.Cookie)
 	}
 	if auth.AuthUserID != "" {
-		req.Header.Set("New-Api-User", auth.AuthUserID)
+		headerName := "New-Api-User"
+		if h, ok := compatUserIDHeaders[auth.SiteKind]; ok {
+			headerName = h
+		}
+		req.Header.Set(headerName, auth.AuthUserID)
 	}
 	if token := firstNonEmpty(auth.AccessToken, auth.APIKey); token != "" {
 		if !strings.HasPrefix(strings.ToLower(token), "bearer ") {

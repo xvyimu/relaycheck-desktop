@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
+import { reopenOnboarding } from "@/components/onboarding/OnboardingWizard";
 import { formatBuildTime, formatBytes, formatTime } from "@/lib/format";
 import { auditActionLabel, auditLevelLabel, diagnosticLevelLabel, schedulerStatusLabel } from "@/lib/labels";
-import type { AuditLogItem, NetworkProxyConfig, ProxyTestResult, SchedulerStatus, StatusPayload, SyncScheduleConfig, SystemBackup, SystemSetting } from "@/types";
+import type { AuditLogItem, ExportResult, NetworkProxyConfig, PortCheckResult, ProxyTestResult, SchedulerStatus, StatusPayload, SyncScheduleConfig, SystemBackup, SystemSetting, VersionCheckResult } from "@/types";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusLabel } from "@/components/ui/status-label";
 
@@ -18,6 +19,19 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
   const [multiSelectBackups, setMultiSelectBackups] = useState(false);
   const [selectedBackups, setSelectedBackups] = useState<string[]>([]);
   const [showHelpGuide, setShowHelpGuide] = useState(false);
+  const [portCheckPort, setPortCheckPort] = useState(String(status.port || 3001));
+  const [portCheckResult, setPortCheckResult] = useState<PortCheckResult | null>(null);
+  const [portChecking, setPortChecking] = useState(false);
+  const [versionCheckResult, setVersionCheckResult] = useState<VersionCheckResult | null>(null);
+  const [versionChecking, setVersionChecking] = useState(false);
+  const [versionCheckURL, setVersionCheckURL] = useState("");
+  const [exportPassword, setExportPassword] = useState("");
+  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [importPassword, setImportPassword] = useState("");
+  const [importFileName, setImportFileName] = useState("");
+  const [exports, setExports] = useState<ExportResult[]>([]);
+  const [importing, setImporting] = useState(false);
   const totalBackupSize = backups.reduce((sum, backup) => sum + backup.sizeBytes, 0);
   const defaultProxyConfig: NetworkProxyConfig = { enabled: false, url: "http://127.0.0.1:7897", bypassLocal: true };
   const defaultSyncSchedule: SyncScheduleConfig = { enabled: true, intervalMinutes: 30, mode: "local-newapi", runOnStartup: false };
@@ -41,6 +55,16 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
   }, [settings]);
   const checkinJob = scheduler?.jobs.find((job) => job.key === "checkin.daily");
   const syncJob = scheduler?.jobs.find((job) => job.key === "sync.local_newapi");
+  const versionCheckURLSetting = settings.find((item) => item.key === "app.version_check_url");
+  const currentVersionCheckURL = useMemo(() => {
+    if (!versionCheckURLSetting) return "";
+    try {
+      const parsed = JSON.parse(versionCheckURLSetting.valueJson);
+      return typeof parsed === "string" ? parsed : "";
+    } catch {
+      return versionCheckURLSetting.valueJson?.replace(/^"|"$/g, "") || "";
+    }
+  }, [versionCheckURLSetting]);
 
   function upsertSetting(key: string, valueJson: string) {
     setSettings((current) => {
@@ -70,21 +94,23 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
   }
 
   async function refresh() {
-    const [nextSettings, nextBackups, nextScheduler, nextAuditLogs] = await Promise.all([
+    const [nextSettings, nextBackups, nextScheduler, nextAuditLogs, nextExports] = await Promise.all([
       api<SystemSetting[]>("/api/system/settings"),
       api<SystemBackup[]>("/api/system/backups"),
       api<SchedulerStatus>("/api/system/scheduler-status"),
       api<AuditLogItem[]>("/api/system/audit-log"),
+      api<ExportResult[]>("/api/system/exports").catch(() => []),
     ]);
     setSettings(nextSettings);
     setBackups(nextBackups);
     setScheduler(nextScheduler);
     setAuditLogs(nextAuditLogs);
+    setExports(nextExports || []);
   }
 
   async function createBackup() {
     setBusy("backup");
-    setMessage("正在创建数据库备份...");
+    setMessage("正在创建数据库备份…");
     try {
       const backup = await api<SystemBackup>("/api/system/backup", { method: "POST" });
       setMessage("备份完成：" + backup.fileName);
@@ -101,7 +127,7 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
     const confirmed = window.confirm("确认从 " + backup.fileName + " 恢复数据库？程序会先自动备份当前数据库，然后恢复该快照。恢复后建议刷新页面。");
     if (!confirmed) return;
     setBusy("restore");
-    setMessage("正在恢复 " + backup.fileName + "...");
+    setMessage("正在恢复 " + backup.fileName + "…");
     try {
       const result = await api<{ restored: boolean; fileName: string; beforeBackup: SystemBackup }>("/api/system/restore", {
         method: "POST",
@@ -122,7 +148,7 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
     const confirmed = window.confirm("确认删除选中的 " + selectedBackups.length + " 个本地备份？这不会影响当前数据库，但删除后这些快照无法恢复。");
     if (!confirmed) return;
     setBusy("delete");
-    setMessage("正在删除选中的备份...");
+    setMessage("正在删除选中的备份…");
     try {
       const result = await api<{ deleted: number; skipped: string[] }>("/api/system/backups/delete", {
         method: "POST",
@@ -153,7 +179,7 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
 
   async function saveSettings() {
     setBusy("settings");
-    setMessage("正在保存系统设置...");
+    setMessage("正在保存系统设置…");
     try {
       const result = await persistSettings();
       setMessage("已保存 " + result.updated + " 项设置。");
@@ -166,7 +192,7 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
 
   async function testProxy() {
     setBusy("proxy");
-    setMessage("正在保存并测试代理...");
+    setMessage("正在保存并测试代理…");
     setProxyTestResult(null);
     try {
       await persistSettings();
@@ -187,16 +213,20 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
     void refresh();
   }, []);
 
+  useEffect(() => {
+    setVersionCheckURL(currentVersionCheckURL);
+  }, [currentVersionCheckURL]);
+
   return (
     <section className="panel">
       <div className="settings-hero">
         <div>
-          <span className="eyebrow">Local Maintenance</span>
+          <span className="eyebrow">本地维护</span>
           <h2>本地数据安全与运行配置</h2>
           <p>备份只保存在本机 data/backups 目录。恢复前会自动创建当前数据库快照，避免误操作不可回退。</p>
         </div>
         <button disabled={busy !== ""} onClick={() => void createBackup()}>
-          {busy === "backup" ? "备份中..." : "立即备份数据库"}
+          {busy === "backup" ? "备份中…" : "立即备份数据库"}
         </button>
       </div>
 
@@ -233,11 +263,168 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
             <div><span>版本</span><strong>{status.productVersion}</strong></div>
             <div><span>构建时间</span><strong>{formatBuildTime(status.buildTime)}</strong></div>
             <div><span>绑定地址</span><strong>{status.bindAddress}:{status.port}</strong></div>
+            {status.portConflict && status.preferredPort ? (
+              <div className="warning-banner" style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, fontSize: 13 }}>
+                <span>端口冲突</span>
+                <strong>首选端口 {status.preferredPort} 被占用，已回退到 {status.port}</strong>
+              </div>
+            ) : null}
             <div><span>调度器</span><strong>{scheduler ? `${scheduler.jobs.length} 个任务 &middot; ${schedulerStatusLabel(checkinJob?.status || "idle")}` : "读取中"}</strong></div>
             <div>
               <span>上次自检</span>
               <strong>{status.lastDiagnostics ? `${diagnosticLevelLabel(status.lastDiagnostics.overall)} &middot; ${status.lastDiagnostics.itemCount} 项 &middot; ${formatTime(status.lastDiagnostics.generatedAt)}` : "未生成"}</strong>
             </div>
+          </div>
+        </article>
+
+        <article className="card settings-version-check-card">
+          <div className="section-heading">
+            <div>
+              <strong>版本检查</strong>
+              <span>检查是否有新版本可用</span>
+            </div>
+          </div>
+          <div className="proxy-form-grid">
+            <label className="field">
+              <span>版本清单 URL</span>
+              <input
+                value={versionCheckURL}
+                onChange={(event) => setVersionCheckURL(event.target.value)}
+                onBlur={() => {
+                  if (versionCheckURL !== currentVersionCheckURL) {
+                    upsertSetting("app.version_check_url", JSON.stringify(versionCheckURL));
+                  }
+                }}
+                placeholder="https://example.com/relaycheck-version.json"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={versionChecking}
+              onClick={async () => {
+                setVersionChecking(true);
+                setVersionCheckResult(null);
+                try {
+                  if (versionCheckURL !== currentVersionCheckURL) {
+                    upsertSetting("app.version_check_url", JSON.stringify(versionCheckURL));
+                    await api("/api/system/settings", {
+                      method: "PUT",
+                      body: JSON.stringify({ settings: [{ key: "app.version_check_url", valueJson: JSON.stringify(versionCheckURL) }] }),
+                    });
+                  }
+                  const result = await api<VersionCheckResult>("/api/system/version-check");
+                  setVersionCheckResult(result);
+                } catch (error) {
+                  setVersionCheckResult({
+                    currentVersion: status.productVersion,
+                    updateAvailable: false,
+                    checkedAt: new Date().toISOString(),
+                    error: error instanceof Error ? error.message : "检查失败",
+                  });
+                } finally {
+                  setVersionChecking(false);
+                }
+              }}
+            >
+              {versionChecking ? "检查中…" : "检查更新"}
+            </button>
+          </div>
+          {versionCheckResult ? (
+            <div className="detail-list" style={{ marginTop: 8 }}>
+              <div><span>当前版本</span><strong>{versionCheckResult.currentVersion}</strong></div>
+              {versionCheckResult.latestVersion ? (
+                <div><span>最新版本</span><strong>{versionCheckResult.latestVersion}</strong></div>
+              ) : null}
+              <div>
+                <span>状态</span>
+                <strong>
+                  {versionCheckResult.error
+                    ? versionCheckResult.error
+                    : versionCheckResult.updateAvailable
+                      ? "有新版本可用"
+                      : "已是最新版本"}
+                </strong>
+              </div>
+              {versionCheckResult.updateAvailable && versionCheckResult.releaseUrl ? (
+                <div>
+                  <span>下载</span>
+                  <strong>
+                    <a href={versionCheckResult.releaseUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--v4-blue)" }}>
+                      打开下载页面
+                    </a>
+                  </strong>
+                </div>
+              ) : null}
+              {versionCheckResult.releaseNotes ? (
+                <div style={{ marginTop: 4, padding: "8px 12px", background: "var(--v4-neutral-bg)", borderRadius: 8, fontSize: 13, whiteSpace: "pre-wrap" }}>
+                  {versionCheckResult.releaseNotes}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="problem-hint detail-hint">
+            配置版本清单 URL 后，可检查远程是否有新版本。清单格式: {"{ \"version\": \"v1.1\", \"releaseUrl\": \"...\", \"releaseNotes\": \"...\" }"}
+          </div>
+        </article>
+
+        <article className="card settings-port-check-card">
+          <div className="section-heading">
+            <div>
+              <strong>端口检测</strong>
+              <span>检查本地端口是否可绑定</span>
+            </div>
+          </div>
+          <div className="proxy-form-grid">
+            <label className="field">
+              <span>端口号</span>
+              <input
+                value={portCheckPort}
+                onChange={(event) => setPortCheckPort(event.target.value)}
+                placeholder="如 3001"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={portChecking}
+              onClick={async () => {
+                setPortChecking(true);
+                setPortCheckResult(null);
+                try {
+                  const result = await api<PortCheckResult>(`/api/system/port-check?port=${encodeURIComponent(portCheckPort)}`);
+                  setPortCheckResult(result);
+                } catch {
+                  setPortCheckResult({ port: Number(portCheckPort) || 0, available: false, inUse: false, error: "检测失败" });
+                } finally {
+                  setPortChecking(false);
+                }
+              }}
+            >
+              {portChecking ? "检测中…" : "检测端口"}
+            </button>
+          </div>
+          {portCheckResult ? (
+            <div className="detail-list">
+              <div>
+                <span>端口</span>
+                <strong>{portCheckResult.port}</strong>
+              </div>
+              <div>
+                <span>状态</span>
+                <strong>
+                  {portCheckResult.available
+                    ? "可用（未被占用）"
+                    : portCheckResult.inUse
+                      ? "已被占用"
+                      : "检测失败"}
+                </strong>
+              </div>
+              {portCheckResult.error ? (
+                <div><span>详情</span><strong>{portCheckResult.error}</strong></div>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="problem-hint detail-hint">
+            启动前检测端口可避免端口冲突。当前运行端口为 {status.port}。
           </div>
         </article>
 
@@ -252,15 +439,139 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
           <div className="problem-hint detail-hint">建议在大量导入、批量识别、批量签到前先点一次"立即备份数据库"。</div>
         </article>
 
+        <article className="card settings-export-card">
+          <div className="section-heading">
+            <div>
+              <strong>加密导出 / 导入</strong>
+              <span>将渠道、凭据、历史和设置打包为 AES-GCM 加密文件</span>
+            </div>
+          </div>
+          <div className="proxy-form-grid">
+            <label className="field">
+              <span>导出密码（至少 6 位）</span>
+              <input
+                type="password"
+                value={exportPassword}
+                onChange={(e) => setExportPassword(e.target.value)}
+                placeholder="设置导出密码"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={exporting || exportPassword.length < 6}
+              onClick={async () => {
+                setExporting(true);
+                setExportResult(null);
+                try {
+                  const result = await api<ExportResult>("/api/system/export", {
+                    method: "POST",
+                    body: JSON.stringify({ password: exportPassword }),
+                  });
+                  setExportResult(result);
+                  setMessage("加密导出成功");
+                  const list = await api<ExportResult[]>("/api/system/exports");
+                  setExports(list || []);
+                } catch (error) {
+                  setMessage(error instanceof Error ? error.message : "导出失败");
+                } finally {
+                  setExporting(false);
+                }
+              }}
+            >
+              {exporting ? "导出中…" : "加密导出"}
+            </button>
+          </div>
+          {exportResult ? (
+            <div className="detail-list" style={{ marginTop: 8 }}>
+              <div><span>文件名</span><strong>{exportResult.fileName}</strong></div>
+              <div><span>大小</span><strong>{formatBytes(exportResult.sizeBytes)}</strong></div>
+              <div><span>数据库</span><strong>{formatBytes(exportResult.manifest.databaseSize)}</strong></div>
+              <div><span>设置数</span><strong>{exportResult.manifest.settingCount}</strong></div>
+              <div><span>导出时间</span><strong>{formatTime(exportResult.manifest.exportedAt)}</strong></div>
+            </div>
+          ) : null}
+          {exports.length > 0 ? (
+            <div className="detail-list" style={{ marginTop: 12 }}>
+              <div className="section-heading"><strong>已有导出文件</strong></div>
+              {exports.map((exp) => (
+                <div key={exp.fileName}>
+                  <span>{exp.fileName}</span>
+                  <strong>
+                    {formatBytes(exp.sizeBytes)}
+                    <button
+                      type="button"
+                      className="ghost"
+                      style={{ marginLeft: 8, padding: "2px 8px", fontSize: 12 }}
+                      onClick={() => { setImportFileName(exp.fileName); }}
+                    >
+                      选择导入
+                    </button>
+                  </strong>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <div className="proxy-form-grid" style={{ marginTop: 12 }}>
+            <label className="field">
+              <span>导入密码</span>
+              <input
+                type="password"
+                value={importPassword}
+                onChange={(e) => setImportPassword(e.target.value)}
+                placeholder="输入导出时设置的密码"
+              />
+            </label>
+            <label className="field">
+              <span>导入文件</span>
+              <input
+                value={importFileName}
+                onChange={(e) => setImportFileName(e.target.value)}
+                placeholder="export-XXXXXXXX-XXXXXX.rczip"
+              />
+            </label>
+            <button
+              type="button"
+              className="danger"
+              disabled={importing || importPassword.length < 6 || !importFileName}
+              onClick={async () => {
+                if (!confirm("导入将覆盖当前数据库，确定继续？")) return;
+                setImporting(true);
+                try {
+                  await api("/api/system/import", {
+                    method: "POST",
+                    body: JSON.stringify({ password: importPassword, fileName: importFileName }),
+                  });
+                  setMessage("导入成功，正在刷新…");
+                  setTimeout(() => window.location.reload(), 1500);
+                } catch (error) {
+                  setMessage(error instanceof Error ? error.message : "导入失败");
+                } finally {
+                  setImporting(false);
+                }
+              }}
+            >
+              {importing ? "导入中…" : "加密导入"}
+            </button>
+          </div>
+          <div className="problem-hint detail-hint">
+            导出文件使用 AES-256-GCM 加密，包含完整数据库和所有设置。导入会覆盖当前数据，请先备份。
+          </div>
+        </article>
+
         <article className="card settings-help-card">
           <div className="section-heading">
             <div>
               <strong>帮助 / 文档</strong>
               <span>把常用说明集中在本地设置页，避免需要翻目录才知道下一步。</span>
             </div>
-            <button className="ghost" type="button" onClick={() => setShowHelpGuide((current) => !current)}>
-              {showHelpGuide ? "收起" : "查看指引"}
-            </button>
+            <div className="toolbar compact-toolbar">
+              <button className="ghost" type="button" onClick={() => setShowHelpGuide((current) => !current)}>
+                {showHelpGuide ? "收起" : "查看指引"}
+              </button>
+              <button className="ghost" type="button" onClick={reopenOnboarding}>
+                重新查看引导
+              </button>
+            </div>
           </div>
           <div className="detail-list">
             <div><span>使用说明</span><strong>relaycheck-desktop/README.md</strong></div>
@@ -329,7 +640,7 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
           </div>
           <div className="proxy-actions">
             <button disabled={busy !== "" || !settings.length} onClick={() => void testProxy()}>
-              {busy === "proxy" ? "测试中..." : "保存并测试代理"}
+              {busy === "proxy" ? "测试中…" : "保存并测试代理"}
             </button>
             <button className="ghost" disabled={busy !== ""} onClick={() => updateProxyConfig(defaultProxyConfig)}>恢复默认</button>
           </div>
@@ -381,7 +692,7 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
           <div className="problem-hint detail-hint">后台同步默认不导入渠道 Key、不做重探测，只更新渠道结构和源端移除状态；失败才发重要通知。</div>
           <div className="proxy-actions">
             <button disabled={busy !== "" || !settings.length} onClick={() => void saveSettings()}>
-              {busy === "settings" ? "保存中..." : "保存同步频率"}
+              {busy === "settings" ? "保存中…" : "保存同步频率"}
             </button>
           </div>
         </article>
@@ -450,7 +761,7 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
               </button>
               {multiSelectBackups ? (
                 <button className="danger" disabled={busy !== "" || !selectedBackups.length} onClick={() => void deleteSelectedBackups()}>
-                  {busy === "delete" ? "删除中..." : "删除选中"}
+                  {busy === "delete" ? "删除中…" : "删除选中"}
                 </button>
               ) : null}
             </div>
@@ -468,7 +779,7 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
                   <span>{formatBytes(backup.sizeBytes)} {"·"} {formatTime(backup.createdAt)}</span>
                 </div>
                 <button className="danger" disabled={busy !== ""} onClick={() => void restoreBackup(backup)}>
-                  {busy === "restore" ? "恢复中..." : "恢复"}
+                  {busy === "restore" ? "恢复中…" : "恢复"}
                 </button>
               </article>
             ))}
@@ -484,7 +795,7 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
             <span>轻量保存扫描目标、签到计划和本地运行偏好。保存前会校验 JSON 格式。</span>
           </div>
           <button disabled={busy !== "" || !settings.length} onClick={() => void saveSettings()}>
-            {busy === "settings" ? "保存中..." : "保存设置"}
+            {busy === "settings" ? "保存中…" : "保存设置"}
           </button>
         </div>
         <div className="settings-list">

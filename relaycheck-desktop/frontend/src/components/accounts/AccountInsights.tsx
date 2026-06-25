@@ -1,10 +1,12 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { formatPriceComparisonBadge, formatPriceComparisonMeta, formatPricingSource } from "@/lib/format";
 import { apiKeyStatusLabel, formatAPIKeyTestMessage, priceLevelLabel, priceLevelShort, pricingCacheStatusLabel, pricingSourceBadge } from "@/lib/labels";
 import type { Account, APIKeyTestResult, BulkBrowserOpenResponse, BulkBrowserSaveResponse, BulkPasswordLoginResponse, KeyExportPreview, ModelOverview, ModelPricingOverview, UnsupportedCheckinCleanupResult } from "@/types";
 import { EmptyState } from "@/components/ui/empty-state";
 import { isLocalURL } from "@/components/accounts/helpers";
+import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { TaskProgressView } from "@/components/ui/TaskProgressView";
 
 const API_KEY_STALE_MS = 24 * 60 * 60 * 1000;
 const UNSUPPORTED_CLEANUP_LIMIT = 10;
@@ -116,6 +118,21 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
   const [cleanupPreview, setCleanupPreview] = useState<UnsupportedCheckinCleanupResult | null>(null);
   const [cleanupBusy, setCleanupBusy] = useState(false);
   const [cleanupIncludeLastUnsupported, setCleanupIncludeLastUnsupported] = useState(true);
+  const keyTask = useTaskProgress();
+  const balanceTask = useTaskProgress();
+
+  // 批量任务完成后刷新数据
+  useEffect(() => {
+    if (keyTask.progress?.status === "done") {
+      void onDone();
+    }
+  }, [keyTask.progress?.status, onDone]);
+
+  useEffect(() => {
+    if (balanceTask.progress?.status === "done") {
+      void onDone();
+    }
+  }, [balanceTask.progress?.status, onDone]);
   const cleanupBatchLimit = cleanupPreview?.limit || UNSUPPORTED_CLEANUP_LIMIT;
   const cleanupCanDelete = Boolean(cleanupPreview?.matched && cleanupPreview.deleted === 0);
   const cleanupPreviewButtonLabel = cleanupBusy
@@ -162,7 +179,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
   async function testSingleKey(account: Account) {
     if (keyTestBusyId) return;
     setKeyTestBusyId(account.id);
-    setMessage(`正在检测 ${account.displayName} 的 API Key...`);
+    setMessage(`正在检测 ${account.displayName} 的 API Key…`);
     try {
       const result = await api<APIKeyTestResult>(`/api/accounts/${account.id}/test-api-key`, { method: "POST" });
       setMessage(`${account.displayName}：${formatAPIKeyTestMessage(result)}`);
@@ -177,7 +194,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
   async function syncModels() {
     if (modelSyncBusy || !keyAccounts.length) return;
     setModelSyncBusy(true);
-    setMessage("正在同步 Key 模型列表、可用性和测速...");
+    setMessage("正在同步 Key 模型列表、可用性和测速…");
     try {
       const overview = await api<ModelOverview>("/api/models/sync", {
         method: "POST",
@@ -199,7 +216,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
   async function syncPricing() {
     if (pricingSyncBusy) return;
     setPricingSyncBusy(true);
-    setMessage("正在探测 NewAPI/Sub2API 站点 /api/pricing，并写入本地缓存...");
+    setMessage("正在探测 NewAPI/Sub2API 站点 /api/pricing，并写入本地缓存…");
     try {
       const pricing = await api<ModelPricingOverview>("/api/models/pricing/sync", {
         method: "POST",
@@ -217,7 +234,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
   async function loadKeyExportPreview() {
     if (keyExportBusy || !keyAccounts.length) return;
     setKeyExportBusy(true);
-    setMessage("正在生成 Key 安全导出预览...");
+    setMessage("正在生成 Key 安全导出预览…");
     try {
       const preview = await api<KeyExportPreview>("/api/keys/export-preview");
       setKeyExportPreview(preview);
@@ -253,7 +270,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
   async function previewUnsupportedCheckinCleanup() {
     if (cleanupBusy) return;
     setCleanupBusy(true);
-    setMessage("正在预览不支持签到账号，预览不会修改数据...");
+    setMessage("正在预览不支持签到账号，预览不会修改数据…");
     try {
       const result = await api<UnsupportedCheckinCleanupResult>("/api/accounts/delete-unsupported-checkins", {
         method: "POST",
@@ -274,7 +291,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
     const confirmed = window.confirm("确认删除 " + cleanupPreview.matched + " 个不支持签到的账号？这会同步删除这些账号的签到日志和余额快照。" + (samples ? "\n样例：" + samples : ""));
     if (!confirmed) return;
     setCleanupBusy(true);
-    setMessage("正在删除不支持签到账号...");
+    setMessage("正在删除不支持签到账号…");
     try {
       const result = await api<UnsupportedCheckinCleanupResult>("/api/accounts/delete-unsupported-checkins", {
         method: "POST",
@@ -535,8 +552,22 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
       </div>
       <div className="toolbar">
         <button
+          type="button"
+          disabled={!keyAccounts.length || keyTask.loading || keyTask.progress?.status === "running"}
+          onClick={() => void keyTask.startTask("test_keys")}
+        >
+          {keyTask.loading || keyTask.progress?.status === "running" ? "测试中…" : "批量测试 Key"}
+        </button>
+        <button
+          type="button"
+          disabled={balanceTask.loading || balanceTask.progress?.status === "running"}
+          onClick={() => void balanceTask.startTask("refresh_balances")}
+        >
+          {balanceTask.loading || balanceTask.progress?.status === "running" ? "刷新中…" : "批量刷新余额"}
+        </button>
+        <button
           onClick={async () => {
-            setMessage("正在用已保存密码重登...");
+            setMessage("正在用已保存密码重登…");
             const result = await api<BulkPasswordLoginResponse>("/api/accounts/bulk-password-login", {
               method: "POST",
               body: JSON.stringify({ limit: 20 }),
@@ -551,11 +582,11 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
           disabled={!keyAccounts.length}
           onClick={() => void syncModels()}
         >
-          {modelSyncBusy ? "同步中..." : "同步模型/密钥"}
+          {modelSyncBusy ? "同步中…" : "同步模型/密钥"}
         </button>
         <button
           onClick={async () => {
-            setMessage("正在批量打开网页登录窗口...");
+            setMessage("正在批量打开网页登录窗口…");
             const result = await api<BulkBrowserOpenResponse>("/api/accounts/bulk-open-browser-login", {
               method: "POST",
               body: JSON.stringify({ limit: 5 }),
@@ -567,7 +598,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
         </button>
         <button
           onClick={async () => {
-            setMessage("正在保存已完成网页登录的账号...");
+            setMessage("正在保存已完成网页登录的账号…");
             const result = await api<BulkBrowserSaveResponse>("/api/accounts/bulk-finish-browser-login", {
               method: "POST",
               body: JSON.stringify({}),
@@ -580,6 +611,26 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
         </button>
         <button type="button" className="ghost" onClick={() => setShowDetails((current) => !current)}>{showDetails ? "收起明细" : "展开明细"}</button>
       </div>
+      {keyTask.progress || keyTask.loading || keyTask.error ? (
+        <TaskProgressView
+          progress={keyTask.progress}
+          loading={keyTask.loading}
+          error={keyTask.error}
+          onCancel={keyTask.cancelTask}
+          onDismiss={keyTask.reset}
+          labels={{ title: "批量测试 Key" }}
+        />
+      ) : null}
+      {balanceTask.progress || balanceTask.loading || balanceTask.error ? (
+        <TaskProgressView
+          progress={balanceTask.progress}
+          loading={balanceTask.loading}
+          error={balanceTask.error}
+          onCancel={balanceTask.cancelTask}
+          onDismiss={balanceTask.reset}
+          labels={{ title: "批量刷新余额" }}
+        />
+      ) : null}
       {message ? <span className="muted">{message}</span> : null}
       {showDetails ? (
         <div className="account-insight-details">

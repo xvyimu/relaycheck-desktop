@@ -42,7 +42,9 @@ func (a *App) listAccounts(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(a.balance_unit,'unknown'),
 		       a.balance, COALESCE(a.last_checkin_at,''), COALESCE(a.last_checkin_status,''),
 		       COALESCE((SELECT l.message FROM checkin_logs l WHERE l.account_id = a.id ORDER BY l.started_at DESC LIMIT 1), ''),
-		       COALESCE(a.last_login_at,''), COALESCE(a.last_validated_at,''), a.created_at, a.updated_at
+		       COALESCE(a.last_login_at,''), COALESCE(a.last_validated_at,''),
+		       COALESCE(a.cookie_expiry_at,''), COALESCE(a.storage_state_expiry_at,''),
+		       a.created_at, a.updated_at
 		FROM channel_accounts a
 		JOIN upstream_sites s ON s.id = a.upstream_site_id
 		ORDER BY a.updated_at DESC
@@ -58,7 +60,7 @@ func (a *App) listAccounts(w http.ResponseWriter, r *http.Request) {
 			var balance sql.NullFloat64
 			var sampleModelsJSON string
 			var modelUsable int
-			if err := rows.Scan(&item.ID, &item.UpstreamSiteID, &item.UpstreamSiteName, &item.UpstreamSiteBaseURL, &item.UpstreamSiteLoginURL, &item.UpstreamSiteKind, &item.DisplayName, &item.Email, &item.Username, &item.AuthType, &item.BrowserProfilePath, &item.LoginStatus, &item.APIKeyFingerprint, &item.APIKeyStatus, &item.APIKeyLastCheckedAt, &item.APIKeyModelCount, &sampleModelsJSON, &item.APIKeyTestModel, &modelUsable, &item.APIKeyLatencyMs, &item.APIKeyTestHTTPStatus, &item.APIKeyTestMessage, &item.APIKeyTestPath, &item.BalanceUnit, &balance, &item.LastCheckinAt, &item.LastCheckinStatus, &item.LastCheckinMessage, &item.LastLoginAt, &item.LastValidatedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			if err := rows.Scan(&item.ID, &item.UpstreamSiteID, &item.UpstreamSiteName, &item.UpstreamSiteBaseURL, &item.UpstreamSiteLoginURL, &item.UpstreamSiteKind, &item.DisplayName, &item.Email, &item.Username, &item.AuthType, &item.BrowserProfilePath, &item.LoginStatus, &item.APIKeyFingerprint, &item.APIKeyStatus, &item.APIKeyLastCheckedAt, &item.APIKeyModelCount, &sampleModelsJSON, &item.APIKeyTestModel, &modelUsable, &item.APIKeyLatencyMs, &item.APIKeyTestHTTPStatus, &item.APIKeyTestMessage, &item.APIKeyTestPath, &item.BalanceUnit, &balance, &item.LastCheckinAt, &item.LastCheckinStatus, &item.LastCheckinMessage, &item.LastLoginAt, &item.LastValidatedAt, &item.CookieExpiryAt, &item.StorageStateExpiryAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
 				return nil, err
 			}
 			item.APIKeyModelUsable = modelUsable == 1
@@ -531,11 +533,13 @@ func (a *App) loadAccountByID(ctx context.Context, id string) (ChannelAccount, e
 		       COALESCE(a.balance_unit,'unknown'),
 		       a.balance, COALESCE(a.last_checkin_at,''), COALESCE(a.last_checkin_status,''),
 		       COALESCE((SELECT l.message FROM checkin_logs l WHERE l.account_id = a.id ORDER BY l.started_at DESC LIMIT 1), ''),
-		       COALESCE(a.last_login_at,''), COALESCE(a.last_validated_at,''), a.created_at, a.updated_at
+		       COALESCE(a.last_login_at,''), COALESCE(a.last_validated_at,''),
+		       COALESCE(a.cookie_expiry_at,''), COALESCE(a.storage_state_expiry_at,''),
+		       a.created_at, a.updated_at
 		FROM channel_accounts a
 		JOIN upstream_sites s ON s.id = a.upstream_site_id
 		WHERE a.id=?
-	`, id).Scan(&item.ID, &item.UpstreamSiteID, &item.UpstreamSiteName, &item.UpstreamSiteBaseURL, &item.UpstreamSiteLoginURL, &item.UpstreamSiteKind, &item.DisplayName, &item.Email, &item.Username, &item.AuthType, &item.BrowserProfilePath, &item.LoginStatus, &item.APIKeyFingerprint, &item.APIKeyStatus, &item.APIKeyLastCheckedAt, &item.APIKeyModelCount, &sampleModelsJSON, &item.APIKeyTestModel, &modelUsable, &item.APIKeyLatencyMs, &item.APIKeyTestHTTPStatus, &item.APIKeyTestMessage, &item.APIKeyTestPath, &item.BalanceUnit, &balance, &item.LastCheckinAt, &item.LastCheckinStatus, &item.LastCheckinMessage, &item.LastLoginAt, &item.LastValidatedAt, &item.CreatedAt, &item.UpdatedAt)
+	`, id).Scan(&item.ID, &item.UpstreamSiteID, &item.UpstreamSiteName, &item.UpstreamSiteBaseURL, &item.UpstreamSiteLoginURL, &item.UpstreamSiteKind, &item.DisplayName, &item.Email, &item.Username, &item.AuthType, &item.BrowserProfilePath, &item.LoginStatus, &item.APIKeyFingerprint, &item.APIKeyStatus, &item.APIKeyLastCheckedAt, &item.APIKeyModelCount, &sampleModelsJSON, &item.APIKeyTestModel, &modelUsable, &item.APIKeyLatencyMs, &item.APIKeyTestHTTPStatus, &item.APIKeyTestMessage, &item.APIKeyTestPath, &item.BalanceUnit, &balance, &item.LastCheckinAt, &item.LastCheckinStatus, &item.LastCheckinMessage, &item.LastLoginAt, &item.LastValidatedAt, &item.CookieExpiryAt, &item.StorageStateExpiryAt, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		return item, err
 	}
@@ -1066,9 +1070,9 @@ func (a *App) saveBrowserLoginSession(ctx context.Context, id string) browserLog
 	}
 	_, err = a.db.ExecContext(ctx, `
 		UPDATE channel_accounts
-		SET cookie_encrypted=?, user_agent=?, login_status='valid', last_login_at=?, last_validated_at=?, updated_at=?
+		SET cookie_encrypted=?, user_agent=?, login_status='valid', last_login_at=?, last_validated_at=?, cookie_expiry_at=?, updated_at=?
 		WHERE id=?
-	`, encryptedCookie, userAgent, now(), now(), now(), id)
+	`, encryptedCookie, userAgent, now(), now(), estimateCookieExpiry(), now(), id)
 	if err != nil {
 		result.Status = "failed"
 		result.Message = err.Error()
@@ -1520,6 +1524,12 @@ func sanitizeAPIKeyDiagnostic(message string, apiKey string) string {
 	message = strings.ReplaceAll(message, "Bearer "+apiKey, "Bearer "+maskSecret(apiKey))
 	message = strings.ReplaceAll(message, "bearer "+apiKey, "bearer "+maskSecret(apiKey))
 	return message
+}
+
+// estimateCookieExpiry returns an ISO 8601 timestamp approximately 30 days
+// from now, representing the estimated cookie expiry for most relay sites.
+func estimateCookieExpiry() string {
+	return time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
 }
 
 func (a *App) clearAccountSession(w http.ResponseWriter, r *http.Request, id string) {

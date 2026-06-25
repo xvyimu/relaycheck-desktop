@@ -1,5 +1,6 @@
 package core
 
+// DashboardSummary is the high-level count overview shown on the dashboard.
 type DashboardSummary struct {
 	LocalNewAPICount       int `json:"localNewApiCount"`
 	ImportedChannelCount   int `json:"importedChannelCount"`
@@ -8,17 +9,22 @@ type DashboardSummary struct {
 	UnreadNotifications    int `json:"unreadNotifications"`
 }
 
+// SystemDiagnostics holds the latest self-check result with an overall level
+// ("ok" | "warning" | "critical") and a list of diagnostic items.
 type SystemDiagnostics struct {
 	GeneratedAt string           `json:"generatedAt"`
 	Overall     string           `json:"overall"`
 	Items       []DiagnosticItem `json:"items"`
 }
 
+// SchedulerStatus reports all registered background jobs and their current state.
 type SchedulerStatus struct {
 	GeneratedAt string               `json:"generatedAt"`
 	Jobs        []SchedulerJobStatus `json:"jobs"`
 }
 
+// SchedulerJobStatus describes one background job (e.g. "checkin.daily").
+// Status is one of "idle" | "running" | "succeeded" | "failed".
 type SchedulerJobStatus struct {
 	Key            string `json:"key"`
 	Label          string `json:"label"`
@@ -34,6 +40,9 @@ type SchedulerJobStatus struct {
 	UpdatedAt      string `json:"updatedAt,omitempty"`
 }
 
+// SystemStatus is the response payload for /api/system/status.
+// It includes product metadata, runtime address, port conflict info,
+// proxy/scheduler sub-status, and the dashboard summary.
 type SystemStatus struct {
 	ProductName     string                  `json:"productName"`
 	ProductVersion  string                  `json:"productVersion"`
@@ -41,6 +50,8 @@ type SystemStatus struct {
 	Architecture    string                  `json:"architecture"`
 	BindAddress     string                  `json:"bindAddress"`
 	Port            int                     `json:"port"`
+	PreferredPort   int                     `json:"preferredPort"`   // original port from env/config
+	PortConflict    bool                    `json:"portConflict"`     // true if PreferredPort was busy and a fallback was used
 	DatabasePath    string                  `json:"databasePath"`
 	BackupDir       string                  `json:"backupDir"`
 	NetworkProxy    NetworkProxyStatus      `json:"networkProxy"`
@@ -49,48 +60,57 @@ type SystemStatus struct {
 	Summary         DashboardSummary        `json:"summary"`
 }
 
+// SystemStatusDiagnostics is a lightweight summary of the last diagnostic run.
 type SystemStatusDiagnostics struct {
-	Overall     string `json:"overall"`
+	Overall     string `json:"overall"` // "ok" | "warning" | "critical"
 	GeneratedAt string `json:"generatedAt"`
 	ItemCount   int    `json:"itemCount"`
 }
 
+// HealthStatus is the response for /api/health (no auth required).
 type HealthStatus struct {
-	Status      string        `json:"status"`
+	Status      string        `json:"status"` // "ok" | "degraded" | "down"
 	GeneratedAt string        `json:"generatedAt"`
 	Checks      []HealthCheck `json:"checks"`
 }
 
+// HealthCheck represents a single health probe result.
 type HealthCheck struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
-	Status  string `json:"status"`
+	Status  string `json:"status"` // "ok" | "warn" | "fail"
 	Message string `json:"message,omitempty"`
 }
 
+// ActionCenter aggregates actionable items from across the system for the
+// dashboard banner. Overall is "ok" | "warning" | "critical".
 type ActionCenter struct {
 	GeneratedAt string       `json:"generatedAt"`
 	Overall     string       `json:"overall"`
 	Items       []ActionItem `json:"items"`
 }
 
+// ActionItem is a single recommended action shown in the Action Center.
+// Level is "info" | "warning" | "critical".
 type ActionItem struct {
 	ID          string   `json:"id"`
-	Priority    int      `json:"priority"`
+	Priority    int      `json:"priority"` // lower = higher priority
 	Level       string   `json:"level"`
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
 	Count       int      `json:"count"`
-	Target      string   `json:"target"`
+	Target      string   `json:"target"` // route path for navigation
 	Filter      string   `json:"filter,omitempty"`
 	Action      string   `json:"action"`
 	Samples     []string `json:"samples,omitempty"`
 }
 
+// CheckinStatus reports the current state of the checkin engine, including
+// real-time progress when a batch is running and today's summary.
 type CheckinStatus struct {
 	GeneratedAt       string                `json:"generatedAt"`
 	Running           bool                  `json:"running"`
-	Mode              string                `json:"mode"`
+	Mode              string                `json:"mode"` // "manual" | "scheduled"
 	CurrentAccountID  string                `json:"currentAccountId,omitempty"`
 	CurrentAccount    string                `json:"currentAccount,omitempty"`
 	CurrentSite       string                `json:"currentSite,omitempty"`
@@ -111,6 +131,7 @@ type CheckinStatus struct {
 	Schedule          CheckinScheduleStatus `json:"schedule"`
 }
 
+// CheckinTodaySummary aggregates today's checkin results.
 type CheckinTodaySummary struct {
 	TotalLogs        int `json:"totalLogs"`
 	SuccessCount     int `json:"successCount"`
@@ -121,9 +142,10 @@ type CheckinTodaySummary struct {
 	DueAccounts      int `json:"dueAccounts"`
 }
 
+// CheckinScheduleStatus describes the daily checkin schedule.
 type CheckinScheduleStatus struct {
 	Enabled             bool   `json:"enabled"`
-	Time                string `json:"time"`
+	Time                string `json:"time"` // "HH:MM" format
 	RandomDelayMin      int    `json:"randomDelayMin"`
 	RandomDelayMax      int    `json:"randomDelayMax"`
 	NextRunAt           string `json:"nextRunAt,omitempty"`
@@ -134,12 +156,30 @@ type CheckinScheduleStatus struct {
 	Message             string `json:"message,omitempty"`
 }
 
+// AutoStartStatus reports the current state of the OS-level auto-start
+// configuration (Windows shell:startup .lnk shortcut).
+type AutoStartStatus struct {
+	// Enabled is true when the startup shortcut currently exists on disk.
+	Enabled bool `json:"enabled"`
+	// Supported is true on platforms where auto-start can be configured
+	// (currently Windows only).
+	Supported bool `json:"supported"`
+	// ShortcutPath is the resolved .lnk path inside the shell:startup folder.
+	ShortcutPath string `json:"shortcutPath,omitempty"`
+	// TargetPath is the executable the shortcut will launch.
+	TargetPath string `json:"targetPath,omitempty"`
+	// Error carries the last error message, if any.
+	Error string `json:"error,omitempty"`
+}
+
+// SystemSetting is a key-value pair stored in the system_settings table.
 type SystemSetting struct {
 	Key       string `json:"key"`
 	ValueJSON string `json:"valueJson"`
 	UpdatedAt string `json:"updatedAt"`
 }
 
+// SystemBackup describes a database backup file.
 type SystemBackup struct {
 	FileName  string `json:"fileName"`
 	Path      string `json:"path"`
@@ -147,6 +187,8 @@ type SystemBackup struct {
 	CreatedAt string `json:"createdAt"`
 }
 
+// AuditLogItem is a single audit trail entry.
+// Level is "info" | "warning" | "critical".
 type AuditLogItem struct {
 	ID           string `json:"id"`
 	Action       string `json:"action"`
@@ -159,6 +201,8 @@ type AuditLogItem struct {
 	CreatedAt    string `json:"createdAt"`
 }
 
+// DiagnosticItem is a single self-check finding.
+// Level is "ok" | "warning" | "critical".
 type DiagnosticItem struct {
 	ID            string   `json:"id"`
 	Level         string   `json:"level"`
@@ -169,6 +213,8 @@ type DiagnosticItem struct {
 	Count         int      `json:"count,omitempty"`
 }
 
+// LocalNewAPIInstance represents a NewAPI installation detected on the local
+// machine. SyncCapability is "none" | "read" | "read_write".
 type LocalNewAPIInstance struct {
 	ID                 string `json:"id"`
 	Name               string `json:"name"`
@@ -187,6 +233,7 @@ type LocalNewAPIInstance struct {
 	SyncTokenEncrypted string `json:"-"`
 }
 
+// LocalNewAPISyncPreview shows what would change if a sync is performed.
 type LocalNewAPISyncPreview struct {
 	InstanceID     string            `json:"instanceId"`
 	InstanceName   string            `json:"instanceName"`
@@ -201,6 +248,8 @@ type LocalNewAPISyncPreview struct {
 	GeneratedAt    string            `json:"generatedAt"`
 }
 
+// SyncPreviewItem represents one channel's sync action.
+// Action is "add" | "update" | "skip" | "remove".
 type SyncPreviewItem struct {
 	SourceChannelID string   `json:"sourceChannelId"`
 	Name            string   `json:"name"`
@@ -212,6 +261,9 @@ type SyncPreviewItem struct {
 	ChangedFields   []string `json:"changedFields,omitempty"`
 }
 
+// UpstreamSite is a detected API relay site (NewAPI/OneAPI/Sub2API etc.).
+// Kind is "newapi" | "oneapi" | "sub2api" | "unknown".
+// HealthStatus is "healthy" | "degraded" | "down" | "unknown".
 type UpstreamSite struct {
 	ID                  string  `json:"id"`
 	ChannelID           string  `json:"channelId,omitempty"`
@@ -233,6 +285,9 @@ type UpstreamSite struct {
 	UpdatedAt           string  `json:"updatedAt"`
 }
 
+// ImportedChannel is a channel imported from a local NewAPI instance.
+// UpstreamKind is "newapi" | "oneapi" | "sub2api" | "unknown".
+// Status is "active" | "disabled" | "removed".
 type ImportedChannel struct {
 	ID                 string   `json:"id"`
 	LocalInstanceID    string   `json:"localInstanceId,omitempty"`
@@ -262,6 +317,8 @@ type ImportedChannel struct {
 	UpdatedAt          string   `json:"updatedAt"`
 }
 
+// SiteDetail is the full detail view for an upstream site, including
+// related accounts, recent balance snapshots, and checkin logs.
 type SiteDetail struct {
 	Site             UpstreamSite      `json:"site"`
 	Detection        UpstreamDetection `json:"detection"`
@@ -271,6 +328,10 @@ type SiteDetail struct {
 	Suggestions      []string          `json:"suggestions"`
 }
 
+// ChannelAccount is the core account entity. It stores credentials (encrypted),
+// API key test results, balance, and checkin status.
+// AuthType is "cookie" | "token" | "api_key" | "browser_profile".
+// LoginStatus is "logged_in" | "logged_out" | "expired" | "unknown".
 type ChannelAccount struct {
 	ID                   string   `json:"id"`
 	UpstreamSiteID       string   `json:"upstreamSiteId"`
@@ -285,7 +346,7 @@ type ChannelAccount struct {
 	BrowserProfilePath   string   `json:"browserProfilePath,omitempty"`
 	LoginStatus          string   `json:"loginStatus"`
 	APIKeyFingerprint    string   `json:"apiKeyFingerprint,omitempty"`
-	APIKeyStatus         string   `json:"apiKeyStatus,omitempty"`
+	APIKeyStatus         string   `json:"apiKeyStatus,omitempty"` // "valid" | "invalid" | "untested" | "rate_limited"
 	APIKeyLastCheckedAt  string   `json:"apiKeyLastCheckedAt,omitempty"`
 	APIKeyModelCount     int      `json:"apiKeyModelCount"`
 	APIKeySampleModels   []string `json:"apiKeySampleModels,omitempty"`
@@ -302,10 +363,14 @@ type ChannelAccount struct {
 	LastCheckinMessage   string   `json:"lastCheckinMessage,omitempty"`
 	LastLoginAt          string   `json:"lastLoginAt,omitempty"`
 	LastValidatedAt      string   `json:"lastValidatedAt,omitempty"`
+	CookieExpiryAt       string   `json:"cookieExpiryAt,omitempty"`       // estimated cookie expiry time (ISO 8601)
+	StorageStateExpiryAt string  `json:"storageStateExpiryAt,omitempty"` // estimated browser storage state expiry
 	CreatedAt            string   `json:"createdAt"`
 	UpdatedAt            string   `json:"updatedAt"`
 }
 
+// CheckinLog records a single checkin attempt.
+// Status is "success" | "already" | "failed" | "unsupported" | "auth_expired".
 type CheckinLog struct {
 	ID                string `json:"id"`
 	AccountID         string `json:"accountId"`
@@ -321,6 +386,7 @@ type CheckinLog struct {
 	FinishedAt        string `json:"finishedAt"`
 }
 
+// BalanceSnapshot records a point-in-time balance query result.
 type BalanceSnapshot struct {
 	ID                string   `json:"id"`
 	AccountID         string   `json:"accountId"`
@@ -336,6 +402,9 @@ type BalanceSnapshot struct {
 	CreatedAt         string   `json:"createdAt"`
 }
 
+// Notification is a user-facing notification shown in the notification center.
+// Type is "checkin" | "balance" | "system" | "alert".
+// Level is "info" | "warning" | "critical".
 type Notification struct {
 	ID        string `json:"id"`
 	Type      string `json:"type"`
@@ -346,6 +415,8 @@ type Notification struct {
 	CreatedAt string `json:"createdAt"`
 }
 
+// NotificationChannelStatus reports the configuration state of a notification
+// channel (e.g. webhook, telegram, email).
 type NotificationChannelStatus struct {
 	Type        string   `json:"type"`
 	Name        string   `json:"name"`

@@ -117,7 +117,7 @@ export function HubRadar({
           <p>{validKeys} 有效 Key · {usableKeys} 个可调用模型账号</p>
           <div className="radar-metrics">
             <span>{modelOverview?.fastestLatencyMs ? `最快 ${modelOverview.fastestLatencyMs}ms` : "待测速"}</span>
-            <span>{modelOverview?.sites.length ?? 0} 站点</span>
+            <span>{modelOverview?.sites?.length ?? 0} 站点</span>
           </div>
           <div className="radar-actions">
             <button type="button" onClick={() => onNavigate("accounts", { accountStatus: "all" })}>Key 库</button>

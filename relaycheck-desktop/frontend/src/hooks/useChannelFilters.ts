@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CHANNELS_INITIAL_VISIBLE_LIMIT,
-  CHANNELS_VISIBLE_INCREMENT,
   CHANNEL_RAW_SEARCH_KEYS,
   TARGET_RELAY_KINDS,
 } from "@/lib/constants";

@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
 import { formatConfidence, formatTime } from "@/lib/format";
 import type { UpstreamSite } from "@/types";
+import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { TaskProgressView } from "@/components/ui/TaskProgressView";
 
 type SitesPanelProps = {
   sites: UpstreamSite[];
@@ -16,12 +18,20 @@ function isUnhealthy(status: string) {
 }
 
 function capabilityLabel(enabled?: boolean) {
-  return enabled ? "supported" : "unknown / no";
+  return enabled ? "支持" : "未知/否";
 }
 
 export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
+  const task = useTaskProgress();
+
+  // 批量探测任务完成后刷新数据
+  useEffect(() => {
+    if (task.progress?.status === "done") {
+      void onRefresh();
+    }
+  }, [task.progress?.status, onRefresh]);
 
   const summary = useMemo(
     () => ({
@@ -39,9 +49,9 @@ export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
     try {
       await api(`/api/upstream-sites/${site.id}/detect`, { method: "POST" });
       await onRefresh();
-      setMessage(`${site.name} detection completed.`);
+      setMessage(`${site.name} 探测完成。`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Detection failed.");
+      setMessage(error instanceof Error ? error.message : "探测失败。");
     } finally {
       setBusyId("");
     }
@@ -51,32 +61,51 @@ export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
     <section className="sites-panel">
       <div className="channel-summary site-summary compact-summary">
         <div>
-          <span>Sites</span>
+          <span>站点</span>
           <strong>{summary.total}</strong>
         </div>
         <div>
-          <span>Healthy</span>
+          <span>健康</span>
           <strong>{summary.healthy}</strong>
         </div>
         <div>
-          <span>Check-in ready</span>
+          <span>可签到</span>
           <strong>{summary.checkinReady}</strong>
         </div>
         <div>
-          <span>Linked accounts</span>
+          <span>关联账号</span>
           <strong>{summary.linkedAccounts}</strong>
         </div>
       </div>
+
+      <div className="site-bulk-actions">
+        <button
+          type="button"
+          disabled={task.loading || task.progress?.status === "running"}
+          onClick={() => void task.startTask("detect_sites")}
+        >
+          {task.loading || task.progress?.status === "running" ? "探测中…" : "批量探测"}
+        </button>
+      </div>
+
+      <TaskProgressView
+        progress={task.progress}
+        loading={task.loading}
+        error={task.error}
+        onCancel={task.cancelTask}
+        onDismiss={task.reset}
+        labels={{ title: "批量识别" }}
+      />
 
       {message ? <div className="problem-hint">{message}</div> : null}
 
       <div className="site-grid">
         {sites.map((site) => {
           const capabilities: Array<{ label: string; enabled?: boolean }> = [
-            { label: "Check-in", enabled: site.supportsCheckin },
-            { label: "Balance", enabled: site.supportsBalance },
-            { label: "Models", enabled: site.supportsModels },
-            { label: "Pricing", enabled: site.supportsPricing },
+            { label: "签到", enabled: site.supportsCheckin },
+            { label: "余额", enabled: site.supportsBalance },
+            { label: "模型", enabled: site.supportsModels },
+            { label: "价格", enabled: site.supportsPricing },
           ];
 
           return (
@@ -86,26 +115,26 @@ export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
             >
               <div className="site-card-head">
                 <div>
-                  <span>{site.kind || "unknown"}</span>
+                  <span>{site.kind || "未知"}</span>
                   <strong title={site.name}>{site.name}</strong>
                 </div>
                 <span className={`status-pill ${isUnhealthy(site.healthStatus) ? "danger" : "neutral"}`}>
-                  {site.healthStatus || "unknown"}
+                  {site.healthStatus || "未知"}
                 </span>
               </div>
 
               <dl className="site-addresses">
                 <div>
-                  <dt>Base URL</dt>
+                  <dt>基础网址</dt>
                   <dd title={site.baseUrl}>{site.baseUrl || "-"}</dd>
                 </div>
                 <div>
-                  <dt>Login URL</dt>
+                  <dt>登录网址</dt>
                   <dd title={site.loginUrl || ""}>{site.loginUrl || "-"}</dd>
                 </div>
                 {site.homepageUrl ? (
                   <div>
-                    <dt>Home</dt>
+                    <dt>主页</dt>
                     <dd title={site.homepageUrl}>{site.homepageUrl}</dd>
                   </div>
                 ) : null}
@@ -113,15 +142,15 @@ export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
 
               <div className="site-card-metrics">
                 <div>
-                  <span>Accounts</span>
+                  <span>账号</span>
                   <strong>{site.accountCount || 0}</strong>
                 </div>
                 <div>
-                  <span>Confidence</span>
+                  <span>置信度</span>
                   <strong>{formatConfidence(site.detectionConfidence)}</strong>
                 </div>
                 <div>
-                  <span>Last health</span>
+                  <span>最近健康检查</span>
                   <strong>{formatTime(site.lastHealthCheckAt || "")}</strong>
                 </div>
               </div>
@@ -135,7 +164,7 @@ export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
               </div>
 
               {site.updatedAt ? (
-                <div className="channel-subtle">Updated {formatTime(site.updatedAt)}</div>
+                <div className="channel-subtle">更新于 {formatTime(site.updatedAt)}</div>
               ) : null}
 
               <div className="site-actions">
@@ -144,7 +173,7 @@ export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
                   onClick={() => void detect(site)}
                   type="button"
                 >
-                  {busyId === site.id ? "Detecting..." : "Detect capabilities"}
+                  {busyId === site.id ? "探测中…" : "探测能力"}
                 </button>
               </div>
             </article>
@@ -154,8 +183,8 @@ export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
         {!sites.length ? (
           <div className="empty-state">
             <div className="empty-mark">RC</div>
-            <strong>No upstream sites yet</strong>
-            <span>Import NewAPI or OneAPI channels first, then detect site capabilities here.</span>
+            <strong>暂无上游站点</strong>
+            <span>请先导入 NewAPI 或 OneAPI 渠道，再在此探测站点能力。</span>
           </div>
         ) : null}
       </div>

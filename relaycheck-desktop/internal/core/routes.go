@@ -2,27 +2,40 @@ package core
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
 	productName    = "RelayCheck Desktop"
-	productVersion = "v1.0"
+	productVersion = "v1.1.0"
 	buildTime      = "local build"
 )
 
 func (a *App) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/auth/login", a.handleLogin)
-	mux.HandleFunc("/api/auth/logout", a.handleLogout)
-	mux.HandleFunc("/api/auth/session", a.handleSession)
 	mux.HandleFunc("/api/health", a.handleHealth)
+	mux.HandleFunc("/api/analytics", a.requireSession(a.handleAnalytics))
+	mux.HandleFunc("/api/scheduler/channel-schedules", a.requireSession(a.handleChannelSchedules))
+	mux.HandleFunc("/api/scheduler/calendar", a.requireSession(a.handleScheduleCalendar))
+	mux.HandleFunc("/api/scheduler/next-runs", a.requireSession(a.handleNextRuns))
+	mux.HandleFunc("/api/tasks/dry-run", a.requireSession(a.handleDryRun))
+	mux.HandleFunc("/api/tasks/start", a.requireSession(a.handleTaskStart))
+	mux.HandleFunc("/api/tasks/", a.requireSession(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasSuffix(path, "/stream") {
+			a.handleTaskStream(w, r)
+		} else if strings.HasSuffix(path, "/cancel") {
+			a.handleTaskCancel(w, r)
+		} else {
+			writeError(w, http.StatusNotFound, "未知的任务端点。")
+		}
+	}))
 	mux.HandleFunc("/api/system/status", a.requireSession(a.handleSystemStatus))
+	mux.HandleFunc("/api/system/version-check", a.requireSession(a.handleVersionCheck))
+	mux.HandleFunc("/api/system/autostart", a.requireSession(a.handleSystemAutoStart))
+	mux.HandleFunc("/api/system/legacy-check", a.requireSession(a.handleLegacyPythonCheck))
+	mux.HandleFunc("/api/system/port-check", a.requireSession(a.handleSystemPortCheck))
 	mux.HandleFunc("/api/system/settings", a.requireSession(a.handleSystemSettings))
 	mux.HandleFunc("/api/system/scheduler-status", a.requireSession(a.handleSystemSchedulerStatus))
 	mux.HandleFunc("/api/system/proxy-test", a.requireSession(a.handleSystemProxyTest))
@@ -31,9 +44,13 @@ func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/system/audit-log", a.requireSession(a.handleAuditLog))
 	mux.HandleFunc("/api/system/backups", a.requireSession(a.handleSystemBackups))
 	mux.HandleFunc("/api/system/backup", a.requireSession(a.handleSystemBackup))
+	mux.HandleFunc("/api/system/export", a.requireSession(a.handleEncryptedExport))
+	mux.HandleFunc("/api/system/import", a.requireSession(a.handleEncryptedImport))
+	mux.HandleFunc("/api/system/exports", a.requireSession(a.handleListExports))
 	mux.HandleFunc("/api/system/backups/delete", a.requireSession(a.handleSystemDeleteBackups))
 	mux.HandleFunc("/api/system/restore", a.requireSession(a.handleSystemRestore))
 	mux.HandleFunc("/api/system/migrate-from-python-db", a.requireSession(a.handleMigrateFromPythonDB))
+	mux.HandleFunc("/api/system/migrate-python-db", a.requireSession(a.handleMigratePythonDB))
 	mux.HandleFunc("/api/local-newapi", a.requireSession(a.handleLocalNewAPIInstances))
 	mux.HandleFunc("/api/local-newapi/scan", a.requireSession(a.handleScanLocalNewAPI))
 	mux.HandleFunc("/api/local-newapi/import-from-sqlite", a.requireSession(a.handleImportFromSQLite))
@@ -72,88 +89,7 @@ func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/notifications", a.requireSession(a.handleNotifications))
 	mux.HandleFunc("/api/notifications/mark-all-read", a.requireSession(a.handleMarkAllNotificationsRead))
 	mux.HandleFunc("/api/notifications/clear-read", a.requireSession(a.handleClearReadNotifications))
-}
-
-func (a *App) handleSession(w http.ResponseWriter, r *http.Request) {
-	if !method(w, r, http.MethodGet) {
-		return
-	}
-	userID, err := a.withSession(r)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]bool{"authenticated": false})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"authenticated": true,
-		"userId":        userID,
-	})
-}
-
-func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
-	if !method(w, r, http.MethodPost) {
-		return
-	}
-	var input struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	if err := decodeJSON(r, &input); err != nil || input.Username == "" || input.Password == "" {
-		writeError(w, http.StatusBadRequest, "登录参数不完整。")
-		return
-	}
-
-	var userID, hash, displayName string
-	err := a.db.QueryRowContext(r.Context(), `
-		SELECT id, password_hash, COALESCE(display_name, username)
-		FROM app_users WHERE username = ?
-	`, input.Username).Scan(&userID, &hash, &displayName)
-	if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(input.Password)) != nil {
-		a.audit("auth.login_failed", "warning", input.Username, "user", "", "登录失败："+input.Username, nil)
-		writeError(w, http.StatusUnauthorized, "用户名或密码错误。")
-		return
-	}
-
-	token := randomToken()
-	a.mu.Lock()
-	a.sessions[token] = userID
-	a.mu.Unlock()
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "relaycheck_session",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int((7 * 24 * time.Hour).Seconds()),
-	})
-	a.audit("auth.login", "info", input.Username, "user", userID, "登录成功："+displayName, nil)
-	writeJSON(w, http.StatusOK, map[string]string{
-		"userId":      userID,
-		"username":    input.Username,
-		"displayName": displayName,
-	})
-}
-
-func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if !method(w, r, http.MethodPost) {
-		return
-	}
-	if cookie, err := r.Cookie("relaycheck_session"); err == nil {
-		a.mu.Lock()
-		userID := a.sessions[cookie.Value]
-		delete(a.sessions, cookie.Value)
-		a.mu.Unlock()
-		a.audit("auth.logout", "info", userID, "user", userID, "退出登录", nil)
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     "relaycheck_session",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Expires:  time.Unix(0, 0),
-		MaxAge:   -1,
-	})
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	mux.HandleFunc("/api/notifications/mark-read", a.requireSession(a.handleMarkNotificationRead))
 }
 
 func (a *App) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
@@ -180,14 +116,18 @@ func (a *App) systemStatus(r *http.Request) (SystemStatus, error) {
 	a.mu.RLock()
 	bind := a.bind
 	port := a.port
+	preferredPort := a.preferredPort
+	portConflict := a.portConflict
 	a.mu.RUnlock()
 	return SystemStatus{
-		ProductName:    productName,
-		ProductVersion: productVersion,
-		BuildTime:      buildTime,
-		Architecture:   "Go + embedded React + SQLite",
-		BindAddress:    bind,
-		Port:           port,
+		ProductName:     productName,
+		ProductVersion:  productVersion,
+		BuildTime:       buildTime,
+		Architecture:    "Go + embedded React + SQLite",
+		BindAddress:     bind,
+		Port:            port,
+		PreferredPort:   preferredPort,
+		PortConflict:    portConflict,
 		DatabasePath:   a.databasePath(),
 		BackupDir:      a.backupsDir(),
 		NetworkProxy:   a.networkProxyStatus(),
@@ -238,12 +178,26 @@ func (a *App) handleNotifications(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	rows, err := a.db.QueryContext(r.Context(), `
-		SELECT id, type, level, title, content, read, created_at
-		FROM app_notifications
-		ORDER BY created_at DESC
-		LIMIT 100
-	`)
+	levelFilter := r.URL.Query().Get("level")
+	typeFilter := r.URL.Query().Get("type")
+	unreadOnly := r.URL.Query().Get("unread") == "1"
+
+	query := `SELECT id, type, level, title, content, read, created_at FROM app_notifications WHERE 1=1`
+	var args []interface{}
+	if levelFilter != "" {
+		query += ` AND level = ?`
+		args = append(args, levelFilter)
+	}
+	if typeFilter != "" {
+		query += ` AND type = ?`
+		args = append(args, typeFilter)
+	}
+	if unreadOnly {
+		query += ` AND read = 0`
+	}
+	query += ` ORDER BY created_at DESC LIMIT 100`
+
+	rows, err := a.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -290,6 +244,35 @@ func (a *App) handleClearReadNotifications(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+func (a *App) handleMarkNotificationRead(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodPost) {
+		return
+	}
+	var body struct {
+		ID     string `json:"id"`
+		AllOfType string `json:"allOfType"` // mark all of a type as read
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体解析失败")
+		return
+	}
+	if body.AllOfType != "" {
+		_, err := a.db.ExecContext(r.Context(), `UPDATE app_notifications SET read = 1 WHERE type = ? AND read = 0`, body.AllOfType)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else if body.ID != "" {
+		_, err := a.db.ExecContext(r.Context(), `UPDATE app_notifications SET read = 1 WHERE id = ?`, body.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	a.invalidateReadCache()
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 func (a *App) notify(kind, level, title, content, relatedType, relatedID string) {
 	_, _ = a.db.Exec(`
 		INSERT INTO app_notifications (id, type, level, title, content, read, related_type, related_id, created_at)
@@ -299,12 +282,6 @@ func (a *App) notify(kind, level, title, content, relatedType, relatedID string)
 
 	// 异步分发到外部通知渠道
 	go a.dispatchNotification(kind, level, title, content)
-}
-
-func randomToken() string {
-	buf := make([]byte, 32)
-	_, _ = rand.Read(buf)
-	return hex.EncodeToString(buf)
 }
 
 func pathTail(path, prefix string) string {

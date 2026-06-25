@@ -70,6 +70,18 @@ func (a *App) actionCenter(r *http.Request) (ActionCenter, error) {
 			sampleSQL:   `SELECT a.display_name || ' · ' || s.name || ' · ' || l.status FROM checkin_logs l JOIN channel_accounts a ON a.id=l.account_id JOIN upstream_sites s ON s.id=l.upstream_site_id WHERE l.status NOT IN ('success','already_checked') AND substr(l.started_at,1,10)=substr(datetime('now'),1,10) ORDER BY l.started_at DESC LIMIT 4`,
 		},
 		{
+			id:          "cookie-expiring",
+			priority:    88,
+			level:       "warning",
+			title:       "Cookie 临近过期",
+			description: "部分账号的 Cookie 预计在 7 天内过期，可能导致签到和余额刷新失败。",
+			target:      "accounts",
+			filter:      "problem",
+			action:      "进入账号页重新登录或刷新授权，更新 Cookie 有效期。",
+			countSQL:    `SELECT COUNT(*) FROM channel_accounts WHERE cookie_expiry_at != '' AND datetime(cookie_expiry_at) BETWEEN datetime('now') AND datetime('now','+7 days')`,
+			sampleSQL:   `SELECT a.display_name || ' · 过期于 ' || substr(a.cookie_expiry_at,1,10) FROM channel_accounts a WHERE a.cookie_expiry_at != '' AND datetime(a.cookie_expiry_at) BETWEEN datetime('now') AND datetime('now','+7 days') ORDER BY a.cookie_expiry_at ASC LIMIT 4`,
+		},
+		{
 			id:          "balance-missing",
 			priority:    72,
 			level:       "warning",

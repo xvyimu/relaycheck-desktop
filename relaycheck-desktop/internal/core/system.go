@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -291,9 +293,6 @@ func (a *App) restoreFromBackup(backupPath string) error {
 	if err := a.migrate(ctx); err != nil {
 		return a.rollbackRestore(dbPath, currentPath, currentMoved, err)
 	}
-	if err := a.ensureDefaultAdmin(ctx); err != nil {
-		return a.rollbackRestore(dbPath, currentPath, currentMoved, err)
-	}
 	if err := a.ensureDefaultSettings(ctx); err != nil {
 		return a.rollbackRestore(dbPath, currentPath, currentMoved, err)
 	}
@@ -407,4 +406,46 @@ func validateSQLiteFile(path string) error {
 		return fmt.Errorf("备份文件不是有效的 SQLite 数据库。")
 	}
 	return nil
+}
+
+type PortCheckResult struct {
+	Port       int    `json:"port"`
+	Available  bool   `json:"available"`
+	InUse      bool   `json:"inUse"`
+	InUseByPID int    `json:"inUseByPid,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+func (a *App) handleSystemPortCheck(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodGet) {
+		return
+	}
+	portStr := r.URL.Query().Get("port")
+	port := 0
+	if portStr != "" {
+		var err error
+		port, err = strconv.Atoi(portStr)
+		if err != nil || port < 1 || port > 65535 {
+			writeError(w, http.StatusBadRequest, "端口号无效，需为 1-65535。")
+			return
+		}
+	} else {
+		a.mu.RLock()
+		port = a.port
+		a.mu.RUnlock()
+	}
+
+	result := PortCheckResult{Port: port}
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		result.InUse = true
+		result.Available = false
+		result.Error = err.Error()
+	} else {
+		_ = listener.Close()
+		result.Available = true
+		result.InUse = false
+	}
+	writeJSON(w, http.StatusOK, result)
 }

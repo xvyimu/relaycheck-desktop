@@ -315,8 +315,11 @@ func TestClassifyCheckinResponse_NonMatchingReturnsSuccess(t *testing.T) {
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %q", result.Status)
 	}
-	if result.Message != "签到成功" {
-		t.Fatalf("expected message from JSON, got %q", result.Message)
+	if result.Message != "签到成功 奖励：100.00" {
+		t.Fatalf("expected message with reward, got %q", result.Message)
+	}
+	if result.Reward != "100.00" {
+		t.Fatalf("expected reward 100.00, got %q", result.Reward)
 	}
 }
 

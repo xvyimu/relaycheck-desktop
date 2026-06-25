@@ -7,17 +7,6 @@ import (
 
 func (a *App) migrate(ctx context.Context) error {
 	_, err := a.db.ExecContext(ctx, `
-CREATE TABLE IF NOT EXISTS app_users (
-	id TEXT PRIMARY KEY,
-	username TEXT NOT NULL UNIQUE,
-	password_hash TEXT NOT NULL,
-	display_name TEXT,
-	role TEXT NOT NULL DEFAULT 'admin',
-	must_change_pass INTEGER NOT NULL DEFAULT 1,
-	created_at TEXT NOT NULL,
-	updated_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS system_settings (
 	id TEXT PRIMARY KEY,
 	key TEXT NOT NULL UNIQUE,
@@ -181,6 +170,22 @@ CREATE TABLE IF NOT EXISTS scheduler_runs (
 	updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS channel_schedules (
+	id TEXT PRIMARY KEY,
+	upstream_site_id TEXT NOT NULL,
+	enabled INTEGER NOT NULL DEFAULT 1,
+	checkin_time TEXT NOT NULL DEFAULT '08:00',
+	random_delay_min INTEGER NOT NULL DEFAULT 0,
+	random_delay_max INTEGER NOT NULL DEFAULT 30,
+	last_run_at TEXT,
+	next_run_at TEXT,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (upstream_site_id) REFERENCES upstream_sites(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_channel_schedules_site ON channel_schedules(upstream_site_id);
+CREATE INDEX IF NOT EXISTS idx_channel_schedules_next ON channel_schedules(next_run_at);
+
 CREATE TABLE IF NOT EXISTS site_pricing_cache (
 	id TEXT PRIMARY KEY,
 	site_id TEXT NOT NULL,
@@ -224,6 +229,8 @@ CREATE INDEX IF NOT EXISTS idx_site_pricing_cache_synced ON site_pricing_cache(l
 		{"channel_accounts", "api_key_test_http_status", "INTEGER NOT NULL DEFAULT 0"},
 		{"channel_accounts", "api_key_test_message", "TEXT"},
 		{"channel_accounts", "api_key_test_path", "TEXT"},
+		{"channel_accounts", "cookie_expiry_at", "TEXT"},
+		{"channel_accounts", "storage_state_expiry_at", "TEXT"},
 		{"upstream_sites", "detection_json", "TEXT"},
 		{"imported_channels", "detection_json", "TEXT"},
 		{"imported_channels", "source_sync_status", "TEXT NOT NULL DEFAULT 'active'"},

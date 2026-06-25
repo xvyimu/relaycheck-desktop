@@ -178,7 +178,7 @@ export function statusLabel(status: string): string {
     auth_expired: "需授权",
     failed: "失败",
   };
-  return labels[status] || status || "未知";
+  return labels[status] || status || "未签到";
 }
 
 export function loginStatusLabel(status: string): string {

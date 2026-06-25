@@ -47,6 +47,7 @@ type webhookConfig struct {
 	Mode               string `json:"mode"`
 	TimeoutSeconds     int    `json:"timeoutSeconds"`
 	DigestIntervalMin  int    `json:"digestIntervalMin"`
+	MaxRetries         int    `json:"maxRetries"` // 0=不重试, 默认3
 }
 
 type telegramConfig struct {
@@ -76,6 +77,42 @@ type emailConfig struct {
 	ToAddr   string `json:"toAddr"`
 	Mode     string `json:"mode"`
 }
+
+type desktopConfig struct {
+	Mode  string `json:"mode"`  // "all" | "failure" | "warning+"
+	Sound bool   `json:"sound"` // play sound on notification
+}
+
+// desktopChannel pushes notifications to the in-app notification table and
+// marks them for desktop push (the frontend SSE listener will trigger
+// browser Notification API when it sees desktop-push flagged items).
+type desktopChannel struct {
+	app    *App
+	config desktopConfig
+	name   string
+	levels []string
+	types  []string
+}
+
+func (c *desktopChannel) Name() string { return c.name }
+func (c *desktopChannel) Type() string { return "desktop" }
+func (c *desktopChannel) Levels() []string { return c.levels }
+func (c *desktopChannel) Types() []string { return c.types }
+func (c *desktopChannel) Validate() error { return nil }
+
+func (c *desktopChannel) Send(ctx context.Context, kind, level, title, content string) error {
+	if !levelMatchesMode(c.config.Mode, level) {
+		return nil
+	}
+	// Create an in-app notification flagged for desktop push
+	_, err := c.app.db.ExecContext(ctx, `
+		INSERT INTO app_notifications (id, type, level, title, content, read, related_type, created_at)
+		VALUES (?, ?, ?, ?, ?, 0, 'desktop-push', ?)
+	`, newID(), kind, level, title, content, now())
+	return err
+}
+
+func (c *desktopChannel) EncryptedFields() []string { return nil }
 
 // ==================== 摘要积累 ====================
 
@@ -249,10 +286,15 @@ func validateNotificationChannelsConfig(config *notificationChannelsConfig) []st
 				err = (&serverchanChannel{config: cfg}).Validate()
 			}
 		case "email":
-			var cfg emailConfig
-			if json.Unmarshal(ch.Config, &cfg) == nil {
-				err = (&emailChannel{config: cfg}).Validate()
-			}
+		var cfg emailConfig
+		if json.Unmarshal(ch.Config, &cfg) == nil {
+			err = (&emailChannel{config: cfg}).Validate()
+		}
+	case "desktop":
+		var cfg desktopConfig
+		if json.Unmarshal(ch.Config, &cfg) == nil {
+			err = (&desktopChannel{config: cfg}).Validate()
+		}
 		}
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("[%s] %s: %v", ch.Type, ch.Name, err))
@@ -464,6 +506,19 @@ func (a *App) buildChannelFromConfig(entry channelEntry) notificationChannel {
 		}
 		if err := ch.Validate(); err != nil {
 			return nil
+		}
+		return ch
+	case "desktop":
+		var cfg desktopConfig
+		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
+			return nil
+		}
+		ch := &desktopChannel{
+			app:    a,
+			config: cfg,
+			name:   entry.Name,
+			levels: entry.Levels,
+			types:  entry.Types,
 		}
 		return ch
 	default:
@@ -703,6 +758,8 @@ func levelMatchesMode(mode, level string) bool {
 		return level == "success" || level == "info"
 	case "failure":
 		return level == "warning" || level == "error"
+	case "warning+":
+		return level == "warning" || level == "error"
 	default:
 		return true
 	}
@@ -741,6 +798,14 @@ func (c *webhookChannel) Send(ctx context.Context, kind, level, title, content s
 		timeout = 60
 	}
 
+	maxRetries := c.config.MaxRetries
+	if maxRetries < 0 {
+		maxRetries = 0
+	}
+	if maxRetries > 5 {
+		maxRetries = 5
+	}
+
 	bodyMap := map[string]interface{}{
 		"type":      kind,
 		"level":     level,
@@ -753,29 +818,53 @@ func (c *webhookChannel) Send(ctx context.Context, kind, level, title, content s
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.config.URL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(1<<uint(attempt-1)) * time.Second // 1s, 2s, 4s, 8s, 16s
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
 
-	if c.config.HMACSecret != "" {
-		mac := hmac.New(sha256.New, []byte(c.config.HMACSecret))
-		mac.Write(bodyBytes)
-		sig := hex.EncodeToString(mac.Sum(nil))
-		req.Header.Set("X-Signature-256", sig)
-	}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.config.URL, bytes.NewReader(bodyBytes))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.app.doHTTPWithTimeout(req, time.Duration(timeout)*time.Second)
-	if err != nil {
-		return err
+		if c.config.HMACSecret != "" {
+			mac := hmac.New(sha256.New, []byte(c.config.HMACSecret))
+			mac.Write(bodyBytes)
+			sig := hex.EncodeToString(mac.Sum(nil))
+			req.Header.Set("X-Signature-256", sig)
+		}
+
+		resp, err := c.app.doHTTPWithTimeout(req, time.Duration(timeout)*time.Second)
+		if err != nil {
+			lastErr = err
+			log.Printf("[notification] webhook 发送失败 (attempt %d/%d): %v", attempt+1, maxRetries+1, err)
+			continue
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return nil
+		}
+		// 4xx 客户端错误不重试（除了 429）
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != 429 {
+			return fmt.Errorf("HTTP %d (不重试)", resp.StatusCode)
+		}
+		lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
+		log.Printf("[notification] webhook 返回非 2xx (attempt %d/%d): %d", attempt+1, maxRetries+1, resp.StatusCode)
 	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	return nil
+	return lastErr
 }
 
 func (c *webhookChannel) EncryptedFields() []string {

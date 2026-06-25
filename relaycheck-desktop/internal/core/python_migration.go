@@ -31,6 +31,14 @@ type pythonMigrateBody struct {
 	Mode         string `json:"mode"`
 }
 
+// pythonMigrateSimpleBody is the request body for POST /api/system/migrate-python-db.
+// It accepts a sourcePath (pointing at a Python zidqiandao.db file) and an optional
+// mode ("dry_run" or "live", defaulting to "live"). The migration is idempotent.
+type pythonMigrateSimpleBody struct {
+	SourcePath string `json:"sourcePath"`
+	Mode       string `json:"mode"`
+}
+
 // handleMigrateFromPythonDB is the HTTP handler for POST /api/system/migrate-from-python-db.
 func (a *App) handleMigrateFromPythonDB(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodPost) {
@@ -56,6 +64,54 @@ func (a *App) handleMigrateFromPythonDB(w http.ResponseWriter, r *http.Request) 
 
 	if input.Mode == "live" {
 		a.audit("migrate.python_db", "info", "", "system", "", "Python 数据库迁移完成。", map[string]interface{}{
+			"settingsImported": report.SettingsImported,
+			"sitesImported":    report.SitesImported,
+			"accountsImported": report.AccountsImported,
+			"logsImported":     report.LogsImported,
+			"backupFileName":   report.BackupFileName,
+		})
+		a.notify("migrate_python_db", "success", "Python 数据库迁移完成",
+			fmt.Sprintf("迁移了 %d 个设置, %d 个站点, %d 个账号, %d 条签到记录。", report.SettingsImported, report.SitesImported, report.AccountsImported, report.LogsImported),
+			"system", "python-migration")
+	}
+
+	writeJSON(w, http.StatusOK, report)
+}
+
+// handleMigratePythonDB is the HTTP handler for POST /api/system/migrate-python-db.
+// It accepts {"sourcePath": "...", "mode": "dry_run|live"} and performs an idempotent
+// one-way migration from a Python zidqiandao.db into the Go relaycheck.db. When mode
+// is omitted it defaults to "live" (actual write). Re-running with the same source
+// will not create duplicate data.
+func (a *App) handleMigratePythonDB(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodPost) {
+		return
+	}
+
+	var input pythonMigrateSimpleBody
+	if err := decodeJSON(r, &input); err != nil || strings.TrimSpace(input.SourcePath) == "" {
+		writeError(w, http.StatusBadRequest, "缺少 sourcePath 参数。")
+		return
+	}
+
+	mode := strings.TrimSpace(input.Mode)
+	if mode == "" {
+		mode = "live"
+	}
+	if mode != "dry_run" && mode != "live" {
+		writeError(w, http.StatusBadRequest, "mode 必须是 dry_run 或 live。")
+		return
+	}
+
+	report, err := a.migrateFromPythonDB(r.Context(), input.SourcePath, mode)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if mode == "live" {
+		a.audit("migrate.python_db", "info", "", "system", "", "Python 数据库迁移完成。", map[string]interface{}{
+			"sourcePath":       input.SourcePath,
 			"settingsImported": report.SettingsImported,
 			"sitesImported":    report.SitesImported,
 			"accountsImported": report.AccountsImported,

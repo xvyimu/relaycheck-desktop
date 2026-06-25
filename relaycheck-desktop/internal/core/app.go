@@ -6,17 +6,14 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite"
 )
 
@@ -24,7 +21,6 @@ type App struct {
 	db                 *sql.DB
 	dataDir            string
 	key                []byte
-	sessions           map[string]string
 	browserSessions    map[string]BrowserLoginSession
 	mu                 sync.RWMutex
 	readCache          map[string]readCacheEntry
@@ -41,8 +37,11 @@ type App struct {
 	digestWG           sync.WaitGroup
 	digestChannels     map[string]*webhookChannel
 	channelRateLimits  map[string]*channelRateLimiter
+	taskRunner         *TaskRunner
 	bind               string
 	port               int
+	preferredPort      int
+	portConflict       bool
 	allowLocalOutbound bool
 }
 
@@ -101,7 +100,6 @@ func NewApp(root string) (*App, error) {
 		db:              db,
 		dataDir:         dataDir,
 		key:             key,
-		sessions:        map[string]string{},
 		browserSessions: map[string]BrowserLoginSession{},
 		readCache:       map[string]readCacheEntry{},
 		client: &http.Client{
@@ -110,15 +108,12 @@ func NewApp(root string) (*App, error) {
 		networkProxy:      defaultNetworkProxyConfig(),
 		digestChannels:    map[string]*webhookChannel{},
 		channelRateLimits: map[string]*channelRateLimiter{},
+		taskRunner:        newTaskRunner(),
 		bind:              "127.0.0.1",
 		port:              3001,
 	}
 
 	if err := app.migrate(context.Background()); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	if err := app.ensureDefaultAdmin(context.Background()); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -167,60 +162,22 @@ func (a *App) SetRuntimeAddress(bind string, port int) {
 	a.port = port
 }
 
-func (a *App) ensureDefaultAdmin(ctx context.Context) error {
-	var count int
-	if err := a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM app_users WHERE username = ?`, "admin").Scan(&count); err != nil {
-		return err
-	}
-	if count > 0 {
-		return nil
-	}
-
-	password, err := a.bootstrapAdminPassword()
-	if err != nil {
-		return err
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-
-	_, err = a.db.ExecContext(ctx, `
-		INSERT INTO app_users (id, username, password_hash, display_name, role, must_change_pass, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, newID(), "admin", string(hash), "本地管理员", "admin", 1, now(), now())
-	return err
-}
-
-func (a *App) bootstrapAdminPassword() (string, error) {
-	if password := strings.TrimSpace(os.Getenv("RELAYCHECK_BOOTSTRAP_PASSWORD")); password != "" {
-		return password, nil
-	}
-
-	path := filepath.Join(a.dataDir, "bootstrap-admin-password.txt")
-	if data, err := os.ReadFile(path); err == nil {
-		if password := strings.TrimSpace(string(data)); password != "" {
-			return password, nil
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
-
-	password := randomToken()
-	if err := os.WriteFile(path, []byte(password+"\n"), 0o600); err != nil {
-		return "", err
-	}
-	return password, nil
+func (a *App) SetPortConflict(preferredPort int, conflict bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.preferredPort = preferredPort
+	a.portConflict = conflict
 }
 
 func (a *App) ensureDefaultSettings(ctx context.Context) error {
 	defaults := map[string]string{
 		"app.general":           `{"productName":"RelayCheck Desktop","bindAddress":"127.0.0.1","port":3001,"lightweightMode":true}`,
+		"app.version_check_url": `""`,
 		"scanner.targets":       `{"hosts":["127.0.0.1","localhost"],"ports":[3000,3001,8080,9999,3010],"allowCustomUrls":true}`,
 		"checkin.schedule":      `{"enabled":true,"time":"08:00","randomDelayMinutes":[0,120],"siteConcurrency":1,"globalConcurrency":3,"siteMinIntervalSeconds":2}`,
 		"network.proxy":         `{"enabled":false,"url":"http://127.0.0.1:7897","bypassLocal":true}`,
 		"sync.schedule":         `{"enabled":true,"intervalMinutes":30,"mode":"local-newapi","runOnStartup":false}`,
-		"notification.channels": `{"enabled":false,"defaultLevels":["warning","error"],"channels":[{"type":"webhook","name":"默认 Webhook","enabled":false,"config":{"url":"","hmacSecret":"","mode":"all","timeoutSeconds":10},"levels":["warning","error"],"types":["scheduled_checkin_failed","scheduled_sync_failed"]},{"type":"telegram","name":"Telegram Bot","enabled":false,"config":{"botToken":"","chatId":"","mode":"failure"},"levels":["warning","error"],"types":["scheduled_checkin_failed"]},{"type":"bark","name":"Bark","enabled":false,"config":{"url":"","mode":"failure","group":"RelayCheck"},"levels":["warning","error"]},{"type":"serverchan","name":"ServerChan","enabled":false,"config":{"sendKey":"","mode":"failure"},"levels":["warning","error"]},{"type":"email","name":"SMTP 邮件","enabled":false,"config":{"smtpHost":"","smtpPort":587,"smtpTls":true,"username":"","password":"","fromAddr":"","toAddr":"","mode":"failure"},"levels":["warning","error"]}]}`,
+		"notification.channels": `{"enabled":false,"defaultLevels":["warning","error"],"channels":[{"type":"webhook","name":"默认 Webhook","enabled":false,"config":{"url":"","hmacSecret":"","mode":"all","timeoutSeconds":10,"maxRetries":3},"levels":["warning","error"],"types":["scheduled_checkin_failed","scheduled_sync_failed"]},{"type":"telegram","name":"Telegram Bot","enabled":false,"config":{"botToken":"","chatId":"","mode":"failure"},"levels":["warning","error"],"types":["scheduled_checkin_failed"]},{"type":"bark","name":"Bark","enabled":false,"config":{"url":"","mode":"failure","group":"RelayCheck"},"levels":["warning","error"]},{"type":"serverchan","name":"ServerChan","enabled":false,"config":{"sendKey":"","mode":"failure"},"levels":["warning","error"]},{"type":"email","name":"SMTP 邮件","enabled":false,"config":{"smtpHost":"","smtpPort":587,"smtpTls":true,"username":"","password":"","fromAddr":"","toAddr":"","mode":"failure"},"levels":["warning","error"]},{"type":"desktop","name":"桌面通知","enabled":true,"config":{"mode":"all","sound":true},"levels":["info","warning","error"]}]}`,
 	}
 	for key, value := range defaults {
 		_, err := a.db.ExecContext(ctx, `
@@ -253,25 +210,9 @@ func now() string {
 }
 
 func (a *App) withSession(r *http.Request) (string, error) {
-	cookie, err := r.Cookie("relaycheck_session")
-	if err != nil || cookie.Value == "" {
-		return "", errors.New("not authenticated")
-	}
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	userID := a.sessions[cookie.Value]
-	if userID == "" {
-		return "", errors.New("not authenticated")
-	}
-	return userID, nil
+	return "local", nil
 }
 
 func (a *App) requireSession(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if _, err := a.withSession(r); err != nil {
-			writeError(w, http.StatusUnauthorized, "未登录或会话已过期")
-			return
-		}
-		next(w, r)
-	}
+	return next
 }

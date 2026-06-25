@@ -31,7 +31,7 @@ func main() {
 	lockFile := filepath.Join(app.DataDir(), ".lock")
 	lk, err := lock.Acquire(lockFile)
 	if err != nil {
-		log.Fatalf("WARN: %v (lockfile: %s)", err, lockFile)
+		log.Fatalf("RelayCheck Desktop 已在运行中。请检查系统托盘或任务栏，或在浏览器中访问 http://127.0.0.1:%d 。如需强制启动新实例，请先关闭已有进程并删除锁文件: %s", 3001, lockFile)
 	}
 	defer lk.Close()
 	defer app.Close()
@@ -48,6 +48,7 @@ func main() {
 		log.Fatalf("listen failed: %v", err)
 	}
 	app.SetRuntimeAddress(bind, actualPort)
+	app.SetPortConflict(preferredPort, actualPort != preferredPort)
 	app.StartSchedulers(context.Background())
 
 	addr := bind + ":" + strconv.Itoa(actualPort)

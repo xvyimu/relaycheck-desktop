@@ -7,6 +7,8 @@ import {
   channelSourceSyncLabel,
   upstreamKindLabel,
 } from "@/lib/labels";
+import { Progress } from "@/components/ui/progress";
+import { Tooltip } from "@/components/ui/tooltip";
 import { LoadingSkeleton } from "../loading-skeleton";
 import type { DetailDrawerState, ImportedChannel } from "@/types";
 import type { ChannelActionsResult } from "@/hooks/useChannelActions";
@@ -73,17 +75,26 @@ export function ChannelTable({
                 <span>签到</span>
                 <strong>{channel.supportsCheckin ? "可签到" : "不可用"}</strong>
               </div>
-              <div>
+              <div className="metrics-model">
                 <span>模型</span>
-                <strong>{channel.modelCount || 0}</strong>
+                <Progress className="h-1.5" max={20} value={Math.min(channel.modelCount || 0, 20)} />
+                <span className="progress-label">{channel.modelCount || 0}</span>
               </div>
             </div>
             <div className="chips secondary-chips">
               <span>来源 {channelSourceLabel(channel.sourceType || "")}</span>
-              <span>签到 {channel.supportsCheckin ? "支持" : "未知/不支持"}</span>
-              <span>余额 {channel.supportsBalance ? "支持" : "未知/不支持"}</span>
-              {channel.supportsModels ? <span>模型列表</span> : null}
-              {channel.supportsPricing ? <span>价格/倍率</span> : null}
+              <Tooltip content={channel.supportsCheckin ? "该渠道支持定时自动签到" : "该渠道不支持自动签到"}>
+                <span>签到 {channel.supportsCheckin ? "支持" : "未知/不支持"}</span>
+              </Tooltip>
+              <Tooltip content={channel.supportsBalance ? "该渠道提供余额/用量查询" : "该渠道不支持余额查询"}>
+                <span>余额 {channel.supportsBalance ? "支持" : "未知/不支持"}</span>
+              </Tooltip>
+              {channel.supportsModels ? (
+                <Tooltip content="渠道可通过 /v1/models 查询"><span>模型列表</span></Tooltip>
+              ) : null}
+              {channel.supportsPricing ? (
+                <Tooltip content="渠道提供价格/倍率信息"><span>价格/倍率</span></Tooltip>
+              ) : null}
               {channel.channelKeyMasked ? <span>Key {channel.channelKeyMasked}</span> : null}
             </div>
             {channel.sampleModels?.length ? (

@@ -16,6 +16,7 @@ RelayCheck Hub is a local operations console for NewAPI/Sub2API relay management
 - Tailwind `@theme` should bridge to V4 tokens rather than hard-code a parallel palette.
 - Token groups now include semantic colors, status backgrounds/borders, input/focus values, skeleton values, type scale, font weights, tracking, spacing, radius, and shadow levels.
 - Legacy `--rc-*` / `--linear-*` / early base tokens may still exist in older CSS layers; do not treat those as the desired long-term source. Continue migrating active rules to V4 tokens before deleting historical layers.
+- Dark mode: `--rc-*` Control Room variables are overridden in both `html.dark` and `@media (prefers-color-scheme: dark)` blocks. Shadow tokens (`--v4-shadow-*`) have separate dark-mode values with inset highlights (`rgba(255,255,255,0.04-0.06)`) and deeper outer shadows (`rgba(0,0,0,0.2-0.3)`). Spacing and font-size tokens are single-sourced from V4 with no legacy duplicates.
 
 ## Hierarchy Rules
 - Important numbers are large, tabular, and placed near the top-left of cards.
@@ -27,9 +28,13 @@ RelayCheck Hub is a local operations console for NewAPI/Sub2API relay management
 
 ## Component Rules
 - Local UI primitives live under `frontend/src/components/ui/*`; they are project-owned wrappers, not a generated shadcn install.
-- Current primitives: `Button`, `Card`, `Badge`, `Input`, `Select`, `Skeleton`, `Dialog`, `Progress`, `Tooltip`, and `Switch`.
-- UI primitives should use `cn()` from `frontend/src/lib/cn.ts`; `cn()` is backed by `clsx + tailwind-merge` so Tailwind conflicts resolve predictably.
+- Current primitives: `Button`, `Card`, `Badge`, `Input`, `Select`, `Skeleton`, `Dialog`, `Progress`, `Tooltip`, `Switch`, `ThemeToggle`, `UpdateBanner`, `TwoFactorGuide`, `Empty`.
+- `ThemeToggle` uses inline SVG icons (monitor/sun/moon), not emoji.
+- `UpdateBanner` renders a blue gradient banner when `updateAvailable` is true; dismiss state persists in `localStorage` keyed by version.
+- `TwoFactorGuide` supports `inline` and `dialog` modes with 5-step instructions and collapsible FAQ.
 - Dashboard cards: short, fixed-width where possible, never stretch just to fill a row.
+- Analytics charts use pure SVG (no chart library dependency): line chart for balance trend, donut for checkin distribution, bar chart for response times and balance deltas, table for site reliability.
+- Chart drilldown: clicking data points/donut segments expands detail panels below the chart.
 - Filters/toolbars: content-width on desktop, full-width only on mobile.
 - Account cards: compact, domain/backend identity first, then account/checkin/balance, then actions.
 - Channel cards: show backend type and check-in capability above secondary metadata.

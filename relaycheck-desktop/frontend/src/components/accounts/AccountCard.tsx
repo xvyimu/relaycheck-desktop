@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { formatBalanceValue, formatTime } from "@/lib/format";
 import { apiKeyStatusLabel, formatAPIKeyTestMessage, loginStatusLabel, statusLabel, upstreamKindLabel } from "@/lib/labels";
@@ -6,6 +6,7 @@ import type { Account, APIKeyTestResult } from "@/types";
 import { AccountKeySummary } from "@/components/accounts/AccountKeySummary";
 import { accountAvatarLabel, accountBackendShort, accountDomainLabel, defaultLoginUrl, isProblemAccount } from "@/components/accounts/helpers";
 import { StatusLabel } from "@/components/ui/status-label";
+import { TwoFactorGuide } from "@/components/ui/TwoFactorGuide";
 
 interface AccountCardProps {
   account: Account;
@@ -16,6 +17,8 @@ interface AccountCardProps {
 export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps) {
   const [editing, setEditing] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [showTwoFactorGuide, setShowTwoFactorGuide] = useState(false);
+  const [dismissedTwoFactor, setDismissedTwoFactor] = useState(false);
   const [displayName, setDisplayName] = useState(account.displayName);
   const [siteName, setSiteName] = useState(account.upstreamSiteName);
   const [baseUrl, setBaseUrl] = useState(account.upstreamSiteBaseUrl || "");
@@ -45,6 +48,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     setApiKey("");
     setClearApiKey(false);
     setSiteUpdateScope("current");
+    setDismissedTwoFactor(false);
   }, [account.id, account.displayName, account.upstreamSiteName, account.upstreamSiteBaseUrl, account.upstreamSiteLoginUrl, account.upstreamSiteKind, account.email, account.username, account.authType]);
 
   async function runAction(label: string, action: () => Promise<unknown>) {
@@ -147,6 +151,17 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
 
       {account.lastCheckinMessage ? <div className="problem-hint">{account.lastCheckinMessage}</div> : null}
 
+      {account.loginStatus === "two_factor_required" && !dismissedTwoFactor ? (
+        <TwoFactorGuide
+          variant="inline"
+          siteName={account.upstreamSiteName}
+          baseUrl={account.upstreamSiteBaseUrl}
+          loginUrl={account.upstreamSiteLoginUrl || defaultLoginUrl(account.upstreamSiteBaseUrl || "")}
+          onClose={() => setDismissedTwoFactor(true)}
+          onOpenBrowserLogin={() => void runAction("网页登录", () => api(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" }))}
+        />
+      ) : null}
+
       {editing ? (
         <div className="account-card-editor">
           <div className="account-editor-head">
@@ -220,7 +235,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
             </label>
           ) : null}
           <div className="toolbar">
-            <button type="button" disabled={busy !== ""} onClick={() => void saveAccount()}>{busy === "保存账号" ? "保存中..." : "保存账号"}</button>
+            <button type="button" disabled={busy !== ""} onClick={() => void saveAccount()}>{busy === "保存账号" ? "保存中…" : "保存账号"}</button>
             <button type="button" className="ghost" disabled={busy !== ""} onClick={() => setEditing(false)}>取消</button>
           </div>
         </div>
@@ -241,7 +256,8 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
               <button type="button" className="ghost" onClick={() => setEditing((current) => !current)}>{editing ? "收起编辑" : "编辑账号"}</button>
               <button type="button" className="ghost" onClick={() => void runAction("保存授权", () => api(`/api/accounts/${account.id}/finish-browser-login`, { method: "POST" }))}>保存授权</button>
               <button type="button" className="ghost" onClick={() => void runAction("测试登录态", () => api(`/api/accounts/${account.id}/test-login`, { method: "POST" }))}>测试登录态</button>
-              <button type="button" className="ghost" disabled={!account.apiKeyFingerprint || busy !== ""} onClick={() => void testAPIKey()}>{busy === "检测密钥" ? "检测中..." : "检测密钥"}</button>
+              <button type="button" className="ghost" disabled={!account.apiKeyFingerprint || busy !== ""} onClick={() => void testAPIKey()}>{busy === "检测密钥" ? "检测中…" : "检测密钥"}</button>
+              <button type="button" className="ghost" onClick={() => setShowTwoFactorGuide(true)}>2FA 指引</button>
             </div>
             <div className="account-action-label danger-label">危险操作</div>
             <div className="account-action-group danger-zone">
@@ -251,6 +267,20 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
         ) : null}
       </div>
       {message ? <div className={message.includes("失败") || message.includes("错误") ? "error" : "note"}>{message}</div> : null}
+
+      {showTwoFactorGuide ? (
+        <TwoFactorGuide
+          variant="dialog"
+          siteName={account.upstreamSiteName}
+          baseUrl={account.upstreamSiteBaseUrl}
+          loginUrl={account.upstreamSiteLoginUrl || defaultLoginUrl(account.upstreamSiteBaseUrl || "")}
+          onClose={() => setShowTwoFactorGuide(false)}
+          onOpenBrowserLogin={() => {
+            setShowTwoFactorGuide(false);
+            void runAction("网页登录", () => api(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" }));
+          }}
+        />
+      ) : null}
     </article>
   );
 }

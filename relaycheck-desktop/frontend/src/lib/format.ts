@@ -33,7 +33,7 @@ export function compactJSONPreview(value: unknown) {
     return "暂无可展示的识别原始数据";
   }
   const text = JSON.stringify(value, null, 2);
-  return text.length > 2200 ? `${text.slice(0, 2200)}\n... 已截断` : text;
+  return text.length > 2200 ? `${text.slice(0, 2200)}\n… 已截断` : text;
 }
 
 export function formatDuration(seconds: number) {
