@@ -49,12 +49,8 @@ cd frontend && npx tsc --noEmit
 | Document | Purpose |
 |----------|---------|
 | `docs/PROJECT_STRUCTURE.md` | Current source tree, generated paths, archive boundary, and verification order. |
-| `PRODUCT_RESEARCH_AND_REQUIREMENTS.md` | Online research synthesis, product boundary, detailed requirements, roadmap, and risk register. |
 | `DESIGN_SYSTEM.md` | Control Room visual direction and UI rules. |
-| `PROMPT_CHECKLIST.md` | Execution checklist derived from the original optimization prompt. |
-| `AGENT_HANDOFF.md` | Resume packet and operational handoff notes for future agents. |
-| `docs/manual-test-record.md` | Phase 94-97 manual test record with before/after comparisons. |
-| `docs/reports/` | Dated progress reports and recovery records. |
+| `PRODUCT_RESEARCH_AND_REQUIREMENTS.md` | Product research, requirements, roadmap, and risk register. |
 
 ## Runtime
 
