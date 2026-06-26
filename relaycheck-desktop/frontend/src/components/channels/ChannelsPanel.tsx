@@ -15,6 +15,15 @@ export function ChannelsPanel({ onRefresh }: ChannelsPanelProps) {
     void actions.refresh();
   }, [actions.refresh]);
 
+  useEffect(() => {
+    if (actions.drawer?.kind !== "channel") return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") actions.setDrawer(null);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [actions.drawer, actions.setDrawer]);
+
   async function refreshAll() {
     await actions.refresh();
     await onRefresh();
@@ -75,7 +84,7 @@ export function ChannelsPanel({ onRefresh }: ChannelsPanelProps) {
         filters={filters}
       />
       {actions.drawer?.kind === "channel" ? (
-        <div className="drawer-backdrop" onClick={() => actions.setDrawer(null)}>
+        <div className="drawer-backdrop" role="presentation" onClick={() => actions.setDrawer(null)}>
           <aside className="detail-drawer" onClick={(event) => event.stopPropagation()}>
             <div className="detail-header">
               <div>

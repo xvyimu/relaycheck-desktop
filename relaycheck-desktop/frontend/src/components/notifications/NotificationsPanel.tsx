@@ -17,20 +17,21 @@ function notificationTone(level: string) {
   return "neutral";
 }
 
-function isImportant(item: NotificationItem) {
-  return ["error", "danger", "critical", "warning", "warn"].includes(item.level.toLowerCase());
-}
-
 export function NotificationsPanel({ items, onRefresh }: NotificationsPanelProps) {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [showRead, setShowRead] = useState(true);
 
   const summary = useMemo(() => {
     const unread = items.filter((item) => !item.read).length;
     const read = items.length - unread;
-    const important = items.filter(isImportant).length;
+    const important = items.filter((item) => ["error", "danger", "critical", "warning", "warn"].includes(item.level.toLowerCase())).length;
     return { total: items.length, unread, read, important };
   }, [items]);
+
+  const visibleItems = useMemo(() => {
+    return showRead ? items : items.filter((item) => !item.read);
+  }, [items, showRead]);
 
   async function runAction(label: string, action: () => Promise<unknown>) {
     setBusy(label);
@@ -54,6 +55,11 @@ export function NotificationsPanel({ items, onRefresh }: NotificationsPanelProps
     const confirmed = window.confirm(`确认清除 ${summary.read} 条已读通知？`);
     if (!confirmed) return;
     await runAction("清除已读", () => api("/api/notifications/clear-read", { method: "POST" }));
+  }
+
+  async function stowAndTrim() {
+    await runAction("收纳清理", () => api("/api/notifications/trim?keep=10", { method: "POST" }));
+    setShowRead(false);
   }
 
   return (
@@ -88,17 +94,33 @@ export function NotificationsPanel({ items, onRefresh }: NotificationsPanelProps
         <button
           className="ghost"
           disabled={Boolean(busy) || summary.read === 0}
+          onClick={() => void stowAndTrim()}
+          type="button"
+        >
+          {busy === "收纳清理" ? "收纳中…" : `收纳已读`}
+        </button>
+        <button
+          className="ghost"
+          disabled={Boolean(busy) || summary.read === 0}
           onClick={() => void clearRead()}
           type="button"
         >
           {busy === "清除已读" ? "清除中…" : "清除已读"}
+        </button>
+        <button
+          className="ghost"
+          onClick={() => setShowRead((prev) => !prev)}
+          type="button"
+          style={{ marginLeft: "auto" }}
+        >
+          {showRead ? "仅未读" : "全部"}
         </button>
       </div>
 
       {message ? <div className="problem-hint">{message}</div> : null}
 
       <div className="notification-list">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const tone = notificationTone(item.level);
           return (
             <article
@@ -121,7 +143,13 @@ export function NotificationsPanel({ items, onRefresh }: NotificationsPanelProps
           );
         })}
 
-        {!items.length ? (
+        {!showRead && summary.read > 0 ? (
+          <button className="ghost" onClick={() => setShowRead(true)} type="button" style={{ textAlign: "center", width: "100%", padding: "10px" }}>
+            展开 {summary.read} 条已读通知
+          </button>
+        ) : null}
+
+        {!visibleItems.length ? (
           <div className="empty-state">
             <div className="empty-mark">RC</div>
             <strong>暂无通知</strong>

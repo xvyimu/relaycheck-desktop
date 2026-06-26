@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -90,6 +91,7 @@ func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/notifications/mark-all-read", a.requireSession(a.handleMarkAllNotificationsRead))
 	mux.HandleFunc("/api/notifications/clear-read", a.requireSession(a.handleClearReadNotifications))
 	mux.HandleFunc("/api/notifications/mark-read", a.requireSession(a.handleMarkNotificationRead))
+		mux.HandleFunc("/api/notifications/trim", a.requireSession(a.handleTrimNotifications))
 }
 
 func (a *App) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
@@ -236,6 +238,26 @@ func (a *App) handleClearReadNotifications(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	_, err := a.db.ExecContext(r.Context(), `DELETE FROM app_notifications WHERE read = 1`)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	a.invalidateReadCache()
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (a *App) handleTrimNotifications(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodPost) {
+		return
+	}
+	keep := 10
+	if k := r.URL.Query().Get("keep"); k != "" {
+		if n, err := strconv.Atoi(k); err == nil && n > 0 {
+			keep = n
+		}
+	}
+	_, err := a.db.ExecContext(r.Context(),
+		`DELETE FROM app_notifications WHERE id NOT IN (SELECT id FROM app_notifications ORDER BY created_at DESC LIMIT ?)`, keep)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

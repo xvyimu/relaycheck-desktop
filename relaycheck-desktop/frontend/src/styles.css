@@ -10197,8 +10197,12 @@ input[type="checkbox"] {
 .notification-card {
   display: flex;
   flex-direction: column;
-  gap: var(--v4-space-3);
+  gap: 6px;
   max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
   background:
     radial-gradient(circle at 100% 0%, rgba(15, 110, 234, 0.03), transparent 10rem),
     rgba(255, 255, 255, 0.86);
@@ -10263,6 +10267,10 @@ input[type="checkbox"] {
   margin: 0;
   color: #40516b;
   line-height: 1.5;
+}
+
+.notification-card.is-read {
+  opacity: 0.6;
 }
 
 .notification-meta {
@@ -10433,6 +10441,89 @@ input[type="checkbox"] {
 .is-warning {
   border-color: rgba(161, 98, 7, 0.2);
   background: #fff9e8;
+}
+
+/* ── drawer 简约协调 ── */
+.detail-drawer {
+  border-left: 1px solid var(--linear-border, rgba(148,163,184,0.2));
+  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+  box-shadow: -12px 0 32px rgba(8, 25, 47, 0.06);
+}
+.detail-header strong {
+  font-size: 18px;
+  letter-spacing: -0.025em;
+  margin-top: 2px;
+}
+.detail-header p {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.detail-card {
+  border: 1px solid rgba(71, 85, 105, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: none;
+}
+.detail-card h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: #1e293b;
+}
+.detail-list {
+  margin-top: 10px;
+  gap: 6px;
+}
+.detail-list > div {
+  border-bottom: 1px solid rgba(71, 85, 105, 0.06);
+  padding-bottom: 6px;
+  gap: 8px;
+}
+.detail-list > div:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.detail-list span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+.detail-list strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-word;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.detail-metrics {
+  gap: 6px;
+}
+.detail-metrics > div {
+  border: 1px solid rgba(71, 85, 105, 0.08);
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 8px 10px;
+}
+.detail-metrics strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.detail-metrics span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
 }
 
 @media (max-width: 720px) {

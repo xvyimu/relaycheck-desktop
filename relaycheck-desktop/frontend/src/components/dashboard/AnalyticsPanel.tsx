@@ -116,6 +116,9 @@ function BalanceTrendChart({
             strokeWidth={isSelected ? 1 : 0}
             className="chart-point"
             onClick={() => onSelectDate?.(p.date)}
+            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelectDate?.(p.date); } }}
+            role="button"
+            tabIndex={0}
           >
             <title>{`${p.date}: $${p.balance?.toFixed(2) ?? "—"}（点击查看当日详情）`}</title>
           </circle>
@@ -221,6 +224,9 @@ function CheckinDonutChart({
               className="donut-segment"
               opacity={selectedStatus && !isSelected ? 0.4 : 1}
               onClick={() => onSelectStatus?.(item.status)}
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelectStatus?.(item.status); } }}
+              role="button"
+              tabIndex={0}
             >
               <title>{`${item.label}: ${item.count} (${((item.count / total) * 100).toFixed(1)}%) — 点击筛选`}</title>
             </circle>

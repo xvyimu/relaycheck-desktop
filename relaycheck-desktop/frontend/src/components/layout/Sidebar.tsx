@@ -29,6 +29,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         {TABS.map((item) => (
           <button
             key={item.key}
+            aria-current={activeTab === item.key ? "page" : undefined}
             className={activeTab === item.key ? "active" : ""}
             onClick={() => onTabChange(item.key)}
           >

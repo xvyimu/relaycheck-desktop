@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AccountCard } from "@/components/accounts/AccountCard";
 import { AccountDetailContent } from "@/components/accounts/AccountDetailContent";
 import { AccountForm } from "@/components/accounts/AccountForm";
@@ -14,6 +14,15 @@ export interface AccountsPanelProps {
 
 export function AccountsPanel({ accounts, sites, onRefresh }: AccountsPanelProps) {
   const [detailAccount, setDetailAccount] = useState<Account | null>(null);
+
+  useEffect(() => {
+    if (!detailAccount) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setDetailAccount(null);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [detailAccount]);
 
   return (
     <section className="accounts-panel">
@@ -31,7 +40,7 @@ export function AccountsPanel({ accounts, sites, onRefresh }: AccountsPanelProps
         {!accounts.length ? <Empty message="No accounts configured yet." /> : null}
       </div>
       {detailAccount ? (
-        <div className="drawer-backdrop" onClick={() => setDetailAccount(null)}>
+        <div className="drawer-backdrop" role="presentation" onClick={() => setDetailAccount(null)}>
           <aside className="detail-drawer" onClick={(event) => event.stopPropagation()}>
             <AccountDetailContent account={detailAccount} onClose={() => setDetailAccount(null)} />
           </aside>

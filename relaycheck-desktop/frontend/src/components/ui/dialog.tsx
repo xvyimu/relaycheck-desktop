@@ -44,7 +44,7 @@ export const Dialog = forwardRef<HTMLDivElement, DialogProps>(
 
     return (
       <div
-        className="fixed inset-0 z-50 grid place-items-center bg-background/58 p-4 backdrop-blur-sm"
+        className="fixed inset-0 z-50 grid place-items-center bg-background/58 p-4 backdrop-blur-sm overscroll-contain"
         onMouseDown={handleBackdropClick}
         role="presentation"
       >
