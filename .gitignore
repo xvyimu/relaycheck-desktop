@@ -40,6 +40,19 @@ coverage/
 .pipeline/test-results/
 **/.pipeline/test-results/
 
+# Agent/tool workspaces
+.workbuddy/
+deliverables/
+
+# Internal project docs (not for public repo)
+relaycheck-desktop/AGENT_HANDOFF.md
+relaycheck-desktop/PROMPT_CHECKLIST.md
+relaycheck-desktop/docs/reports/
+relaycheck-desktop/findings.md
+relaycheck-desktop/progress.md
+relaycheck-desktop/task_plan.md
+relaycheck-desktop/internal/core/PACKAGE_INDEX.md
+
 # Logs and local OS artifacts
 *.log
 *.tmp
