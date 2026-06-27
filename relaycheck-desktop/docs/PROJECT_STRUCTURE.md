@@ -35,12 +35,8 @@ Last updated: 2026-06-25
 | Path | Purpose |
 |------|---------|
 | `README.md` | Main product, runtime, command, and safety overview. |
-| `PRODUCT_RESEARCH_AND_REQUIREMENTS.md` | Research-backed requirements, roadmap, and risk register. |
 | `DESIGN_SYSTEM.md` | Control Room UI direction and visual rules. |
-| `PROMPT_CHECKLIST.md` | Long-form optimization checklist. |
-| `task_plan.md`, `progress.md`, `findings.md` | Live planning, progress, and engineering findings. |
-| `AGENT_HANDOFF.md` | Resume packet for future development sessions. |
-| `docs/manual-test-record.md` | Phase 94-97 manual test record with before/after comparisons. |
+| `docs/manual-test-record.md` | Manual test record with before/after comparisons. |
 | `docs/reports/` | Dated progress reports and recovery records. |
 
 ## Local And Generated Paths

@@ -50,7 +50,6 @@ cd frontend && npx tsc --noEmit
 |----------|---------|
 | `docs/PROJECT_STRUCTURE.md` | Current source tree, generated paths, archive boundary, and verification order. |
 | `DESIGN_SYSTEM.md` | Control Room visual direction and UI rules. |
-| `PRODUCT_RESEARCH_AND_REQUIREMENTS.md` | Product research, requirements, roadmap, and risk register. |
 
 ## Runtime
 
@@ -98,20 +97,19 @@ flowchart TD
 
 | Group | Endpoints |
 |-------|-----------|
-| System | `/api/system/status`, `/version-check`, `/autostart`, `/legacy-check`, `/port-check`, `/settings`, `/scheduler-status`, `/proxy-test`, `/diagnostics`, `/action-center`, `/audit-log`, `/backups`, `/backup`, `/export`, `/import`, `/exports`, `/restore`, `/migrate-from-python-db`, `/migrate-python-db` |
-| Scheduler | `/api/scheduler/channel-schedules`, `/calendar`, `/next-runs` |
-| Tasks | `/api/tasks/start`, `/tasks/{id}/stream`, `/tasks/{id}/cancel`, `/tasks/dry-run` |
+| System | `/api/system/status`, `/api/system/version-check`, `/api/system/autostart`, `/api/system/legacy-check`, `/api/system/port-check`, `/api/system/settings`, `/api/system/scheduler-status`, `/api/system/proxy-test`, `/api/system/diagnostics`, `/api/system/action-center`, `/api/system/audit-log`, `/api/system/backups`, `/api/system/backup`, `/api/system/export`, `/api/system/import`, `/api/system/exports`, `/api/system/backups/delete`, `/api/system/restore`, `/api/system/migrate-from-python-db`, `/api/system/migrate-python-db` |
+| Scheduler | `/api/scheduler/channel-schedules`, `/api/scheduler/calendar`, `/api/scheduler/next-runs` |
+| Tasks | `/api/tasks/start`, `/api/tasks/{id}`, `/api/tasks/dry-run` |
 | Analytics | `/api/analytics` (balance trend, checkin distribution, response times, site reliability, balance deltas) |
-| Auth | `/api/auth/login`, `/logout`, `/session` |
-| Sites | `/api/upstream-sites`, `/bulk-detect` |
-| Channels | `/api/channels`, `/bulk-source-status`, `/models/overview`, `/models/sync` |
-| Accounts | `/api/accounts`, `/bulk-open-browser-login`, `/bulk-finish-browser-login`, `/bulk-password-login`, `/bulk-test-api-keys`, `/bulk-refresh-balances`, `/import-legacy-config`, `/import-chrome-passwords/preview`, `/import-chrome-passwords/import` |
-| Checkins | `/api/checkins/today`, `/logs`, `/status`, `/run-all` |
+| Sites | `/api/upstream-sites`, `/api/upstream-sites/bulk-detect`, `/api/upstream-sites/{id}` |
+| Channels | `/api/channels`, `/api/channels/bulk-source-status`, `/api/channels/models/overview`, `/api/channels/models/sync`, `/api/channels/{id}` |
+| Accounts | `/api/accounts`, `/api/accounts/bulk-open-browser-login`, `/api/accounts/bulk-finish-browser-login`, `/api/accounts/bulk-password-login`, `/api/accounts/bulk-test-api-keys`, `/api/accounts/bulk-refresh-balances`, `/api/accounts/delete-unsupported-checkins`, `/api/accounts/import-legacy-config`, `/api/accounts/import-chrome-passwords/preview`, `/api/accounts/import-chrome-passwords/import`, `/api/accounts/{id}` |
+| Checkins | `/api/checkins/today`, `/api/checkins/logs`, `/api/checkins/status`, `/api/checkins/run-all` |
 | Balances | `/api/balances/snapshots`, `/api/usage/overview` |
-| Models | `/api/models/overview`, `/sync`, `/pricing`, `/pricing/sync` |
+| Models | `/api/models/overview`, `/api/models/sync`, `/api/models/pricing`, `/api/models/pricing/sync` |
 | Keys | `/api/keys/export-preview` |
-| Notifications | `/api/notifications`, `/mark-all-read`, `/clear-read`, `/mark-read` |
-| Local NewAPI | `/api/local-newapi`, `/scan`, `/import-from-sqlite`, `/import-from-admin-api` |
+| Notifications | `/api/notifications`, `/api/notifications/mark-all-read`, `/api/notifications/clear-read`, `/api/notifications/mark-read`, `/api/notifications/trim` |
+| Local NewAPI | `/api/local-newapi`, `/api/local-newapi/scan`, `/api/local-newapi/import-from-sqlite`, `/api/local-newapi/import-from-admin-api`, `/api/local-newapi/{id}` |
 | Health | `/api/health` (unauthenticated) |
 
 ## Commands
@@ -182,8 +180,6 @@ The `/api/analytics?days=N` endpoint provides:
 - Preserve the existing SQLite data file unless a migration task includes a backup and rollback plan.
 - Use `docs/PROJECT_STRUCTURE.md` as the source-tree map before deleting or moving files.
 - Follow `DESIGN_SYSTEM.md` when changing visual surfaces.
-- Update `AGENT_HANDOFF.md`, `progress.md`, and `task_plan.md` after substantial implementation work.
-- Use `PROMPT_CHECKLIST.md` as the master checklist for the original optimization prompt; mark each item complete there as work lands.
-- `/api/health` is intentionally unauthenticated for local startup/smoke checks; business `/api/*` routes remain session-protected.
+- `/api/health` is intentionally unauthenticated for local startup/smoke checks; business `/api/*` routes use `requireSession` middleware (currently a passthrough for single-user local mode).
 - External outbound URLs are validated against SSRF rules by default. Only explicit trusted local probes may opt into loopback/private addresses.
 - The scheduler uses `time.FixedZone("CST", 8*3600)` (UTC+8) for consistent scheduling regardless of server timezone.
