@@ -22,6 +22,9 @@ frontend/tsconfig.app.tsbuildinfo
 # Generated reports
 docs/reports/
 
+# Dev logs
+frontend/npm-dev.log
+
 # Mixed package managers — project uses npm
 pnpm-lock.yaml
 pnpm-workspace.yaml
