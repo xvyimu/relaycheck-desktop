@@ -47,7 +47,7 @@ async function captureState(page, label, options = {}) {
     hasRelayCheck: document.body.innerText.includes("RelayCheck"),
     active: document.querySelector(".sidebar nav button.active")?.textContent?.trim() || "",
     cards: document.querySelectorAll(
-      ".card, .metric-card, .channel-card, .account-card, .site-card, .checkin-card, .notification-card, .channel-summary > div, .channels-panel, .accounts-panel, .sites-panel, .checkin-panel, .notifications-panel, .settings-grid",
+      ".card, .metric-card, .channel-card, .account-card, .site-card, .checkin-card, .notification-card, .channel-summary > div, .channels-panel, .accounts-panel, .sites-panel, .scan-panel, .checkin-panel, .notifications-panel, .settings-grid",
     ).length,
     scrollWidth: document.body.scrollWidth,
     clientWidth: document.documentElement.clientWidth,
@@ -73,6 +73,7 @@ async function openTab(page, name, label = name) {
     Channels: ".channels-panel",
     Sites: ".sites-panel",
     "Check-ins": ".checkin-panel",
+    本机扫描: ".scan-panel",
     Notifications: ".notifications-panel",
     Settings: ".settings-grid",
   };
@@ -125,7 +126,7 @@ try {
   await page.screenshot({ path: desktopPath, fullPage: true });
   const desktop = await captureState(page, "desktop", { minCards: 3 });
   const tabs = {};
-  for (const tabName of ["Channels", "Sites", "Accounts", "Check-ins", "Notifications", "Settings", "Dashboard"]) {
+  for (const tabName of ["Channels", "Sites", "Accounts", "Check-ins", "本机扫描", "Notifications", "Settings", "Dashboard"]) {
     tabs[tabName] = await openTab(page, tabName);
   }
   const settingsPath = path.join(outDir, "app-shell-settings-smoke.png");
@@ -140,7 +141,7 @@ try {
   await page.screenshot({ path: mobilePath, fullPage: true });
   const mobile = await captureState(page, "mobile");
   const mobileTabs = {};
-  for (const tabName of ["Channels", "Sites", "Accounts", "Check-ins", "Notifications", "Settings", "Dashboard"]) {
+  for (const tabName of ["Channels", "Sites", "Accounts", "Check-ins", "本机扫描", "Notifications", "Settings", "Dashboard"]) {
     mobileTabs[tabName] = await openTab(page, tabName, `mobile ${tabName}`);
   }
 

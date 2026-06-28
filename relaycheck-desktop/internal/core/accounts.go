@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -978,6 +979,7 @@ func (a *App) startBrowserLogin(ctx context.Context, id string) browserLoginOpen
 	if targetURL == "" {
 		targetURL = strings.TrimRight(baseURL, "/") + "/login"
 	}
+	targetURL = resolveLoginTargetURL(baseURL, targetURL)
 	port, err := freeDebugPort(usedPorts)
 	if err != nil {
 		result.Status = "failed"
@@ -1028,6 +1030,33 @@ func (a *App) startBrowserLogin(ctx context.Context, id string) browserLoginOpen
 	result.DebugPort = port
 	result.ProfilePath = profilePath
 	return result
+}
+
+func resolveLoginTargetURL(baseURL string, loginURL string) string {
+	baseURL = strings.TrimSpace(baseURL)
+	loginURL = strings.TrimSpace(loginURL)
+	if loginURL == "" {
+		loginURL = "/login"
+	}
+	if strings.HasPrefix(loginURL, "http://") || strings.HasPrefix(loginURL, "https://") {
+		return loginURL
+	}
+	base, err := url.Parse(strings.TrimRight(baseURL, "/") + "/")
+	if err != nil || base.Scheme == "" || base.Host == "" {
+		return loginURL
+	}
+	parsed, err := url.Parse(loginURL)
+	if err != nil {
+		return strings.TrimRight(baseURL, "/") + "/" + strings.TrimLeft(loginURL, "/")
+	}
+	resolved := base.ResolveReference(parsed)
+	if resolved.Scheme != "http" && resolved.Scheme != "https" {
+		return base.ResolveReference(&url.URL{Path: "/login"}).String()
+	}
+	if !strings.EqualFold(resolved.Host, base.Host) {
+		return base.ResolveReference(&url.URL{Path: "/login"}).String()
+	}
+	return resolved.String()
 }
 
 func (a *App) saveBrowserLoginSession(ctx context.Context, id string) browserLoginSaveResult {

@@ -117,10 +117,7 @@ func TestPythonMigrationDryRun(t *testing.T) {
 	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
 	createTestPythonDB(t, pythonDBPath)
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	report, err := app.migrateFromPythonDB(context.Background(), pythonDBPath, "dry_run")
@@ -153,15 +150,15 @@ func TestPythonMigrationDryRun(t *testing.T) {
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM system_settings`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	// 7 default settings (including notification.channels and version_check_url), none from migration
-	if count != 7 {
-		t.Fatalf("expected 7 default settings (no migration writes), got %d", count)
+	// 8 default settings (including channel.health.schedule), none from migration
+	if count != 8 {
+		t.Fatalf("expected 8 default settings (no migration writes), got %d", count)
 	}
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM upstream_sites`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 0 {
-		t.Fatalf("expected 0 upstream_sites, got %d", count)
+	if count != 1 {
+		t.Fatalf("expected 1 upstream_sites (__global__), got %d", count)
 	}
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM channel_accounts`).Scan(&count); err != nil {
 		t.Fatal(err)
@@ -181,10 +178,7 @@ func TestPythonMigrationLive(t *testing.T) {
 	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
 	createTestPythonDB(t, pythonDBPath)
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	report, err := app.migrateFromPythonDB(context.Background(), pythonDBPath, "live")
@@ -219,19 +213,19 @@ func TestPythonMigrationLive(t *testing.T) {
 
 	// Verify Go tables have data
 	var count int
-	// 6 defaults + 0 imported = 6
+	// 8 defaults + 0 imported = 8
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM system_settings`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 7 {
-		t.Fatalf("expected 7 settings (all defaults), got %d", count)
+	if count != 8 {
+		t.Fatalf("expected 8 settings (all defaults), got %d", count)
 	}
 
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM upstream_sites`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 2 {
-		t.Fatalf("expected 2 upstream_sites, got %d", count)
+	if count != 3 {
+		t.Fatalf("expected 3 upstream_sites, got %d", count)
 	}
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM channel_accounts`).Scan(&count); err != nil {
 		t.Fatal(err)
@@ -251,11 +245,10 @@ func TestPythonMigrationIdempotent(t *testing.T) {
 	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
 	createTestPythonDB(t, pythonDBPath)
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+
+	var err error
 
 	// First run
 	_, err = app.migrateFromPythonDB(context.Background(), pythonDBPath, "live")
@@ -287,8 +280,8 @@ func TestPythonMigrationIdempotent(t *testing.T) {
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM upstream_sites`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 2 {
-		t.Fatalf("expected 2 upstream_sites (no duplicates), got %d", count)
+	if count != 3 {
+		t.Fatalf("expected 3 upstream_sites, got %d", count)
 	}
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM channel_accounts`).Scan(&count); err != nil {
 		t.Fatal(err)
@@ -308,10 +301,7 @@ func TestPythonMigrationEmptyDB(t *testing.T) {
 	pythonDBPath := filepath.Join(t.TempDir(), "python_empty.db")
 	createEmptyTestPythonDB(t, pythonDBPath)
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	report, err := app.migrateFromPythonDB(context.Background(), pythonDBPath, "live")
@@ -334,11 +324,9 @@ func TestPythonMigrationEmptyDB(t *testing.T) {
 }
 
 func TestPythonMigrationMissingFile(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	_, err = app.migrateFromPythonDB(context.Background(), "/nonexistent/path/zidqiandao.db", "dry_run")
 	if err == nil {
@@ -350,10 +338,7 @@ func TestPythonMigrationMissingFile(t *testing.T) {
 }
 
 func TestPythonMigrationInvalidFile(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	invalidPath := filepath.Join(t.TempDir(), "not-a-db.txt")
@@ -361,7 +346,7 @@ func TestPythonMigrationInvalidFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = app.migrateFromPythonDB(context.Background(), invalidPath, "live")
+	_, err := app.migrateFromPythonDB(context.Background(), invalidPath, "live")
 	if err == nil {
 		t.Fatal("expected error for invalid sqlite file")
 	}
@@ -414,11 +399,9 @@ func TestPythonMigrationEncryption(t *testing.T) {
 	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
 	createTestPythonDB(t, pythonDBPath)
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	_, err = app.migrateFromPythonDB(context.Background(), pythonDBPath, "live")
 	if err != nil {
@@ -468,10 +451,7 @@ func TestPythonMigrationApiKeyEncryption(t *testing.T) {
 	}
 	db.Close()
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	_, err = app.migrateFromPythonDB(context.Background(), pythonDBPath, "live")
@@ -504,11 +484,9 @@ func TestPythonMigrationSettingsMerge(t *testing.T) {
 	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
 	createTestPythonDB(t, pythonDBPath)
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	// Pre-populate checkin.schedule with a user-configured value
 	existingSchedule := `{"enabled":false,"time":"10:00","randomDelayMinutes":[30,60],"siteConcurrency":2,"globalConcurrency":5}`
@@ -540,11 +518,9 @@ func TestPythonMigrationMappedStatusesInDB(t *testing.T) {
 	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
 	createTestPythonDB(t, pythonDBPath)
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	_, err = app.migrateFromPythonDB(context.Background(), pythonDBPath, "live")
 	if err != nil {
@@ -629,10 +605,7 @@ func TestPythonMigrationCreateSiteForMissingChannel(t *testing.T) {
 	}
 	db.Close()
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	report, err := app.migrateFromPythonDB(context.Background(), pythonDBPath, "live")
@@ -669,10 +642,7 @@ func TestPythonMigrationEmptyPasswordHandling(t *testing.T) {
 	}
 	db.Close()
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	_, err = app.migrateFromPythonDB(context.Background(), pythonDBPath, "live")
@@ -690,7 +660,6 @@ func TestPythonMigrationEmptyPasswordHandling(t *testing.T) {
 	}
 }
 
-
 func TestPythonMigrationVerifyTables(t *testing.T) {
 	// Create a DB with only some tables to verify table-check fails
 	pythonDBPath := filepath.Join(t.TempDir(), "partial.db")
@@ -704,10 +673,7 @@ func TestPythonMigrationVerifyTables(t *testing.T) {
 	}
 	db.Close()
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	_, err = app.migrateFromPythonDB(context.Background(), pythonDBPath, "live")
@@ -722,10 +688,7 @@ func TestHandleMigratePythonDBLive(t *testing.T) {
 	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
 	createTestPythonDB(t, pythonDBPath)
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	body, _ := json.Marshal(map[string]string{"sourcePath": pythonDBPath})
@@ -770,10 +733,7 @@ func TestHandleMigratePythonDBDryRun(t *testing.T) {
 	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
 	createTestPythonDB(t, pythonDBPath)
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	body, _ := json.Marshal(map[string]string{"sourcePath": pythonDBPath, "mode": "dry_run"})
@@ -805,18 +765,15 @@ func TestHandleMigratePythonDBDryRun(t *testing.T) {
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM upstream_sites`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 0 {
-		t.Fatalf("expected 0 upstream_sites after dry_run, got %d", count)
+	if count != 1 {
+		t.Fatalf("expected 1 upstream_sites (__global__) after dry_run, got %d", count)
 	}
 }
 
 // TestHandleMigratePythonDBMissingSourcePath verifies the handler rejects
 // requests without a sourcePath parameter.
 func TestHandleMigratePythonDBMissingSourcePath(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	body, _ := json.Marshal(map[string]string{"mode": "live"})
@@ -839,10 +796,7 @@ func TestHandleMigratePythonDBIdempotent(t *testing.T) {
 	pythonDBPath := filepath.Join(t.TempDir(), "zidqiandao.db")
 	createTestPythonDB(t, pythonDBPath)
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	// First call
@@ -866,8 +820,8 @@ func TestHandleMigratePythonDBIdempotent(t *testing.T) {
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM upstream_sites`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 2 {
-		t.Fatalf("expected 2 upstream_sites (no duplicates), got %d", count)
+	if count != 3 {
+		t.Fatalf("expected 3 upstream_sites, got %d", count)
 	}
 	if err := app.db.QueryRow(`SELECT COUNT(*) FROM channel_accounts`).Scan(&count); err != nil {
 		t.Fatal(err)

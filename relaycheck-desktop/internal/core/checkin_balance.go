@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"time"
@@ -341,27 +342,52 @@ func (a *App) handleRunAllCheckins(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) runDueCheckins(ctx context.Context, mode string) ([]map[string]interface{}, error) {
-	accounts, err := a.loadDueCheckinAccounts(ctx, 0)
+	results, err := a.runDueCheckinsWithFilter(ctx, mode, "", "正在签到...", "今天没有待签到账号。")
+	if err == errCheckinRunBusy {
+		return nil, errorsText("已有签到任务正在运行，请等待当前任务完成。")
+	}
+	return results, err
+}
+
+// runDueCheckinsForSite runs checkins only for accounts belonging to the given site.
+func (a *App) runDueCheckinsForSite(ctx context.Context, siteID string) ([]map[string]interface{}, error) {
+	return a.runDueCheckinsWithFilter(ctx, "channel."+siteID, siteID, "正在签到(独立排程)...", "")
+}
+
+var errCheckinRunBusy = errorsText("checkin run already in progress")
+
+func (a *App) runDueCheckinsWithFilter(ctx context.Context, mode string, siteID string, currentMessage string, emptyMessage string) ([]map[string]interface{}, error) {
+	accounts, err := a.loadDueCheckinAccounts(ctx, siteID, 0)
 	if err != nil {
 		return nil, err
 	}
+	if siteID != "" && len(accounts) == 0 {
+		return nil, nil
+	}
 	if !a.beginCheckinRun(mode, len(accounts)) {
-		return nil, errorsText("已有签到任务正在运行，请等待当前任务完成。")
+		return nil, errCheckinRunBusy
 	}
 	defer a.finishCheckinRun()
 
-	results := []map[string]interface{}{}
-	if len(accounts) == 0 {
-		a.updateCheckinRunMessage("今天没有待签到账号。")
+	results := make([]map[string]interface{}, 0, len(accounts))
+	if len(accounts) == 0 && emptyMessage != "" {
+		a.updateCheckinRunMessage(emptyMessage)
 	}
 	siteLimiter := newCheckinSiteLimiter(a.loadCheckinScheduleConfig(ctx))
 	for _, account := range accounts {
+		if ctx.Err() != nil {
+			break
+		}
 		if err := siteLimiter.wait(ctx, account.UpstreamSiteID); err != nil {
 			return results, err
 		}
-		a.updateCheckinRunCurrent(account.ID, account.AccountName, account.SiteName, "正在签到...")
+		a.updateCheckinRunCurrent(account.ID, account.AccountName, account.SiteName, currentMessage)
 		result, err := a.runAccountCheckin(ctx, account.ID)
-		entry := map[string]interface{}{"accountId": account.ID, "accountName": account.AccountName, "siteName": account.SiteName}
+		entry := map[string]interface{}{
+			"accountId":   account.ID,
+			"accountName": account.AccountName,
+			"siteName":    account.SiteName,
+		}
 		if err != nil {
 			entry["status"] = "failed"
 			entry["message"] = err.Error()
@@ -377,16 +403,20 @@ func (a *App) runDueCheckins(ctx context.Context, mode string) ([]map[string]int
 	return results, nil
 }
 
-func (a *App) loadDueCheckinAccounts(ctx context.Context, limit int) ([]checkinRunAccount, error) {
+func (a *App) loadDueCheckinAccounts(ctx context.Context, siteID string, limit int) ([]checkinRunAccount, error) {
 	query := `
 		SELECT a.id, a.display_name, s.id, s.name
 		FROM channel_accounts a
 		JOIN upstream_sites s ON s.id = a.upstream_site_id
-		WHERE COALESCE(a.last_checkin_status,'') NOT IN ('success','already_checked')
-		   OR COALESCE(substr(a.last_checkin_at, 1, 10),'') <> ?
-		ORDER BY a.updated_at DESC
+		WHERE (COALESCE(a.last_checkin_status,'') NOT IN ('success','already_checked')
+		   OR COALESCE(substr(a.last_checkin_at, 1, 10),'') <> ?)
 	`
 	args := []interface{}{time.Now().UTC().Format("2006-01-02")}
+	if siteID != "" {
+		query += ` AND a.upstream_site_id = ?`
+		args = append(args, siteID)
+	}
+	query += ` ORDER BY a.updated_at DESC`
 	if limit > 0 {
 		query += ` LIMIT ?`
 		args = append(args, limit)
@@ -599,7 +629,7 @@ func (a *App) checkinTodaySummary(ctx context.Context) (CheckinTodaySummary, err
 			summary.FailedCount += count
 		}
 	}
-	dueAccounts, err := a.loadDueCheckinAccounts(ctx, 0)
+	dueAccounts, err := a.loadDueCheckinAccounts(ctx, "", 0)
 	if err != nil {
 		return summary, err
 	}
@@ -1149,14 +1179,15 @@ func (a *App) loginWithPassword(ctx context.Context, auth *accountAuthContext) e
 			req.Header.Set("content-type", "application/json")
 			req.Header.Set("accept", "application/json, text/plain, */*")
 			req.Header.Set("user-agent", firstNonEmpty(auth.UserAgent, "RelayCheck-Desktop/0.1"))
-			resp, err := a.doHTTP(req)
+			jar, _ := cookiejar.New(nil)
+			resp, err := a.doLoginHTTP(req, jar)
 			if err != nil {
 				lastErr = err
 				pathErr = err
 				continue
 			}
 			content, _ := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
-			cookies := cookiesToHeader(resp.Cookies())
+			cookies := cookiesFromLoginResponse(resp, jar, req.URL)
 			_ = resp.Body.Close()
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 				lastErr = fmt.Errorf("%s HTTP %d: %s", loginPath, resp.StatusCode, firstNonEmpty(extractMessage(string(content)), maskResponse(string(content))))
@@ -1209,6 +1240,17 @@ func candidateLoginPaths(customPath string) []string {
 		result = append(result, path)
 	}
 	return result
+}
+
+func (a *App) doLoginHTTP(req *http.Request, jar *cookiejar.Jar) (*http.Response, error) {
+	if a != nil && a.db == nil && a.client != nil {
+		client := *a.client
+		client.Jar = jar
+		return client.Do(req)
+	}
+	client := newNetworkHTTPClient(defaultHTTPTimeout, a.currentNetworkProxyConfig())
+	client.Jar = jar
+	return client.Do(req)
 }
 
 func formatLoginPathFailure(path string, err error) string {
@@ -1290,6 +1332,23 @@ func cookiesToHeader(cookies []*http.Cookie) string {
 		}
 	}
 	return strings.Join(parts, "; ")
+}
+
+func cookiesFromLoginResponse(resp *http.Response, jar *cookiejar.Jar, loginURL *url.URL) string {
+	if jar != nil && loginURL != nil {
+		if cookies := cookiesToHeader(jar.Cookies(loginURL)); cookies != "" {
+			return cookies
+		}
+	}
+	if jar != nil && resp != nil && resp.Request != nil && resp.Request.URL != nil {
+		if cookies := cookiesToHeader(jar.Cookies(resp.Request.URL)); cookies != "" {
+			return cookies
+		}
+	}
+	if resp == nil {
+		return ""
+	}
+	return cookiesToHeader(resp.Cookies())
 }
 
 func extractToken(body string) string {

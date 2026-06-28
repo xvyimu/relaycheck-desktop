@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	schedulerJobCheckin = "checkin.daily"
-	schedulerJobSync    = "sync.local_newapi"
+	schedulerJobCheckin       = "checkin.daily"
+	schedulerJobSync          = "sync.local_newapi"
+	schedulerJobChannelHealth = "channel.health_probe"
 )
 
 type syncJobRunState struct {
@@ -48,6 +49,14 @@ type syncScheduleConfig struct {
 	IntervalMinutes int    `json:"intervalMinutes"`
 	Mode            string `json:"mode"`
 	RunOnStartup    bool   `json:"runOnStartup"`
+}
+
+type channelHealthScheduleConfig struct {
+	Enabled         bool `json:"enabled"`
+	IntervalMinutes int  `json:"intervalMinutes"`
+	RunOnStartup    bool `json:"runOnStartup"`
+	Limit           int  `json:"limit"`
+	OnlyRisky       bool `json:"onlyRisky"`
 }
 
 type checkinPlan struct {
@@ -127,7 +136,48 @@ func (a *App) tickSchedulers(ctx context.Context) {
 	}
 	nowTime := time.Now()
 	a.tickCheckinScheduler(ctx, nowTime)
+	a.tickChannelScheduler(ctx, nowTime)
 	a.tickSyncScheduler(ctx, nowTime)
+	a.tickChannelHealthScheduler(ctx, nowTime)
+}
+
+// tickChannelScheduler checks per-site channel schedules and triggers checkins for due sites.
+// Each site with an enabled schedule gets checked independently of the global schedule.
+func (a *App) tickChannelScheduler(ctx context.Context, currentTime time.Time) {
+	schedules, err := a.listChannelSchedules(ctx)
+	if err != nil || len(schedules) == 0 {
+		return
+	}
+
+	nowStr := currentTime.Format(time.RFC3339)
+	for _, sched := range schedules {
+		if ctx.Err() != nil {
+			return
+		}
+		if sched.ID == globalScheduleSiteID {
+			continue
+		}
+		if !sched.Enabled || sched.NextRunAt == "" {
+			continue
+		}
+		// Skip if next run is still in the future
+		if sched.NextRunAt > nowStr {
+			continue
+		}
+		// Execute per-site checkin. Do not advance the schedule if the run was
+		// blocked or failed before completion; otherwise the due window is lost.
+		if _, err := a.runDueCheckinsForSite(ctx, sched.UpstreamSiteID); err != nil {
+			continue
+		}
+
+		// Recalculate next run after execution
+		newNextRun := computeNextRun(sched.CheckinTime, sched.CronExpr, sched.SkipDates, sched.RandomDelayMin, sched.RandomDelayMax)
+		_, _ = a.db.ExecContext(ctx, `
+			UPDATE channel_schedules
+			SET last_run_at=?, next_run_at=?, updated_at=?
+			WHERE id=?
+		`, nowStr, newNextRun, nowStr, sched.ID)
+	}
 }
 
 func (a *App) tickCheckinScheduler(ctx context.Context, currentTime time.Time) {
@@ -169,6 +219,7 @@ func (a *App) tickCheckinScheduler(ctx context.Context, currentTime time.Time) {
 		a.notify("scheduled_checkin_failed", "warning", "自动签到失败", errMessage, "scheduler", schedulerJobCheckin)
 	}
 	_ = a.finishSchedulerJob(context.Background(), schedulerJobCheckin, plan.RunKey, status, summary, errMessage)
+	a.syncGlobalScheduleRecord(ctx)
 }
 
 func (a *App) tickSyncScheduler(ctx context.Context, currentTime time.Time) {
@@ -226,6 +277,74 @@ func (a *App) tickSyncScheduler(ctx context.Context, currentTime time.Time) {
 		status = "skipped"
 	}
 	_ = a.finishSchedulerJob(context.Background(), schedulerJobSync, runKey, status, result.Summary(), errMessage)
+}
+
+func (a *App) tickChannelHealthScheduler(ctx context.Context, currentTime time.Time) {
+	config := a.loadChannelHealthScheduleConfig(ctx)
+	record, _ := a.loadSchedulerRun(ctx, schedulerJobChannelHealth)
+	if !config.Enabled {
+		_ = a.upsertSchedulerPlan(ctx, schedulerJobChannelHealth, "", "", "渠道健康探测未启用。")
+		return
+	}
+
+	interval := time.Duration(config.IntervalMinutes) * time.Minute
+	if interval < 5*time.Minute {
+		interval = 30 * time.Minute
+	}
+
+	due := false
+	nextRun := currentTime.Add(interval)
+	runKey := currentTime.Format("20060102-1504")
+	if record.LastFinishedAt == "" {
+		if config.RunOnStartup {
+			due = true
+			nextRun = currentTime
+		} else {
+			startedAt := a.schedulerStartTime()
+			nextRun = startedAt.Add(interval)
+			if !currentTime.Before(nextRun) {
+				due = true
+			}
+		}
+	} else if lastFinished, err := time.Parse(time.RFC3339Nano, record.LastFinishedAt); err == nil {
+		nextRun = lastFinished.Add(interval)
+		if !currentTime.Before(nextRun) {
+			due = true
+		}
+	}
+	_ = a.upsertSchedulerPlan(ctx, schedulerJobChannelHealth, runKey, nextRun.UTC().Format(time.RFC3339Nano), "等待下一次渠道健康探测。")
+	if !due {
+		return
+	}
+	if !a.beginSchedulerJob(ctx, schedulerJobChannelHealth, runKey) {
+		return
+	}
+
+	jobCtx, cancel := context.WithTimeout(ctx, 12*time.Minute)
+	defer cancel()
+	result, err := a.runScheduledChannelHealthProbe(jobCtx, config)
+	status := "success"
+	errMessage := ""
+	summary := result.Summary()
+	if err != nil {
+		status = "failed"
+		errMessage = err.Error()
+		summary = "渠道健康探测失败：" + errMessage
+		a.notify("scheduled_channel_health_probe_failed", "warning", "渠道健康探测失败", errMessage, "scheduler", schedulerJobChannelHealth)
+	} else if result.Failed > 0 || result.Warning > 0 {
+		status = "warning"
+		errMessage = fmt.Sprintf("%d 个失败，%d 个预警", result.Failed, result.Warning)
+		a.notify("scheduled_channel_health_probe_warning", "warning", "渠道健康探测发现风险", summary, "scheduler", schedulerJobChannelHealth)
+	}
+	_ = a.finishSchedulerJob(context.Background(), schedulerJobChannelHealth, runKey, status, summary, errMessage)
+}
+
+func (a *App) runScheduledChannelHealthProbe(ctx context.Context, config channelHealthScheduleConfig) (channelHealthProbeResult, error) {
+	jobs, err := a.loadChannelHealthProbeJobs(ctx, config.Limit, config.OnlyRisky)
+	if err != nil {
+		return channelHealthProbeResult{}, err
+	}
+	return a.runChannelHealthProbe(ctx, jobs, nil), nil
 }
 
 func (a *App) runScheduledLocalNewAPISync(ctx context.Context) scheduledSyncResult {
@@ -362,6 +481,15 @@ func (a *App) beginSchedulerJob(ctx context.Context, jobKey string, runKey strin
 		a.localSyncRun.Running = true
 		a.mu.Unlock()
 	}
+	if jobKey == schedulerJobChannelHealth {
+		a.mu.Lock()
+		if a.channelHealthRun.Running {
+			a.mu.Unlock()
+			return false
+		}
+		a.channelHealthRun.Running = true
+		a.mu.Unlock()
+	}
 	_, err := a.db.ExecContext(ctx, `
 		INSERT INTO scheduler_runs (job_key, status, planned_run_key, last_run_key, last_started_at, last_error, summary, updated_at)
 		VALUES (?, 'running', ?, ?, ?, '', '', ?)
@@ -380,6 +508,11 @@ func (a *App) beginSchedulerJob(ctx context.Context, jobKey string, runKey strin
 			a.localSyncRun.Running = false
 			a.mu.Unlock()
 		}
+		if jobKey == schedulerJobChannelHealth {
+			a.mu.Lock()
+			a.channelHealthRun.Running = false
+			a.mu.Unlock()
+		}
 		return false
 	}
 	return true
@@ -389,6 +522,11 @@ func (a *App) finishSchedulerJob(ctx context.Context, jobKey string, runKey stri
 	if jobKey == schedulerJobSync {
 		a.mu.Lock()
 		a.localSyncRun.Running = false
+		a.mu.Unlock()
+	}
+	if jobKey == schedulerJobChannelHealth {
+		a.mu.Lock()
+		a.channelHealthRun.Running = false
 		a.mu.Unlock()
 	}
 	finishedAt := now()
@@ -460,6 +598,7 @@ func (a *App) buildSchedulerStatus(ctx context.Context) SchedulerStatus {
 	}{
 		{schedulerJobCheckin, "自动签到"},
 		{schedulerJobSync, "NewAPI 定时同步"},
+		{schedulerJobChannelHealth, "渠道健康探测"},
 	} {
 		record, err := a.loadSchedulerRun(ctx, job.key)
 		item := SchedulerJobStatus{Key: job.key, Label: job.label, Status: "idle"}
@@ -515,6 +654,34 @@ func (a *App) loadSyncScheduleConfig(ctx context.Context) syncScheduleConfig {
 	}
 	if strings.TrimSpace(config.Mode) == "" {
 		config.Mode = "local-newapi"
+	}
+	return config
+}
+
+func (a *App) loadChannelHealthScheduleConfig(ctx context.Context) channelHealthScheduleConfig {
+	config := channelHealthScheduleConfig{
+		Enabled:         true,
+		IntervalMinutes: 60,
+		RunOnStartup:    false,
+		Limit:           20,
+		OnlyRisky:       false,
+	}
+	_ = a.loadSettingJSON(ctx, "channel.health.schedule", &config)
+	return normalizeChannelHealthScheduleConfig(config)
+}
+
+func normalizeChannelHealthScheduleConfig(config channelHealthScheduleConfig) channelHealthScheduleConfig {
+	if config.IntervalMinutes < 5 {
+		config.IntervalMinutes = 30
+	}
+	if config.IntervalMinutes > 1440 {
+		config.IntervalMinutes = 1440
+	}
+	if config.Limit <= 0 {
+		config.Limit = 20
+	}
+	if config.Limit > 50 {
+		config.Limit = 50
 	}
 	return config
 }

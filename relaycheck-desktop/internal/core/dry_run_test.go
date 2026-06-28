@@ -43,10 +43,7 @@ func decodeDryRunResponse(t *testing.T, rec *httptest.ResponseRecorder) DryRunPr
 // TestDryRunRejectsExceedingAccountLimit 验证：超过 200 个账号上限的请求会被拒绝，
 // 符合 project_memory 中 Dry run 最多 200 条的硬约束。
 func TestDryRunRejectsExceedingAccountLimit(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	accountIDs := make([]string, 201)
@@ -70,10 +67,7 @@ func TestDryRunRejectsExceedingAccountLimit(t *testing.T) {
 
 // TestDryRunRejectsMissingTypeOrAccountIds 验证：缺少 type 或 accountIds 的请求被拒绝。
 func TestDryRunRejectsMissingTypeOrAccountIds(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	cases := []struct {
@@ -99,10 +93,7 @@ func TestDryRunRejectsMissingTypeOrAccountIds(t *testing.T) {
 
 // TestDryRunRejectsWrongMethod 验证：非 POST 请求被拒绝。
 func TestDryRunRejectsWrongMethod(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/tasks/dry-run", nil)
@@ -116,10 +107,7 @@ func TestDryRunRejectsWrongMethod(t *testing.T) {
 // TestDryRunClassifiesCheckinActions 验证：checkin 类型的 dry-run 正确分类账号为
 // will_run / skip_unsupported / skip_expired / skip_no_cookie。
 func TestDryRunClassifiesCheckinActions(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	idOK := "acc-ok"
@@ -183,10 +171,7 @@ func TestDryRunClassifiesCheckinActions(t *testing.T) {
 
 // TestDryRunSkipsNotFoundAccounts 验证：请求中存在但数据库中不存在的账号 ID 被标记为 skip_not_found。
 func TestDryRunSkipsNotFoundAccounts(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	idReal := "acc-real"
@@ -233,10 +218,7 @@ func TestDryRunSkipsNotFoundAccounts(t *testing.T) {
 
 // TestDryRunHandlesUnknownType 验证：未知操作类型的账号被标记为 skip_unknown_type。
 func TestDryRunHandlesUnknownType(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	idTest := "acc-unknown-type"
@@ -266,10 +248,7 @@ func TestDryRunHandlesUnknownType(t *testing.T) {
 
 // TestDryRunTestAndIdentifyTypesAlwaysWillRun 验证：test 和 identify 类型对存在的账号总是 will_run。
 func TestDryRunTestAndIdentifyTypesAlwaysWillRun(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	idTest := "acc-test-type"
@@ -302,10 +281,7 @@ func TestDryRunTestAndIdentifyTypesAlwaysWillRun(t *testing.T) {
 // TestDryRunPreservesRequestOrder 验证：preview.items 的顺序与请求中 accountIds 顺序一致，
 // 而非数据库返回顺序。
 func TestDryRunPreservesRequestOrder(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	idA := "acc-order-a"

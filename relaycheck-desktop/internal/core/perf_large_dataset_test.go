@@ -10,11 +10,9 @@ import (
 // TestLargeDatasetPerformance verifies that dashboard queries complete
 // within acceptable time limits even with 500+ accounts.
 func TestLargeDatasetPerformance(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	ctx := context.Background()
 

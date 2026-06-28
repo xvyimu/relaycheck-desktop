@@ -19,7 +19,12 @@ export interface TaskProgress {
   error?: string;
 }
 
-export type TaskType = "checkin" | "test_keys" | "refresh_balances" | "detect_sites";
+export type TaskType =
+  | "checkin"
+  | "test_keys"
+  | "refresh_balances"
+  | "detect_sites"
+  | "channel_health_probe";
 
 interface UseTaskProgressState {
   progress: TaskProgress | null;

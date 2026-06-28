@@ -7,11 +7,10 @@ import (
 )
 
 func TestDeleteUnsupportedCheckinAccountsDeletesOnlyUnsupportedTargets(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+
+	var err error
 
 	supportedSiteID := newID()
 	unsupportedSiteID := newID()
@@ -98,10 +97,7 @@ func TestDeleteUnsupportedCheckinAccountsDeletesOnlyUnsupportedTargets(t *testin
 }
 
 func TestDeleteUnsupportedCheckinAccountsReportsBatchProgress(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	supportedSiteID := newID()

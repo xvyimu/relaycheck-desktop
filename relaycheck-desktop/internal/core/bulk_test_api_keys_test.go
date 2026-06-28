@@ -28,10 +28,7 @@ func TestBulkTestAPIKeysReturnsSummaryAndExcludesPlaintextSecret(t *testing.T) {
 	}))
 	defer server.Close()
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	app.allowLocalOutbound = true
 
@@ -119,11 +116,9 @@ func TestBulkTestAPIKeysReturnsSummaryAndExcludesPlaintextSecret(t *testing.T) {
 // TestBulkTestAPIKeysSkipsAccountsWithoutKey 验证：没有 API Key 的账号不会被纳入
 // 批量重测，避免对无 Key 账号发起无意义的请求。
 func TestBulkTestAPIKeysSkipsAccountsWithoutKey(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	siteID := newID()
 	_, err = app.db.Exec(`
@@ -167,10 +162,7 @@ func TestBulkTestAPIKeysSkipsAccountsWithoutKey(t *testing.T) {
 // TestBulkTestAPIKeysClampsLimit 验证：批量重测的 limit 参数会被 clamp 到合法范围，
 // 防止过大 limit 对上游站点造成瞬时压力（符合 project_memory 中批量动作 1..10 的约定）。
 func TestBulkTestAPIKeysClampsLimit(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	// limit=0 应被 clamp 到默认值（不会返回 error）

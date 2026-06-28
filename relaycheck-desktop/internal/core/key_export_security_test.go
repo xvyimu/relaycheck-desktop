@@ -12,10 +12,7 @@ import (
 // HTTP 响应体本身不包含明文 API Key，只包含指纹。这是对 audit_test.go 中审计日志
 // 断言的补充——审计干净不等于响应体干净，两者必须分别锁定。
 func TestKeyExportPreviewResponseBodyExcludesPlaintextSecret(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	siteID := newID()
@@ -94,11 +91,9 @@ func TestKeyExportPreviewResponseBodyExcludesPlaintextSecret(t *testing.T) {
 // TestKeyExportPreviewOrdersValidFirst 验证：导出预览将 valid 状态的账号排在前面，
 // 且无效状态排在后面，方便用户优先查看可用 Key。
 func TestKeyExportPreviewOrdersValidFirst(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	siteID := newID()
 	_, err = app.db.Exec(`
@@ -150,11 +145,9 @@ func TestKeyExportPreviewOrdersValidFirst(t *testing.T) {
 // TestKeyExportPreviewSkipsAccountsWithoutFingerprint 验证：没有 fingerprint 的账号
 // 不会被纳入导出预览，避免泄露未检测的账号信息。
 func TestKeyExportPreviewSkipsAccountsWithoutFingerprint(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	siteID := newID()
 	_, err = app.db.Exec(`

@@ -19,6 +19,13 @@ frontend/src/*.css.map
 frontend/tsconfig.tsbuildinfo
 frontend/tsconfig.app.tsbuildinfo
 
+# Generated reports
+docs/reports/
+
+# Mixed package managers — project uses npm
+pnpm-lock.yaml
+pnpm-workspace.yaml
+
 # Screenshots
 screenshots/
 frontend/screenshots/
@@ -36,7 +43,3 @@ Thumbs.db
 
 # Session artifacts
 *.jsonl
-
-# Agent work artifacts
-../.workbuddy/
-../deliverables/

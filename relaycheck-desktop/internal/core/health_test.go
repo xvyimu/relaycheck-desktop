@@ -7,10 +7,7 @@ import (
 )
 
 func TestHealthStatusChecksDatabaseAndPaths(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	status := app.healthStatus(httptest.NewRequest(http.MethodGet, "/api/health", nil).Context())

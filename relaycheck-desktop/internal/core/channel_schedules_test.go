@@ -32,27 +32,23 @@ func parseAPIResponse(t *testing.T, body string, target interface{}) {
 }
 
 func TestListChannelSchedules_Empty(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	items, err := app.listChannelSchedules(context.Background())
 	if err != nil {
 		t.Fatalf("listChannelSchedules on empty DB: %v", err)
 	}
-	if len(items) != 0 {
-		t.Fatalf("expected empty list, got %d items", len(items))
+	// __global__ schedule is created during NewApp startup
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item (__global__), got %d items", len(items))
 	}
 }
 
 func TestUpsertChannelSchedule_CreatesAndUpdates(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	// First, create an upstream site to satisfy FK constraint
 	_, err = app.db.ExecContext(context.Background(),
@@ -73,29 +69,29 @@ func TestUpsertChannelSchedule_CreatesAndUpdates(t *testing.T) {
 		t.Fatalf("expected 200, got %d: body=%s", w.Code, body)
 	}
 
-	var data struct {
+	var resp struct {
 		OK        bool   `json:"ok"`
 		NextRunAt string `json:"nextRunAt"`
 	}
-	parseAPIResponse(t, body, &data)
-	if !data.OK {
-		t.Fatalf("expected ok=true, got %v", data.OK)
+	parseAPIResponse(t, body, &resp)
+	if !resp.OK {
+		t.Fatalf("expected ok=true, got %v", resp.OK)
 	}
-	if data.NextRunAt == "" {
-		t.Fatalf("expected non-empty nextRunAt, data=%+v", data)
+	if resp.NextRunAt == "" {
+		t.Fatalf("expected non-empty nextRunAt, data=%+v", resp)
 	}
 
 	items, err := app.listChannelSchedules(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 1 {
-		t.Fatalf("expected 1 schedule, got %d", len(items))
+	if len(items) != 2 {
+		t.Fatalf("expected 2 schedules (__global__ + site-1), got %d", len(items))
 	}
-	if items[0].CheckinTime != "09:30" {
+	if items[1].CheckinTime != "09:30" {
 		t.Fatalf("expected checkinTime 09:30, got %s", items[0].CheckinTime)
 	}
-	if !items[0].Enabled {
+	if !items[1].Enabled {
 		t.Fatal("expected enabled=true")
 	}
 
@@ -111,19 +107,16 @@ func TestUpsertChannelSchedule_CreatesAndUpdates(t *testing.T) {
 	}
 
 	items2, _ := app.listChannelSchedules(context.Background())
-	if len(items2) != 1 {
-		t.Fatalf("expected 1 schedule after update, got %d", len(items2))
+	if len(items2) != 2 {
+		t.Fatalf("expected 2 schedules (__global__ + site-1) after update, got %d", len(items2))
 	}
-	if items2[0].CheckinTime != "22:00" {
-		t.Fatalf("expected checkinTime 22:00 after update, got %s", items2[0].CheckinTime)
+	if items2[1].CheckinTime != "22:00" {
+		t.Fatalf("expected checkinTime 22:00 after update, got %s", items2[1].CheckinTime)
 	}
 }
 
-func TestHandleChannelSchedules_GET_Empty(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestHandleChannelSchedules_GET_GlobalOnly(t *testing.T) {
+	app := newTestApp(t)
 	defer app.Close()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/scheduler/channel-schedules", nil)
@@ -137,17 +130,18 @@ func TestHandleChannelSchedules_GET_Empty(t *testing.T) {
 
 	var data []ChannelSchedule
 	parseAPIResponse(t, body, &data)
-	if data != nil && len(data) != 0 {
-		t.Fatalf("expected empty array, got %d items", len(data))
+	if len(data) != 1 {
+		t.Fatalf("expected 1 item (__global__), got %d items", len(data))
+	}
+	if data[0].UpstreamSiteID != "__global__" {
+		t.Fatalf("expected __global__ schedule, got %s", data[0].UpstreamSiteID)
 	}
 }
 
 func TestHandleChannelSchedules_GET_WithItems(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	// Create site + schedule
 	_, err = app.db.ExecContext(context.Background(),
@@ -173,19 +167,16 @@ func TestHandleChannelSchedules_GET_WithItems(t *testing.T) {
 
 	var data []ChannelSchedule
 	parseAPIResponse(t, getW.Body.String(), &data)
-	if len(data) != 1 {
-		t.Fatalf("expected 1 schedule, got %d", len(data))
+	if len(data) != 2 {
+		t.Fatalf("expected 2 schedules (__global__ + s1), got %d", len(data))
 	}
-	if data[0].CheckinTime != "10:00" {
+	if data[1].CheckinTime != "10:00" {
 		t.Fatalf("expected checkinTime 10:00, got %s", data[0].CheckinTime)
 	}
 }
 
 func TestHandleChannelSchedules_PUT_InvalidTime(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	req := httptest.NewRequest(http.MethodPut, "/api/scheduler/channel-schedules", strings.NewReader(
@@ -200,10 +191,7 @@ func TestHandleChannelSchedules_PUT_InvalidTime(t *testing.T) {
 }
 
 func TestHandleNextRuns_ReturnsJobs(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/scheduler/next-runs", nil)
@@ -235,10 +223,7 @@ func TestHandleNextRuns_ReturnsJobs(t *testing.T) {
 }
 
 func TestHandleScheduleCalendar_ReturnsItems(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/scheduler/calendar", nil)
@@ -254,17 +239,16 @@ func TestHandleScheduleCalendar_ReturnsItems(t *testing.T) {
 		Items []ScheduleCalendarItem `json:"items"`
 	}
 	parseAPIResponse(t, body, &data)
-	if len(data.Items) < 14 {
-		t.Fatalf("expected at least 14 calendar items (7 days x 2 jobs), got %d\nbody=%s", len(data.Items), body)
+	// Global checkin schedule appears as __global__ channel_schedule.
+	if len(data.Items) < 7 {
+		t.Fatalf("expected at least 7 global checkin items, got %d\nbody=%s", len(data.Items), body)
 	}
 }
 
 func TestHandleScheduleCalendar_IncludesChannelSchedules(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	// Create an upstream site + schedule
 	_, err = app.db.ExecContext(context.Background(),
@@ -293,15 +277,92 @@ func TestHandleScheduleCalendar_IncludesChannelSchedules(t *testing.T) {
 		Items []ScheduleCalendarItem `json:"items"`
 	}
 	parseAPIResponse(t, body, &data)
-	// Should have at least 14 global items + 7 channel schedule items = 21
-	if len(data.Items) < 21 {
-		t.Fatalf("expected at least 21 items (14 global + 7 per-site), got %d\nbody=%s", len(data.Items), body)
+	// 7 global checkin + 7 per-site channel schedule items.
+	if len(data.Items) < 14 {
+		t.Fatalf("expected at least 14 items (7 global + 7 per-site), got %d\nbody=%s", len(data.Items), body)
+	}
+}
+
+func TestHandleScheduleCalendar_RespectsDaysQuery(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/scheduler/calendar?days=2", nil)
+	w := httptest.NewRecorder()
+	app.handleScheduleCalendar(w, req)
+
+	var data struct {
+		Items []ScheduleCalendarItem `json:"items"`
+	}
+	parseAPIResponse(t, w.Body.String(), &data)
+
+	dates := map[string]bool{}
+	for _, item := range data.Items {
+		dates[item.Date] = true
+	}
+	if len(dates) != 2 {
+		t.Fatalf("expected exactly 2 calendar dates for days=2, got %d dates: %v", len(dates), dates)
+	}
+}
+
+func TestHandleScheduleCalendar_UsesCronOccurrences(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	ctx := context.Background()
+
+	_, err := app.db.ExecContext(ctx,
+		`INSERT INTO upstream_sites (id, name, base_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+		"site-calendar-cron", "Calendar Cron Site", "https://cron.example", now(), now())
+	if err != nil {
+		t.Fatalf("create upstream site: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/api/scheduler/channel-schedules", strings.NewReader(
+		`{"upstreamSiteId":"site-calendar-cron","enabled":true,"checkinTime":"08:00","cronExpr":"0 9 * * 1-5"}`,
+	))
+	w := httptest.NewRecorder()
+	app.handleChannelSchedules(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("create schedule: %d: %s", w.Code, w.Body.String())
+	}
+
+	calReq := httptest.NewRequest(http.MethodGet, "/api/scheduler/calendar?days=14", nil)
+	calW := httptest.NewRecorder()
+	app.handleScheduleCalendar(calW, calReq)
+
+	var data struct {
+		Items []ScheduleCalendarItem `json:"items"`
+	}
+	parseAPIResponse(t, calW.Body.String(), &data)
+
+	cst := time.FixedZone("CST", 8*3600)
+	var matched int
+	for _, item := range data.Items {
+		if item.SiteID != "site-calendar-cron" {
+			continue
+		}
+		matched++
+		if item.Time != "09:00" {
+			t.Fatalf("expected cron occurrence at 09:00, got %s", item.Time)
+		}
+		parsedDate, err := time.ParseInLocation("2006-01-02", item.Date, cst)
+		if err != nil {
+			t.Fatalf("parse item date: %v", err)
+		}
+		if parsedDate.Weekday() == time.Saturday || parsedDate.Weekday() == time.Sunday {
+			t.Fatalf("cron calendar should not include weekend date %s", item.Date)
+		}
+	}
+	if matched == 0 {
+		t.Fatal("expected at least one cron calendar occurrence")
+	}
+	if matched > 10 {
+		t.Fatalf("expected no more than 10 weekdays in 14-day window, got %d", matched)
 	}
 }
 
 func TestComputeNextRun_ReturnsFutureTime(t *testing.T) {
 	nowTime := time.Now()
-	result := computeNextRun("08:00", 0, 30)
+	result := computeNextRun("08:00", "", nil, 0, 30)
 	if result == "" {
 		t.Fatal("expected non-empty next run")
 	}
@@ -318,18 +379,181 @@ func TestComputeNextRun_ReturnsFutureTime(t *testing.T) {
 
 func TestComputeNextRun_DeterministicWithinDay(t *testing.T) {
 	// Same inputs should give same result within the same second
-	r1 := computeNextRun("14:30", 10, 20)
-	r2 := computeNextRun("14:30", 10, 20)
+	r1 := computeNextRun("14:30", "", nil, 10, 20)
+	r2 := computeNextRun("14:30", "", nil, 10, 20)
 	if r1 != r2 {
 		t.Fatalf("expected deterministic result, got %s vs %s", r1, r2)
 	}
 }
 
-func TestHandleChannelSchedules_RejectsEmptySiteID(t *testing.T) {
-	app, err := NewApp(t.TempDir())
+func TestHandleChannelSchedules_PUT_WithCronExpr(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	// Create upstream site
+	_, err := app.db.ExecContext(context.Background(),
+		`INSERT INTO upstream_sites (id, name, base_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+		"site-cron", "Cron站点", "https://example.com", now(), now())
+	if err != nil {
+		t.Fatalf("create upstream site: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/scheduler/channel-schedules", strings.NewReader(
+		`{"upstreamSiteId":"site-cron","enabled":true,"checkinTime":"08:00","cronExpr":"0 9 * * 1-5"}`,
+	))
+	w := httptest.NewRecorder()
+	app.handleChannelSchedules(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	items, err := app.listChannelSchedules(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
+	var found bool
+	for _, s := range items {
+		if s.UpstreamSiteID == "site-cron" {
+			found = true
+			if s.CronExpr != "0 9 * * 1-5" {
+				t.Fatalf("expected cronExpr '0 9 * * 1-5', got %q", s.CronExpr)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatal("schedule with site-cron not found")
+	}
+}
+
+func TestHandleChannelSchedules_PUT_InvalidCronExpr(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	req := httptest.NewRequest(http.MethodPut, "/api/scheduler/channel-schedules", strings.NewReader(
+		`{"upstreamSiteId":"site-1","cronExpr":"bad bad"}`,
+	))
+	w := httptest.NewRecorder()
+	app.handleChannelSchedules(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid cron expr, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleChannelSchedules_PUT_WithSkipDates(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	_, err := app.db.ExecContext(context.Background(),
+		`INSERT INTO upstream_sites (id, name, base_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+		"site-skip", "Skip站点", "https://example.com", now(), now())
+	if err != nil {
+		t.Fatalf("create upstream site: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/scheduler/channel-schedules", strings.NewReader(
+		`{"upstreamSiteId":"site-skip","enabled":true,"checkinTime":"08:00","skipDates":["2026-07-01","2026-07-04"]}`,
+	))
+	w := httptest.NewRecorder()
+	app.handleChannelSchedules(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	items, err := app.listChannelSchedules(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, s := range items {
+		if s.UpstreamSiteID == "site-skip" {
+			found = true
+			if len(s.SkipDates) != 2 {
+				t.Fatalf("expected 2 skip dates, got %v", s.SkipDates)
+			}
+			if s.SkipDates[0] != "2026-07-01" {
+				t.Fatalf("expected skip date 2026-07-01, got %s", s.SkipDates[0])
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatal("schedule with site-skip not found")
+	}
+}
+
+func TestHandleChannelSchedules_PUT_InvalidSkipDateFormat(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	req := httptest.NewRequest(http.MethodPut, "/api/scheduler/channel-schedules", strings.NewReader(
+		`{"upstreamSiteId":"site-1","skipDates":["not-a-date"]}`,
+	))
+	w := httptest.NewRecorder()
+	app.handleChannelSchedules(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid skip date format, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestComputeNextRun_WithCronExpr(t *testing.T) {
+	// "0 9 * * 1-5" = 09:00 on weekdays
+	// Use a fixed reference time so the test is deterministic
+	result := computeNextRun("08:00", "0 9 * * 1-5", nil, 0, 0)
+	if result == "" {
+		t.Fatal("expected non-empty next run for cron expr")
+	}
+	parsed, err := time.Parse(time.RFC3339, result)
+	if err != nil {
+		t.Fatalf("parse next run: %v", err)
+	}
+	weekday := parsed.In(time.FixedZone("CST", 8*3600)).Weekday()
+	if weekday == time.Saturday || weekday == time.Sunday {
+		t.Fatalf("cron '0 9 * * 1-5' produced a weekend day: %s (%s)", result, weekday)
+	}
+}
+
+func TestComputeNextRun_WithSkipDates(t *testing.T) {
+	// Use a fixed "today" so skip date is guaranteed relevant
+	// computeNextRun uses time.Now(), so we can't mock. Instead verify
+	// that a date in skip list is indeed excluded from the result.
+	cst := time.FixedZone("CST", 8*3600)
+	tomorrow := time.Now().In(cst).AddDate(0, 0, 1).Format("2006-01-02")
+
+	result := computeNextRun("08:00", "", []string{tomorrow}, 0, 0)
+	if result == "" {
+		t.Fatal("expected non-empty next run")
+	}
+	parsed, err := time.Parse(time.RFC3339, result)
+	if err != nil {
+		t.Fatalf("parse next run: %v", err)
+	}
+	resultDate := parsed.In(cst).Format("2006-01-02")
+	if resultDate == tomorrow {
+		t.Fatalf("next run %s should not fall on skipped date %s", result, tomorrow)
+	}
+}
+
+func TestComputeNextRun_EmptyCronFallsBackToCheckinTime(t *testing.T) {
+	result := computeNextRun("22:30", "", nil, 0, 0)
+	if result == "" {
+		t.Fatal("expected non-empty next run")
+	}
+	parsed, err := time.Parse(time.RFC3339, result)
+	if err != nil {
+		t.Fatalf("parse next run: %v", err)
+	}
+	cst := time.FixedZone("CST", 8*3600)
+	hour, minute, _ := parsed.In(cst).Clock()
+	if hour != 22 || minute != 30 {
+		t.Fatalf("expected 22:30 in result, got %02d:%02d from %s", hour, minute, result)
+	}
+}
+
+func TestHandleChannelSchedules_RejectsEmptySiteID(t *testing.T) {
+	app := newTestApp(t)
 	defer app.Close()
 
 	req := httptest.NewRequest(http.MethodPut, "/api/scheduler/channel-schedules", strings.NewReader(
@@ -344,10 +568,7 @@ func TestHandleChannelSchedules_RejectsEmptySiteID(t *testing.T) {
 }
 
 func TestHandleChannelSchedules_RejectsWrongMethod(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/scheduler/channel-schedules", nil)

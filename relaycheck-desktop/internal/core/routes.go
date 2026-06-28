@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -56,9 +57,11 @@ func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/local-newapi/scan", a.requireSession(a.handleScanLocalNewAPI))
 	mux.HandleFunc("/api/local-newapi/import-from-sqlite", a.requireSession(a.handleImportFromSQLite))
 	mux.HandleFunc("/api/local-newapi/import-from-admin-api", a.requireSession(a.handleImportFromAdminAPI))
+	mux.HandleFunc("/api/local-newapi/auto-detect-import", a.requireSession(a.handleAutoDetectAndImport))
 	mux.HandleFunc("/api/local-newapi/", a.requireSession(a.handleLocalNewAPIInstanceByID))
 	mux.HandleFunc("/api/channels", a.requireSession(a.handleChannels))
 	mux.HandleFunc("/api/channels/bulk-source-status", a.requireSession(a.handleBulkChannelSourceSyncStatus))
+	mux.HandleFunc("/api/channels/health/overview", a.requireSession(a.handleChannelHealthOverview))
 	mux.HandleFunc("/api/channels/models/overview", a.requireSession(a.handleChannelModelsOverview))
 	mux.HandleFunc("/api/channels/models/sync", a.requireSession(a.handleChannelModelsSync))
 	mux.HandleFunc("/api/channels/", a.requireSession(a.handleChannelByID))
@@ -91,7 +94,7 @@ func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/notifications/mark-all-read", a.requireSession(a.handleMarkAllNotificationsRead))
 	mux.HandleFunc("/api/notifications/clear-read", a.requireSession(a.handleClearReadNotifications))
 	mux.HandleFunc("/api/notifications/mark-read", a.requireSession(a.handleMarkNotificationRead))
-		mux.HandleFunc("/api/notifications/trim", a.requireSession(a.handleTrimNotifications))
+	mux.HandleFunc("/api/notifications/trim", a.requireSession(a.handleTrimNotifications))
 }
 
 func (a *App) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
@@ -122,14 +125,14 @@ func (a *App) systemStatus(r *http.Request) (SystemStatus, error) {
 	portConflict := a.portConflict
 	a.mu.RUnlock()
 	return SystemStatus{
-		ProductName:     productName,
-		ProductVersion:  productVersion,
-		BuildTime:       buildTime,
-		Architecture:    "Go + embedded React + SQLite",
-		BindAddress:     bind,
-		Port:            port,
-		PreferredPort:   preferredPort,
-		PortConflict:    portConflict,
+		ProductName:    productName,
+		ProductVersion: productVersion,
+		BuildTime:      buildTime,
+		Architecture:   "Go + embedded React + SQLite",
+		BindAddress:    bind,
+		Port:           port,
+		PreferredPort:  preferredPort,
+		PortConflict:   portConflict,
 		DatabasePath:   a.databasePath(),
 		BackupDir:      a.backupsDir(),
 		NetworkProxy:   a.networkProxyStatus(),
@@ -271,7 +274,7 @@ func (a *App) handleMarkNotificationRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var body struct {
-		ID     string `json:"id"`
+		ID        string `json:"id"`
 		AllOfType string `json:"allOfType"` // mark all of a type as read
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -296,6 +299,9 @@ func (a *App) handleMarkNotificationRead(w http.ResponseWriter, r *http.Request)
 }
 
 func (a *App) notify(kind, level, title, content, relatedType, relatedID string) {
+	if kind == "scheduled_channel_health_probe_warning" && a.recentNotificationExists(context.Background(), kind, relatedType, relatedID, content, 30*time.Minute) {
+		return
+	}
 	_, _ = a.db.Exec(`
 		INSERT INTO app_notifications (id, type, level, title, content, read, related_type, related_id, created_at)
 		VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
@@ -304,6 +310,24 @@ func (a *App) notify(kind, level, title, content, relatedType, relatedID string)
 
 	// 异步分发到外部通知渠道
 	go a.dispatchNotification(kind, level, title, content)
+}
+
+func (a *App) recentNotificationExists(ctx context.Context, kind string, relatedType string, relatedID string, content string, window time.Duration) bool {
+	if window <= 0 {
+		return false
+	}
+	cutoff := time.Now().Add(-window).UTC().Format(time.RFC3339Nano)
+	var count int
+	err := a.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM app_notifications
+		WHERE type=?
+		  AND related_type=?
+		  AND related_id=?
+		  AND content=?
+		  AND created_at >= ?
+	`, kind, relatedType, relatedID, content, cutoff).Scan(&count)
+	return err == nil && count > 0
 }
 
 func pathTail(path, prefix string) string {

@@ -36,6 +36,33 @@ func TestDetectUpstreamRecognizesNewAPIPanelSignals(t *testing.T) {
 	}
 }
 
+func TestDetectUpstreamRecognizesChineseNewAPIPanelSignals(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/login":
+			_, _ = w.Write([]byte(`<html><title>中转后台</title><body>用户登录 令牌管理 渠道管理 额度 模型倍率</body></html>`))
+		case "/api/user/self", "/api/channel/", "/api/token/", "/api/status":
+			http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	app := &App{client: server.Client(), allowLocalOutbound: true}
+	detection := app.detectUpstream(context.Background(), server.URL)
+
+	if detection.Kind != "newapi" && detection.Kind != "modified_relay" {
+		t.Fatalf("expected managed NewAPI-style panel, got %s with signals %v", detection.Kind, detection.MatchedSignals)
+	}
+	if !containsString(detection.MatchedSignals, "newapi-login") {
+		t.Fatalf("expected newapi-login signal from Chinese login page, got %v", detection.MatchedSignals)
+	}
+	if !containsString(detection.MatchedSignals, "panel-login") {
+		t.Fatalf("expected panel-login signal from Chinese admin text, got %v", detection.MatchedSignals)
+	}
+}
+
 func TestDetectUpstreamRecognizesNewAPICheckinStatusJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

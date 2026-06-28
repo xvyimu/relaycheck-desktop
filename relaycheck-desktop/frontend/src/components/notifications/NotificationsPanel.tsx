@@ -1,26 +1,26 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
 import { formatTime } from "@/lib/format";
-import type { NotificationItem } from "@/types";
+import { statusTone } from "@/lib/tone";
+import type { NavigationIntent, NotificationItem } from "@/types";
 
 type NotificationsPanelProps = {
   items: NotificationItem[];
   onRefresh: () => Promise<void>;
+  intent?: NavigationIntent | null;
 };
 
-function notificationTone(level: string) {
-  const normalized = level.toLowerCase();
-  if (["error", "danger", "critical", "failed"].includes(normalized)) return "bad";
-  if (["warning", "warn", "missing"].includes(normalized)) return "warn";
-  if (["success", "ok"].includes(normalized)) return "good";
-  return "neutral";
-}
-
-export function NotificationsPanel({ items, onRefresh }: NotificationsPanelProps) {
+export function NotificationsPanel({ items, onRefresh, intent }: NotificationsPanelProps) {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [showRead, setShowRead] = useState(true);
+
+  // React to navigation intent from Action Center
+  useEffect(() => {
+    if (!intent) return;
+    if (intent.unreadOnly) setShowRead(false);
+  }, [intent]);
 
   const summary = useMemo(() => {
     const unread = items.filter((item) => !item.read).length;
@@ -121,7 +121,7 @@ export function NotificationsPanel({ items, onRefresh }: NotificationsPanelProps
 
       <div className="notification-list">
         {visibleItems.map((item) => {
-          const tone = notificationTone(item.level);
+          const tone = statusTone(item.level, { unknown: "neutral" });
           return (
             <article
               className={`notification-card is-${item.read ? "read" : "unread"} tone-${tone}`}

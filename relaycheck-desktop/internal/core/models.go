@@ -50,8 +50,8 @@ type SystemStatus struct {
 	Architecture    string                  `json:"architecture"`
 	BindAddress     string                  `json:"bindAddress"`
 	Port            int                     `json:"port"`
-	PreferredPort   int                     `json:"preferredPort"`   // original port from env/config
-	PortConflict    bool                    `json:"portConflict"`     // true if PreferredPort was busy and a fallback was used
+	PreferredPort   int                     `json:"preferredPort"` // original port from env/config
+	PortConflict    bool                    `json:"portConflict"`  // true if PreferredPort was busy and a fallback was used
 	DatabasePath    string                  `json:"databasePath"`
 	BackupDir       string                  `json:"backupDir"`
 	NetworkProxy    NetworkProxyStatus      `json:"networkProxy"`
@@ -93,16 +93,59 @@ type ActionCenter struct {
 // ActionItem is a single recommended action shown in the Action Center.
 // Level is "info" | "warning" | "critical".
 type ActionItem struct {
-	ID          string   `json:"id"`
-	Priority    int      `json:"priority"` // lower = higher priority
-	Level       string   `json:"level"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Count       int      `json:"count"`
-	Target      string   `json:"target"` // route path for navigation
-	Filter      string   `json:"filter,omitempty"`
-	Action      string   `json:"action"`
-	Samples     []string `json:"samples,omitempty"`
+	ID                string   `json:"id"`
+	Priority          int      `json:"priority"` // higher = higher priority
+	Level             string   `json:"level"`
+	Category          string   `json:"category"`
+	Title             string   `json:"title"`
+	Description       string   `json:"description"`
+	Impact            string   `json:"impact,omitempty"`
+	Count             int      `json:"count"`
+	Target            string   `json:"target"` // route path for navigation
+	Filter            string   `json:"filter,omitempty"`
+	Action            string   `json:"action"`
+	RecommendedAction string   `json:"recommendedAction,omitempty"`
+	Samples           []string `json:"samples,omitempty"`
+}
+
+// ChannelHealthOverview summarizes relay site, API key, and model sync health.
+type ChannelHealthOverview struct {
+	GeneratedAt                string              `json:"generatedAt"`
+	Overall                    string              `json:"overall"`
+	SiteCount                  int                 `json:"siteCount"`
+	HealthySiteCount           int                 `json:"healthySiteCount"`
+	UnreachableSiteCount       int                 `json:"unreachableSiteCount"`
+	ChannelCount               int                 `json:"channelCount"`
+	LiveModelChannelCount      int                 `json:"liveModelChannelCount"`
+	FailedModelChannelCount    int                 `json:"failedModelChannelCount"`
+	UncheckedModelChannelCount int                 `json:"uncheckedModelChannelCount"`
+	ValidKeyCount              int                 `json:"validKeyCount"`
+	InvalidKeyCount            int                 `json:"invalidKeyCount"`
+	UncheckedKeyCount          int                 `json:"uncheckedKeyCount"`
+	Sites                      []ChannelHealthSite `json:"sites"`
+}
+
+// ChannelHealthSite is the per-site health row used by the dashboard and channels panel.
+type ChannelHealthSite struct {
+	SiteID                     string   `json:"siteId"`
+	SiteName                   string   `json:"siteName"`
+	BaseURL                    string   `json:"baseUrl"`
+	Kind                       string   `json:"kind"`
+	Level                      string   `json:"level"`
+	HealthStatus               string   `json:"healthStatus"`
+	AccountCount               int      `json:"accountCount"`
+	ValidKeyCount              int      `json:"validKeyCount"`
+	InvalidKeyCount            int      `json:"invalidKeyCount"`
+	UncheckedKeyCount          int      `json:"uncheckedKeyCount"`
+	ModelChannelCount          int      `json:"modelChannelCount"`
+	LiveModelChannelCount      int      `json:"liveModelChannelCount"`
+	FailedModelChannelCount    int      `json:"failedModelChannelCount"`
+	UncheckedModelChannelCount int      `json:"uncheckedModelChannelCount"`
+	ModelCount                 int      `json:"modelCount"`
+	LastCheckedAt              string   `json:"lastCheckedAt,omitempty"`
+	Message                    string   `json:"message,omitempty"`
+	RecommendedAction          string   `json:"recommendedAction,omitempty"`
+	Samples                    []string `json:"samples,omitempty"`
 }
 
 // CheckinStatus reports the current state of the checkin engine, including
@@ -364,7 +407,7 @@ type ChannelAccount struct {
 	LastLoginAt          string   `json:"lastLoginAt,omitempty"`
 	LastValidatedAt      string   `json:"lastValidatedAt,omitempty"`
 	CookieExpiryAt       string   `json:"cookieExpiryAt,omitempty"`       // estimated cookie expiry time (ISO 8601)
-	StorageStateExpiryAt string  `json:"storageStateExpiryAt,omitempty"` // estimated browser storage state expiry
+	StorageStateExpiryAt string   `json:"storageStateExpiryAt,omitempty"` // estimated browser storage state expiry
 	CreatedAt            string   `json:"createdAt"`
 	UpdatedAt            string   `json:"updatedAt"`
 }

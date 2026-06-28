@@ -251,7 +251,15 @@ export function OnboardingWizard() {
           </div>
 
           {step.key === "connect" ? (
-            <div className="onboarding-form">
+            <form
+              className="onboarding-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!busy && canRun) {
+                  void runStep();
+                }
+              }}
+            >
               <label className="onboarding-field">
                 <span>NewAPI 后台地址</span>
                 <input
@@ -280,7 +288,7 @@ export function OnboardingWizard() {
                 />
                 保存令牌以便后续定时同步
               </label>
-            </div>
+            </form>
           ) : null}
 
           {step.key === "channels" ? (

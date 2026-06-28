@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -30,6 +31,7 @@ type App struct {
 	notificationConfig notificationChannelsConfig
 	checkinRun         checkinRunState
 	localSyncRun       syncJobRunState
+	channelHealthRun   syncJobRunState
 	schedulerCancel    context.CancelFunc
 	schedulerStartedAt time.Time
 	schedulerWG        sync.WaitGroup
@@ -121,6 +123,10 @@ func NewApp(root string) (*App, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if err := app.ensureGlobalScheduleRecord(context.Background()); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if err := app.reloadNetworkProxyConfig(context.Background()); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -171,14 +177,16 @@ func (a *App) SetPortConflict(preferredPort int, conflict bool) {
 
 func (a *App) ensureDefaultSettings(ctx context.Context) error {
 	defaults := map[string]string{
-		"app.general":           `{"productName":"RelayCheck Desktop","bindAddress":"127.0.0.1","port":3001,"lightweightMode":true}`,
-		"app.version_check_url": `""`,
-		"scanner.targets":       `{"hosts":["127.0.0.1","localhost"],"ports":[3000,3001,8080,9999,3010],"allowCustomUrls":true}`,
-		"checkin.schedule":      `{"enabled":true,"time":"08:00","randomDelayMinutes":[0,120],"siteConcurrency":1,"globalConcurrency":3,"siteMinIntervalSeconds":2}`,
-		"network.proxy":         `{"enabled":false,"url":"http://127.0.0.1:7897","bypassLocal":true}`,
-		"sync.schedule":         `{"enabled":true,"intervalMinutes":30,"mode":"local-newapi","runOnStartup":false}`,
-		"notification.channels": `{"enabled":false,"defaultLevels":["warning","error"],"channels":[{"type":"webhook","name":"默认 Webhook","enabled":false,"config":{"url":"","hmacSecret":"","mode":"all","timeoutSeconds":10,"maxRetries":3},"levels":["warning","error"],"types":["scheduled_checkin_failed","scheduled_sync_failed"]},{"type":"telegram","name":"Telegram Bot","enabled":false,"config":{"botToken":"","chatId":"","mode":"failure"},"levels":["warning","error"],"types":["scheduled_checkin_failed"]},{"type":"bark","name":"Bark","enabled":false,"config":{"url":"","mode":"failure","group":"RelayCheck"},"levels":["warning","error"]},{"type":"serverchan","name":"ServerChan","enabled":false,"config":{"sendKey":"","mode":"failure"},"levels":["warning","error"]},{"type":"email","name":"SMTP 邮件","enabled":false,"config":{"smtpHost":"","smtpPort":587,"smtpTls":true,"username":"","password":"","fromAddr":"","toAddr":"","mode":"failure"},"levels":["warning","error"]},{"type":"desktop","name":"桌面通知","enabled":true,"config":{"mode":"all","sound":true},"levels":["info","warning","error"]}]}`,
+		"app.general":             `{"productName":"RelayCheck Desktop","bindAddress":"127.0.0.1","port":3001,"lightweightMode":true}`,
+		"app.version_check_url":   `""`,
+		"scanner.targets":         `{"hosts":["127.0.0.1","localhost"],"ports":[3000,3001,8080,9999,3010],"allowCustomUrls":true}`,
+		"checkin.schedule":        `{"enabled":true,"time":"08:00","randomDelayMinutes":[0,120],"siteConcurrency":1,"globalConcurrency":3,"siteMinIntervalSeconds":2}`,
+		"network.proxy":           `{"enabled":false,"url":"http://127.0.0.1:7897","bypassLocal":true}`,
+		"sync.schedule":           `{"enabled":true,"intervalMinutes":30,"mode":"local-newapi","runOnStartup":false}`,
+		"channel.health.schedule": `{"enabled":true,"intervalMinutes":60,"runOnStartup":false,"limit":20,"onlyRisky":false}`,
+		"notification.channels":   `{"enabled":false,"defaultLevels":["warning","error"],"channels":[{"type":"webhook","name":"默认 Webhook","enabled":false,"config":{"url":"","hmacSecret":"","mode":"all","timeoutSeconds":10,"maxRetries":3},"levels":["warning","error"],"types":["scheduled_checkin_failed","scheduled_sync_failed"]},{"type":"telegram","name":"Telegram Bot","enabled":false,"config":{"botToken":"","chatId":"","mode":"failure"},"levels":["warning","error"],"types":["scheduled_checkin_failed"]},{"type":"bark","name":"Bark","enabled":false,"config":{"url":"","mode":"failure","group":"RelayCheck"},"levels":["warning","error"]},{"type":"serverchan","name":"ServerChan","enabled":false,"config":{"sendKey":"","mode":"failure"},"levels":["warning","error"]},{"type":"email","name":"SMTP 邮件","enabled":false,"config":{"smtpHost":"","smtpPort":587,"smtpTls":true,"username":"","password":"","fromAddr":"","toAddr":"","mode":"failure"},"levels":["warning","error"]},{"type":"desktop","name":"桌面通知","enabled":true,"config":{"mode":"all","sound":true},"levels":["info","warning","error"]}]}`,
 	}
+	defaults["notification.channels"] = withDefaultHealthNotificationTypes(defaults["notification.channels"])
 	for key, value := range defaults {
 		_, err := a.db.ExecContext(ctx, `
 			INSERT OR IGNORE INTO system_settings (id, key, value_json, created_at, updated_at)
@@ -189,6 +197,22 @@ func (a *App) ensureDefaultSettings(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func withDefaultHealthNotificationTypes(valueJSON string) string {
+	config, _ := parseNotificationChannelsConfig(valueJSON)
+	for index := range config.Channels {
+		switch config.Channels[index].Type {
+		case "webhook", "telegram":
+			appendUniqueString(&config.Channels[index].Types, "scheduled_channel_health_probe_failed", 20)
+			appendUniqueString(&config.Channels[index].Types, "scheduled_channel_health_probe_warning", 20)
+		}
+	}
+	body, err := json.Marshal(config)
+	if err != nil {
+		return valueJSON
+	}
+	return string(body)
 }
 
 func newID() string {

@@ -7,10 +7,7 @@ import (
 )
 
 func TestBackupPathRejectsPathTraversal(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	if _, err := app.backupPath(`..\relaycheck.db`); err == nil {
@@ -22,10 +19,7 @@ func TestBackupPathRejectsPathTraversal(t *testing.T) {
 }
 
 func TestCreateAndDeleteBackupFile(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	backup, err := app.createBackup("test")

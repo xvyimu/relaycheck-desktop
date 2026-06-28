@@ -10,10 +10,7 @@ import (
 )
 
 func TestCredentialsAreEncryptedAtRestAndExportsAreFingerprinted(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	siteID := newID()

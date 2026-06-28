@@ -8,11 +8,9 @@ import (
 )
 
 func TestSyncChannelModelsFromRawJSON(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	channelID := newID()
 	raw := `{
@@ -66,10 +64,7 @@ func TestSyncChannelModelsPrefersLiveModelsWithChannelKey(t *testing.T) {
 	}))
 	defer server.Close()
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	app.client = server.Client()
 	app.allowLocalOutbound = true

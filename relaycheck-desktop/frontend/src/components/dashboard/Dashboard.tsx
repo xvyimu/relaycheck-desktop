@@ -1,11 +1,17 @@
+import { useMemo } from "react";
 import { Empty } from "@/components/ui/empty";
 import { HubRadar } from "@/components/dashboard/HubRadar";
 import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
 import { UpdateBanner } from "@/components/ui/UpdateBanner";
-import { formatTime } from "@/lib/format";
+import { Badge as UiBadge } from "@/components/ui/badge";
+import { useNextRuns } from "@/hooks/useNextRuns";
+import { formatDuration, formatTime } from "@/lib/format";
+import { actionItemNavigationIntent } from "@/lib/navigation";
+import { statusTone, toneBadgeVariant } from "@/lib/tone";
 import type {
   Account,
   ActionCenter,
+  ActionItem,
   CheckinStatus,
   ImportedChannel,
   ModelOverview,
@@ -13,6 +19,7 @@ import type {
   NotificationItem,
   StatusPayload,
   SystemDiagnostics,
+  NavigationIntent,
   TabKey,
   UpstreamSite,
   UsageOverview,
@@ -30,7 +37,7 @@ export interface DashboardProps {
   modelOverview: ModelOverview | null;
   pricingOverview: ModelPricingOverview | null;
   usageOverview: UsageOverview | null;
-  onNavigate: (tab: TabKey) => void;
+  onNavigate: (tab: TabKey, intent?: Omit<NavigationIntent, "target">) => void;
   onRefresh: () => Promise<void>;
 }
 
@@ -38,17 +45,9 @@ function numberValue(value: number | undefined) {
   return typeof value === "number" ? value.toLocaleString() : "0";
 }
 
-function statusTone(value?: string) {
-  const normalized = (value || "unknown").toLowerCase();
-  if (["success", "ok", "healthy", "active", "valid", "enabled"].includes(normalized)) return "good";
-  if (["failed", "error", "danger", "invalid", "expired", "unreachable"].includes(normalized)) return "bad";
-  if (["warning", "missing", "archived", "unknown", "unchecked"].includes(normalized)) return "warn";
-  return "neutral";
-}
-
-function Badge({ value }: { value?: string }) {
+function StatusBadge({ value }: { value?: string }) {
   const label = value || "unknown";
-  return <span className={`badge ${statusTone(label)}`}>{label}</span>;
+  return <UiBadge variant={toneBadgeVariant(statusTone(label))}>{label}</UiBadge>;
 }
 
 function Metric({ title, value }: { title: string; value?: number }) {
@@ -78,6 +77,25 @@ function Row({ label, value }: { label: string; value: number | string }) {
   );
 }
 
+function actionCategoryLabel(category?: string) {
+  const labels: Record<string, string> = {
+    auth: "授权",
+    key: "Key",
+    checkin: "签到",
+    balance: "余额",
+    channel: "渠道",
+    site: "站点",
+    notification: "通知",
+  };
+  return labels[category || ""] || "运营";
+}
+
+function navigateAction(onNavigate: DashboardProps["onNavigate"], item: ActionItem) {
+  const intent = actionItemNavigationIntent(item);
+  const { target, ...nextIntent } = intent;
+  onNavigate(target, nextIntent);
+}
+
 export function Dashboard({
   status,
   channels,
@@ -97,6 +115,54 @@ export function Dashboard({
   const problemAccounts = accounts.filter((item) => ["expired", "invalid", "failed"].includes((item.loginStatus || "").toLowerCase())).length;
   const unread = notifications.filter((item) => !item.read).length;
   const schedulerJobs = status?.scheduler?.jobs || [];
+  const actionItems = actionCenter?.items || [];
+  const priorityActions = actionItems.slice(0, 4);
+
+  const { nextRuns, loading: nextRunsBusy } = useNextRuns();
+
+  const schedulerContent = useMemo<React.ReactNode>(() => {
+    if (nextRunsBusy) {
+      return <Empty message="加载中…" />;
+    }
+    if (nextRuns.length) {
+      return (
+        <div className="stack">
+          {nextRuns.slice(0, 8).map((item) => (
+            <div className="list-row" key={item.jobKey}>
+              <div>
+                <strong>{item.label}</strong>
+                <span>
+                  {item.siteName ? `${item.siteName} · ` : ""}
+                  {formatDuration(item.nextRunInSeconds)}
+                </span>
+              </div>
+              {item.nextRunAt ? (
+                <span className="text-xs text-muted-foreground">{formatTime(item.nextRunAt)}</span>
+              ) : (
+                <StatusBadge value={item.status} />
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    if (schedulerJobs.length) {
+      return (
+        <div className="stack">
+          {schedulerJobs.slice(0, 4).map((job) => (
+            <div className="list-row" key={job.key}>
+              <div>
+                <strong>{job.label}</strong>
+                <span>{job.nextRunAt ? `下次：${formatTime(job.nextRunAt)}` : job.lastError || "暂无下次运行"}</span>
+              </div>
+              <StatusBadge value={job.status} />
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return <Empty message="暂无调度数据。" />;
+  }, [nextRuns, nextRunsBusy, schedulerJobs]);
 
   return (
     <>
@@ -109,8 +175,8 @@ export function Dashboard({
           modelOverview={modelOverview}
           pricingOverview={pricingOverview}
           usageOverview={usageOverview}
-          onNavigate={(nextTab) => onNavigate(nextTab)}
-          onRefresh={() => void onRefresh()}
+          onNavigate={onNavigate}
+          onRefresh={onRefresh}
         />
       ) : null}
       <section className="metric-grid">
@@ -119,6 +185,45 @@ export function Dashboard({
         <Metric title="已识别" value={status?.summary.identifiedChannelCount} />
         <Metric title="账号" value={status?.summary.accountCount ?? accounts.length} />
         <Metric title="未读" value={status?.summary.unreadNotifications ?? unread} />
+      </section>
+      <section className="card dashboard-priority-card">
+        <div className="section-heading">
+          <div>
+            <h2>运营待办</h2>
+            <span>{priorityActions.length ? `按风险优先处理 ${priorityActions.length} 项` : "当前没有需要立即处理的运营事项"}</span>
+          </div>
+          <button type="button" className="ghost" onClick={() => void onRefresh()}>刷新待办</button>
+        </div>
+        {priorityActions.length ? (
+          <div className="dashboard-priority-list">
+            {priorityActions.map((item) => (
+              <article className={`dashboard-priority-item level-${item.level}`} key={item.id}>
+                <div>
+                  <div className="dashboard-priority-head">
+                    <span className="action-category">{actionCategoryLabel(item.category)}</span>
+                    <b>{item.count}</b>
+                  </div>
+                  <strong>{item.title}</strong>
+                  <span>{item.impact || item.description}</span>
+                </div>
+                {item.samples?.length ? (
+                  <div className="task-samples">
+                    {item.samples.slice(0, 3).map((sample) => (
+                      <span key={sample}>{sample}</span>
+                    ))}
+                  </div>
+                ) : null}
+                <em>{item.recommendedAction || item.action}</em>
+                <div className="dashboard-priority-actions">
+                  <button type="button" onClick={() => navigateAction(onNavigate, item)}>处理</button>
+                  <button type="button" className="ghost" onClick={() => navigateAction(onNavigate, item)}>查看列表</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <Empty message="运营状态清爽，暂无待办。" />
+        )}
       </section>
       <section className="card-grid">
         <Card title="系统">
@@ -142,21 +247,7 @@ export function Dashboard({
           </div>
         </Card>
         <Card title="调度器">
-          {schedulerJobs.length ? (
-            <div className="stack">
-              {schedulerJobs.slice(0, 4).map((job) => (
-                <div className="list-row" key={job.key}>
-                  <div>
-                    <strong>{job.label}</strong>
-                    <span>{job.nextRunAt ? `下次：${formatTime(job.nextRunAt)}` : job.lastError || "暂无下次运行"}</span>
-                  </div>
-                  <Badge value={job.status} />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty message="暂无调度数据。" />
-          )}
+          {schedulerContent}
         </Card>
       </section>
       <AnalyticsPanel />

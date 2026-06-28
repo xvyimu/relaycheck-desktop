@@ -515,6 +515,16 @@ nav button.active .nav-icon {
   }
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes skeletonShimmer {
   0% { background-position: 120% 0; }
   100% { background-position: -120% 0; }
@@ -668,6 +678,75 @@ nav button.active .nav-icon {
 .hub-radar-card.ops-card::before,
 .hub-radar-card.is-warning::before {
   background: var(--warning);
+}
+
+.hub-radar-card.schedule-card::before {
+  background: var(--v4-purple, #8b5cf6);
+}
+
+.schedule-day-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.schedule-day {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.schedule-day-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted-strong);
+  letter-spacing: 0.04em;
+  padding: 0 0 2px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.schedule-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.schedule-item-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--v4-text);
+  min-width: 3.2em;
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--v4-text);
+}
+
+.schedule-item-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badge-checkin {
+  background: rgba(8, 145, 178, 0.12);
+  color: #0e7490;
+}
+
+.badge-sync {
+  background: rgba(139, 92, 246, 0.12);
+  color: #7c3aed;
 }
 
 .radar-card-top {
@@ -4025,6 +4104,116 @@ nav button.active .nav-icon {
   gap: 10px;
 }
 
+/* Site schedules — per-site checkin scheduling configuration */
+.site-schedule-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.site-schedule-row {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  background: var(--surface-soft);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.site-schedule-row.is-active {
+  border-color: rgba(15, 110, 234, 0.18);
+  background: rgba(247, 251, 255, 0.84);
+}
+
+.site-schedule-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.site-schedule-info {
+  display: grid;
+  gap: 2px;
+}
+
+.site-schedule-info strong {
+  font-size: 14px;
+  color: var(--v4-text);
+}
+
+.site-schedule-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.site-schedule-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 8px 0 4px;
+}
+
+.compact-field {
+  display: grid;
+  gap: 4px;
+  min-width: 120px;
+}
+
+.compact-field > span {
+  font-size: 11px;
+  color: var(--muted-strong);
+  font-weight: 700;
+}
+
+.compact-field input[type="time"],
+.compact-field input[type="number"] {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--v4-text);
+}
+
+.delay-range {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.delay-range input[type="number"] {
+  width: 64px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--v4-text);
+  text-align: center;
+}
+
+.delay-range span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.site-schedule-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 200px;
+  align-self: center;
+}
+
+.site-schedule-times .detail-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .scheduler-job {
   display: grid;
   gap: 10px;
@@ -6774,6 +6963,35 @@ nav button.active .nav-icon {
   padding: 10px;
 }
 
+.dashboard-priority-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.action-category {
+  width: fit-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(21, 94, 239, 0.13);
+  border-radius: 999px;
+  background: rgba(234, 242, 255, 0.86);
+  color: var(--primary-strong);
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.dashboard-priority-item b {
+  color: var(--linear-text);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
 .dashboard-priority-item.level-danger {
   border-color: rgba(189, 49, 70, 0.18);
   background: #fff7f8;
@@ -6794,6 +7012,18 @@ nav button.active .nav-icon {
   font-size: 13.5px;
   line-height: 1.35;
   letter-spacing: -0.025em;
+}
+
+.dashboard-priority-item em {
+  display: block;
+  border-radius: 10px;
+  background: rgba(231, 241, 255, 0.82);
+  color: var(--primary-strong);
+  padding: 8px 9px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 .dashboard-priority-item span:not(.inline-flex) {
@@ -9968,12 +10198,162 @@ input[type="checkbox"] {
 
 .channels-panel,
 .channel-toolbar,
+.channel-health-center,
 .channel-grid,
 .channel-card,
 .channel-card-metrics,
 .channel-actions {
   display: grid;
   gap: 14px;
+}
+
+.channel-health-center {
+  border-color: rgba(71, 85, 105, 0.14);
+}
+
+.channel-health-center.level-danger {
+  border-color: rgba(190, 18, 60, 0.24);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(190, 18, 60, 0.08), transparent 12rem),
+    rgba(255, 255, 255, 0.92);
+}
+
+.channel-health-center.level-warning {
+  border-color: rgba(161, 98, 7, 0.22);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(161, 98, 7, 0.08), transparent 12rem),
+    rgba(255, 255, 255, 0.92);
+}
+
+.channel-health-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.channel-health-metrics > div {
+  min-width: 0;
+  border: 1px solid rgba(71, 85, 105, 0.1);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.channel-health-metrics span,
+.channel-health-risk span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.channel-health-metrics strong {
+  display: block;
+  margin-top: 4px;
+  color: #172033;
+  font-size: 24px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.channel-health-risk-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.channel-health-risk {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(71, 85, 105, 0.12);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.channel-health-risk.level-danger {
+  border-color: rgba(190, 18, 60, 0.22);
+  background: #fff6f8;
+}
+
+.channel-health-risk.level-warning {
+  border-color: rgba(161, 98, 7, 0.2);
+  background: #fff9e8;
+}
+
+.channel-health-risk strong,
+.channel-health-risk em {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.channel-health-risk strong {
+  margin-top: 3px;
+  color: #172033;
+  font-size: 14px;
+}
+
+.channel-health-risk em {
+  margin-top: 4px;
+  color: #40516b;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.5;
+}
+
+.channel-health-risk-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.channel-health-risk-stats span {
+  border: 1px solid rgba(71, 85, 105, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.channel-active-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(161, 98, 7, 0.2);
+  border-radius: 8px;
+  background: #fff9e8;
+  padding: 9px 10px;
+}
+
+.channel-active-filter > div {
+  min-width: 0;
+}
+
+.channel-active-filter strong,
+.channel-active-filter span {
+  display: block;
+  min-width: 0;
+}
+
+.channel-active-filter strong {
+  color: #713f12;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.channel-active-filter span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.channel-card-v4.is-health-risk {
+  border-color: rgba(161, 98, 7, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 251, 237, 0.96), rgba(255, 255, 255, 0.94));
 }
 
 .compact-summary {
@@ -10090,7 +10470,7 @@ input[type="checkbox"] {
 
 .site-card-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -10503,6 +10883,29 @@ input[type="checkbox"] {
   word-break: break-word;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.detail-drawer-wide {
+  width: min(1000px, 100vw);
+}
+
+.model-list-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.model-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: rgba(15, 110, 234, 0.08);
+  color: var(--v4-text, inherit);
+}
+
+html.dark .model-tag {
+  background: rgba(96, 165, 250, 0.12);
 }
 .detail-metrics {
   gap: 6px;

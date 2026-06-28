@@ -32,11 +32,9 @@ func TestComputeCheckinScheduleStatusUsesNextWindow(t *testing.T) {
 }
 
 func TestBuildCheckinStatusIncludesDueAccountsAndRunProgress(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	siteID := newID()
 	accountID := newID()
@@ -95,10 +93,7 @@ func TestRunAccountCheckinRetriesTemporaryFailures(t *testing.T) {
 	}))
 	defer server.Close()
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	app.client = server.Client()
 	app.allowLocalOutbound = true
@@ -183,11 +178,9 @@ func TestCheckinSiteLimiterComputesPerSiteDelay(t *testing.T) {
 }
 
 func TestLoadCheckinScheduleConfigClampsSiteMinInterval(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	config := app.loadCheckinScheduleConfig(context.Background())
 	if config.SiteMinIntervalSeconds != 2 {

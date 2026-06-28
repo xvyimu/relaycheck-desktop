@@ -87,6 +87,14 @@ func (a *App) handleUpdateSystemSettings(w http.ResponseWriter, r *http.Request)
 			}
 			normalized, _ := json.Marshal(config)
 			valueJSON = string(normalized)
+		} else if key == "channel.health.schedule" {
+			var config channelHealthScheduleConfig
+			if err := json.Unmarshal([]byte(valueJSON), &config); err != nil {
+				writeError(w, http.StatusBadRequest, "渠道健康探测计划无效："+err.Error())
+				return
+			}
+			normalized, _ := json.Marshal(normalizeChannelHealthScheduleConfig(config))
+			valueJSON = string(normalized)
 		} else if key == "notification.channels" {
 			config, warnings := parseNotificationChannelsConfig(valueJSON)
 			for i := range config.Channels {

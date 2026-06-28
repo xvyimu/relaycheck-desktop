@@ -18,9 +18,9 @@ type BalanceDeltaPoint = { date: string; delta: number; cumulative?: number };
 type AnalyticsData = {
   generatedAt: string;
   days?: number;
-  balanceTrend: BalanceTrendPoint[];
-  checkinDistribution: CheckinDistributionItem[];
-  responseTimes: ResponseTimePoint[];
+  balanceTrend?: BalanceTrendPoint[] | null;
+  checkinDistribution?: CheckinDistributionItem[] | null;
+  responseTimes?: ResponseTimePoint[] | null;
   siteReliability?: SiteReliability[];
   balanceDeltas?: BalanceDeltaPoint[];
 };
@@ -443,7 +443,7 @@ export function AnalyticsPanel() {
   }, [selectedDate, selectedStatus]);
 
   const selectedDistItem = useMemo(
-    () => data?.checkinDistribution.find((d) => d.status === selectedStatus),
+    () => (data?.checkinDistribution ?? []).find((d) => d.status === selectedStatus),
     [data?.checkinDistribution, selectedStatus],
   );
 
@@ -488,7 +488,7 @@ export function AnalyticsPanel() {
             {selectedDate ? <span className="drilldown-hint"> · 已选 {selectedDate}</span> : <span className="drilldown-hint"> · 点击数据点查看详情</span>}
           </div>
           <BalanceTrendChart
-            data={data.balanceTrend}
+            data={data.balanceTrend ?? []}
             selectedDate={selectedDate}
             onSelectDate={(date) => setSelectedDate((prev) => (prev === date ? undefined : date))}
           />
@@ -508,7 +508,7 @@ export function AnalyticsPanel() {
             {selectedStatus && selectedDistItem ? <span className="drilldown-hint"> · 已选「{selectedDistItem.label}」</span> : <span className="drilldown-hint"> · 点击筛选</span>}
           </div>
           <CheckinDonutChart
-            data={data.checkinDistribution}
+            data={data.checkinDistribution ?? []}
             selectedStatus={selectedStatus}
             onSelectStatus={(status) => setSelectedStatus((prev) => (prev === status ? undefined : status))}
           />
@@ -531,7 +531,7 @@ export function AnalyticsPanel() {
         </div>
         <div className="card analytics-card">
           <div className="analytics-card-title">API Key 响应时间</div>
-          <ResponseTimeChart data={data.responseTimes} />
+          <ResponseTimeChart data={data.responseTimes ?? []} />
         </div>
       </div>
       <div className="analytics-grid analytics-grid-secondary">

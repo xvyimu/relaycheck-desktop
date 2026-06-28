@@ -1,13 +1,14 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { formatTime } from "@/lib/format";
-import type { CheckinStatus } from "@/types";
+import type { CheckinLog, CheckinStatus, NavigationIntent } from "@/types";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
 
 type CheckinsPanelProps = {
   checkins: CheckinStatus | null;
   onRefresh: () => Promise<void>;
+  intent?: NavigationIntent | null;
 };
 
 function formatCountdown(seconds?: number) {
@@ -29,8 +30,10 @@ function MetricTile({ label, value }: { label: string; value: number | string })
   );
 }
 
-export function CheckinsPanel({ checkins, onRefresh }: CheckinsPanelProps) {
-  const message = "";
+export function CheckinsPanel({ checkins, onRefresh, intent }: CheckinsPanelProps) {
+  const [message, setMessage] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [query, setQuery] = useState("");
   const task = useTaskProgress();
 
   // 任务完成后刷新数据
@@ -39,6 +42,16 @@ export function CheckinsPanel({ checkins, onRefresh }: CheckinsPanelProps) {
       void onRefresh();
     }
   }, [task.progress?.status, onRefresh]);
+
+  // React to navigation intent from Action Center
+  useEffect(() => {
+    if (!intent) return;
+    if (intent.checkinStatus === "failed") setStatusFilter("failed");
+    if (intent.checkinStatus === "unsupported") setStatusFilter("unsupported");
+    if (intent.checkinStatus === "auth_expired") setStatusFilter("auth_expired");
+    if (intent.checkinStatus === "problem") setStatusFilter("failed");
+    if (typeof intent.query === "string") setQuery(intent.query);
+  }, [intent]);
 
   const progress = useMemo(() => {
     const total = Math.max(checkins?.totalAccounts || 0, checkins?.processedAccounts || 0, 1);
@@ -53,6 +66,31 @@ export function CheckinsPanel({ checkins, onRefresh }: CheckinsPanelProps) {
   const running = Boolean(checkins?.running);
   const today = checkins?.today;
   const schedule = checkins?.schedule;
+
+  // Filter logs if available (based on today's logs)
+  const logs = useMemo(() => {
+    if (!today?.logs) return [];
+    let result = [...today.logs];
+    if (statusFilter === "failed") {
+      result = result.filter((log: CheckinLog) => log.status === "failed");
+    } else if (statusFilter === "unsupported") {
+      result = result.filter((log: CheckinLog) => log.status === "unsupported");
+    } else if (statusFilter === "auth_expired") {
+      result = result.filter((log: CheckinLog) => log.status === "auth_expired");
+    }
+    if (query.trim()) {
+      const normalized = query.trim().toLowerCase();
+      result = result.filter((log: CheckinLog) =>
+        [log.accountName || "", log.siteName || "", log.message || ""].join(" ").toLowerCase().includes(normalized)
+      );
+    }
+    return result;
+  }, [today?.logs, statusFilter, query]);
+
+  function clearFilters() {
+    setStatusFilter("all");
+    setQuery("");
+  }
 
   return (
     <section className="checkin-panel">
@@ -78,6 +116,36 @@ export function CheckinsPanel({ checkins, onRefresh }: CheckinsPanelProps) {
       </div>
 
       {message ? <div className="problem-hint">{message}</div> : null}
+
+      <div className="checkin-toolbar card">
+        <div className="proxy-form-grid">
+          <label className="field">
+            <span>搜索</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="账号名、站点、消息" />
+          </label>
+          <label className="field">
+            <span>状态</span>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="all">全部</option>
+              <option value="failed">失败</option>
+              <option value="unsupported">不支持</option>
+              <option value="auth_expired">需授权</option>
+            </select>
+          </label>
+        </div>
+        <div className="toolbar">
+          <button type="button" className="ghost" onClick={clearFilters}>清除筛选</button>
+        </div>
+        {statusFilter !== "all" ? (
+          <div className="channel-active-filter">
+            <div>
+              <strong>签到状态筛选已启用</strong>
+              <span>仅显示 {statusFilter === "failed" ? "失败" : statusFilter === "unsupported" ? "不支持" : "需授权"} 的签到记录。</span>
+            </div>
+            <button type="button" className="ghost" onClick={clearFilters}>清除</button>
+          </div>
+        ) : null}
+      </div>
 
       <div className="checkin-grid">
         <article className="checkin-card checkin-run-card">
@@ -162,6 +230,33 @@ export function CheckinsPanel({ checkins, onRefresh }: CheckinsPanelProps) {
             <MetricTile label="需授权" value={today?.authExpiredCount || 0} />
             <MetricTile label="日志" value={today?.totalLogs || 0} />
           </div>
+
+          {logs.length > 0 && (
+            <div className="checkin-logs">
+              <div className="log-list">
+                {logs.map((log: CheckinLog, index: number) => (
+                  <div key={index} className={`log-item ${log.status}`}>
+                    <div className="log-main">
+                      <span className="log-account">{log.accountName || "未知账号"}</span>
+                      <span className="log-site">{log.siteName || "未知站点"}</span>
+                      <span className={`log-status status-pill ${log.status === "failed" ? "danger" : log.status === "unsupported" || log.status === "auth_expired" ? "warning" : "success"}`}>
+                        {log.status === "failed" ? "失败" : log.status === "unsupported" ? "不支持" : log.status === "auth_expired" ? "需授权" : log.status === "success" ? "成功" : log.status}
+                      </span>
+                    </div>
+                    {log.message && <div className="log-message">{log.message}</div>}
+                    <div className="log-time">{formatTime(log.createdAt || "")}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!logs.length && today?.totalLogs ? (
+            <div className="empty-state">
+              <div className="empty-mark">RC</div>
+              <strong>暂无匹配的签到记录</strong>
+              <span>当前筛选条件下没有找到记录。尝试清除筛选。</span>
+            </div>
+          ) : null}
         </article>
 
         <article className="checkin-card">

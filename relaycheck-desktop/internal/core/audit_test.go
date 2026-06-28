@@ -9,10 +9,7 @@ import (
 )
 
 func TestAuditStoresMetadataWithoutSecrets(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	app.audit("account.updated", "info", "tester", "account", "acct_1", "账号已更新", map[string]interface{}{
@@ -35,10 +32,7 @@ func TestAuditStoresMetadataWithoutSecrets(t *testing.T) {
 }
 
 func TestKeyExportPreviewWritesAuditWithoutPlaintextSecret(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	siteID := newID()
@@ -86,10 +80,7 @@ func TestKeyExportPreviewWritesAuditWithoutPlaintextSecret(t *testing.T) {
 }
 
 func TestClearAccountSessionWritesBrowserDisconnectAudit(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	siteID := newID()

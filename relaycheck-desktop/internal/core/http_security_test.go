@@ -10,10 +10,7 @@ import (
 )
 
 func TestAllowedHostAcceptsLoopbackHostsOnRuntimePort(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	app.SetRuntimeAddress("127.0.0.1", 3001)
 
@@ -31,10 +28,7 @@ func TestAllowedHostAcceptsLoopbackHostsOnRuntimePort(t *testing.T) {
 }
 
 func TestAllowedHostRejectsForeignHostsAndPorts(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	app.SetRuntimeAddress("127.0.0.1", 3001)
 
@@ -52,10 +46,7 @@ func TestAllowedHostRejectsForeignHostsAndPorts(t *testing.T) {
 }
 
 func TestSecureLocalHandlerRejectsBadHostAndSetsHeaders(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	app.SetRuntimeAddress("127.0.0.1", 3001)
 
@@ -102,10 +93,7 @@ func TestClampLimits(t *testing.T) {
 }
 
 func TestSecureLocalHandlerRequestIDAndAccessLog(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	app.SetRuntimeAddress("127.0.0.1", 3001)
 

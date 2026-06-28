@@ -29,10 +29,7 @@ func findPreviewItemBySourceID(items []SyncPreviewItem, sourceID string) *SyncPr
 // TestBuildLocalNewAPISyncPreviewDetectsRemovedChannels 验证：本地存在但源端未返回的渠道，
 // 会被标记为 removed，且不会自动删除（同步预览只读）。
 func TestBuildLocalNewAPISyncPreviewDetectsRemovedChannels(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	instance := LocalNewAPIInstance{ID: "inst-removed", Name: "Removed Detector"}
@@ -78,10 +75,7 @@ func TestBuildLocalNewAPISyncPreviewDetectsRemovedChannels(t *testing.T) {
 // TestBuildLocalNewAPISyncPreviewClassifiesNewAndUnchanged 验证：源端返回的新渠道标记为 new，
 // 字段一致的本地渠道标记为 unchanged。
 func TestBuildLocalNewAPISyncPreviewClassifiesNewAndUnchanged(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	instance := LocalNewAPIInstance{ID: "inst-mixed", Name: "Mixed Classifier"}
@@ -121,10 +115,7 @@ func TestBuildLocalNewAPISyncPreviewClassifiesNewAndUnchanged(t *testing.T) {
 // TestBuildLocalNewAPISyncPreviewDetectsChangedFields 验证：名称和状态变化的渠道标记为 changed，
 // 且 ChangedFields 正确列出变化的字段。
 func TestBuildLocalNewAPISyncPreviewDetectsChangedFields(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	instance := LocalNewAPIInstance{ID: "inst-changed", Name: "Change Detector"}
@@ -171,10 +162,7 @@ func TestBuildLocalNewAPISyncPreviewDetectsChangedFields(t *testing.T) {
 // TestBuildLocalNewAPISyncPreviewSkipsExcludedRelaySites 验证：命中排除规则的纯路由站渠道
 // 会被标记为 skipped，不会进入 new/changed 流程。
 func TestBuildLocalNewAPISyncPreviewSkipsExcludedRelaySites(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	instance := LocalNewAPIInstance{ID: "inst-skip", Name: "Skip Detector"}

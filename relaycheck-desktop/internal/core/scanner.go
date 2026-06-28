@@ -344,6 +344,19 @@ func inspectSignals(path string, status int, body string, signals map[string]boo
 	if strings.Contains(text, "sub2api") || strings.Contains(text, "sub2 api") || strings.Contains(text, "sub-to-api") || strings.Contains(text, "sub_to_api") {
 		signals["sub2api-text"] = true
 	}
+	if strings.Contains(body, "用户登录") ||
+		(strings.Contains(body, "登录") && containsAny(body, "令牌", "额度", "余额", "渠道", "模型")) ||
+		strings.Contains(text, "new-api") {
+		signals["newapi-login"] = true
+	}
+	if strings.Contains(text, "one api") && (strings.Contains(text, "login") || strings.Contains(body, "登录")) {
+		signals["oneapi-login"] = true
+	}
+	if containsAny(body, "渠道管理", "令牌管理", "用户管理", "模型倍率", "模型价格", "分组倍率") ||
+		(strings.Contains(body, "充值") && containsAny(body, "额度", "余额")) ||
+		containsAny(text, "token quota", "model ratio", "group ratio", "channel management", "token management", "user management") {
+		signals["panel-login"] = true
+	}
 	if strings.Contains(text, "用户登录") ||
 		(strings.Contains(text, "登录") && (strings.Contains(text, "令牌") || strings.Contains(text, "额度") || strings.Contains(text, "渠道"))) ||
 		strings.Contains(text, "new-api") {
@@ -637,6 +650,15 @@ func countSignals(signals map[string]bool, names ...string) int {
 		}
 	}
 	return count
+}
+
+func containsAny(value string, candidates ...string) bool {
+	for _, candidate := range candidates {
+		if strings.Contains(value, candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeBaseURL(raw string) string {

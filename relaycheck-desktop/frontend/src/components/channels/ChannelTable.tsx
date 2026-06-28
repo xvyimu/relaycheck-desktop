@@ -49,6 +49,7 @@ export function ChannelTable({
               channel.baseUrl ? "" : "is-incomplete"
             } ${channel.sourceSyncStatus === "missing" ? "is-source-missing" : ""} ${
               channel.sourceSyncStatus === "archived" ? "is-source-archived" : ""
+            } ${filters.healthFilter === "risk" ? "is-health-risk" : ""
             }`}
             key={channel.id}
           >

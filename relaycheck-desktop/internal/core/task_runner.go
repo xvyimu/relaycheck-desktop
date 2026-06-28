@@ -13,10 +13,11 @@ import (
 type TaskType string
 
 const (
-	TaskCheckin         TaskType = "checkin"
-	TaskTestKeys        TaskType = "test_keys"
-	TaskRefreshBalances TaskType = "refresh_balances"
-	TaskDetectSites     TaskType = "detect_sites"
+	TaskCheckin            TaskType = "checkin"
+	TaskTestKeys           TaskType = "test_keys"
+	TaskRefreshBalances    TaskType = "refresh_balances"
+	TaskDetectSites        TaskType = "detect_sites"
+	TaskChannelHealthProbe TaskType = "channel_health_probe"
 )
 
 // TaskStatus tracks the lifecycle of a task.
@@ -47,6 +48,61 @@ type TaskProgress struct {
 	StartedAt string       `json:"startedAt"`
 	UpdatedAt string       `json:"updatedAt"`
 	Error     string       `json:"error,omitempty"`
+}
+
+type channelHealthProbeJob struct {
+	ID      string
+	Name    string
+	BaseURL string
+}
+
+type channelHealthProbeResult struct {
+	Total     int
+	Processed int
+	Failed    int
+	Warning   int
+	Items     []ItemResult
+	Messages  []string
+}
+
+func (r channelHealthProbeResult) Summary() string {
+	parts := []string{
+		fmt.Sprintf("processed %d/%d", r.Processed, r.Total),
+		fmt.Sprintf("warnings %d", r.Warning),
+		fmt.Sprintf("failed %d", r.Failed),
+	}
+	if len(r.Messages) > 0 {
+		parts = append(parts, strings.Join(r.Messages, "; "))
+	}
+	samples := r.RiskSamples(3)
+	if len(samples) > 0 {
+		parts = append(parts, "samples: "+strings.Join(samples, "; "))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func (r channelHealthProbeResult) RiskSamples(limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+	samples := []string{}
+	for _, item := range r.Items {
+		if item.Status != "warning" && item.Status != "failed" {
+			continue
+		}
+		sample := strings.TrimSpace(item.Name)
+		if sample == "" {
+			sample = item.ID
+		}
+		if item.Message != "" {
+			sample += " (" + item.Message + ")"
+		}
+		samples = append(samples, sample)
+		if len(samples) >= limit {
+			break
+		}
+	}
+	return samples
 }
 
 type runningTask struct {
@@ -193,6 +249,8 @@ func (a *App) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 		a.startRefreshBalancesTask(taskID, input.Params)
 	case TaskDetectSites:
 		a.startDetectSitesTask(taskID, input.Params)
+	case TaskChannelHealthProbe:
+		a.startChannelHealthProbeTask(taskID, input.Params)
 	default:
 		writeError(w, http.StatusBadRequest, "未知的任务类型。")
 		return
@@ -275,7 +333,7 @@ func (a *App) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 func (a *App) startCheckinTask(taskID string, _ map[string]interface{}) {
 	go func() {
 		ctx := context.Background()
-		accounts, err := a.loadDueCheckinAccounts(ctx, 0)
+		accounts, err := a.loadDueCheckinAccounts(ctx, "", 0)
 		if err != nil {
 			task, _ := a.taskRunner.start(taskID, TaskCheckin, 0)
 			task.finish(err)
@@ -468,4 +526,178 @@ func (a *App) startDetectSitesTask(taskID string, params map[string]interface{})
 		}
 		task.finish(nil)
 	}()
+}
+
+func (a *App) startChannelHealthProbeTask(taskID string, params map[string]interface{}) {
+	go func() {
+		ctx := context.Background()
+		limit := 20
+		onlyRisky := false
+		if l, ok := params["limit"].(float64); ok && l > 0 {
+			limit = int(l)
+		}
+		if limit > 50 {
+			limit = 50
+		}
+		if r, ok := params["onlyRisky"].(bool); ok {
+			onlyRisky = r
+		}
+		jobs, err := a.loadChannelHealthProbeJobs(ctx, limit, onlyRisky)
+		if err != nil {
+			task, _ := a.taskRunner.start(taskID, TaskChannelHealthProbe, 0)
+			task.finish(err)
+			return
+		}
+
+		task, taskCtx := a.taskRunner.start(taskID, TaskChannelHealthProbe, len(jobs))
+		_ = a.runChannelHealthProbe(taskCtx, jobs, func(item ItemResult) {
+			task.update(item)
+		})
+		if taskCtx.Err() != nil {
+			task.finish(taskCtx.Err())
+			return
+		}
+		task.finish(nil)
+	}()
+}
+
+func (a *App) loadChannelHealthProbeJobs(ctx context.Context, limit int, onlyRisky bool) ([]channelHealthProbeJob, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	query := `
+		SELECT s.id, s.name, s.base_url
+		FROM upstream_sites s
+		WHERE COALESCE(s.base_url,'') <> ''
+		  AND s.id <> ?
+		  AND lower(s.name) NOT LIKE '%9router%'
+		  AND lower(s.base_url) <> 'http://localhost:20128'
+	`
+	args := []interface{}{globalScheduleSiteID}
+	if onlyRisky {
+		query += ` AND (
+			s.health_status IN ('unknown','unreachable','down','failed','error')
+			OR EXISTS (
+				SELECT 1 FROM imported_channels c
+				WHERE COALESCE(c.source_sync_status,'active') <> 'archived'
+				  AND c.upstream_kind IN ('newapi','oneapi','sub2api','modified_relay')
+				  AND (s.channel_id = c.id OR (COALESCE(s.channel_id,'') = '' AND COALESCE(s.base_url,'') <> '' AND s.base_url = COALESCE(c.base_url,'')))
+				  AND COALESCE(c.models_status,'unchecked') IN ('unchecked','failed','key_invalid','empty','')
+			)
+			OR EXISTS (
+				SELECT 1 FROM channel_accounts account
+				WHERE account.upstream_site_id = s.id
+				  AND COALESCE(account.api_key_fingerprint,'') <> ''
+				  AND COALESCE(account.api_key_status,'unchecked') NOT IN ('valid')
+			)
+		)`
+	}
+	query += ` ORDER BY s.updated_at DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := a.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	jobs := []channelHealthProbeJob{}
+	for rows.Next() {
+		var job channelHealthProbeJob
+		if err := rows.Scan(&job.ID, &job.Name, &job.BaseURL); err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs, rows.Err()
+}
+
+func (a *App) runChannelHealthProbe(ctx context.Context, jobs []channelHealthProbeJob, onItem func(ItemResult)) channelHealthProbeResult {
+	result := channelHealthProbeResult{Total: len(jobs), Items: []ItemResult{}}
+	for _, job := range jobs {
+		if ctx.Err() != nil {
+			result.Messages = append(result.Messages, ctx.Err().Error())
+			break
+		}
+		item := a.probeChannelHealthSite(ctx, job.ID, job.Name, job.BaseURL)
+		result.Processed++
+		switch item.Status {
+		case "failed":
+			result.Failed++
+		case "warning":
+			result.Warning++
+		}
+		result.Items = append(result.Items, item)
+		if onItem != nil {
+			onItem(item)
+		}
+	}
+	a.invalidateReadCache()
+	return result
+}
+
+func (a *App) probeChannelHealthSite(ctx context.Context, id string, name string, baseURL string) ItemResult {
+	detection := a.detectAndSaveSite(ctx, id, name, baseURL)
+	item := ItemResult{ID: id, Name: name, Status: "success", Message: detection.HealthStatus}
+	if detection.Error != "" {
+		item.Status = "failed"
+		item.Message = detection.Error
+		return item
+	}
+	a.syncModelsForHealthSite(ctx, id, detection.BaseURL)
+	switch strings.ToLower(detection.HealthStatus) {
+	case "unreachable", "down", "failed", "error":
+		item.Status = "failed"
+	case "unknown", "degraded", "auth_required", "blocked":
+		item.Status = "warning"
+	}
+	return item
+}
+
+func (a *App) syncModelsForHealthSite(ctx context.Context, siteID string, baseURL string) {
+	records, err := a.loadChannelModelSyncRecordsForHealthSite(ctx, siteID, baseURL)
+	if err != nil {
+		return
+	}
+	for _, record := range records {
+		if ctx.Err() != nil {
+			return
+		}
+		a.syncChannelModels(ctx, record)
+	}
+}
+
+func (a *App) loadChannelModelSyncRecordsForHealthSite(ctx context.Context, siteID string, baseURL string) ([]channelModelSyncRecord, error) {
+	baseURL = strings.TrimRight(baseURL, "/")
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT c.id, c.name, COALESCE(c.base_url,''), c.upstream_kind, COALESCE(c.raw_json,''),
+		       COALESCE(c.channel_key_encrypted,''), COALESCE(c.model_count,0),
+		       COALESCE(c.sample_models_json,''), COALESCE(c.models_source,''), COALESCE(c.models_status,''),
+		       COALESCE(c.models_last_synced_at,''), COALESCE(c.models_message,'')
+		FROM imported_channels c
+		LEFT JOIN upstream_sites s
+		  ON (s.channel_id = c.id OR (COALESCE(s.channel_id,'') = '' AND COALESCE(s.base_url,'') <> '' AND s.base_url = COALESCE(c.base_url,'')))
+		WHERE COALESCE(c.source_sync_status,'active') <> 'archived'
+		  AND c.upstream_kind IN ('newapi','oneapi','sub2api','modified_relay')
+		  AND (s.id = ? OR (? <> '' AND COALESCE(c.base_url,'') = ?))
+		ORDER BY c.updated_at DESC
+		LIMIT 10
+	`, siteID, baseURL, baseURL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	records := []channelModelSyncRecord{}
+	for rows.Next() {
+		var record channelModelSyncRecord
+		if err := rows.Scan(&record.ID, &record.Name, &record.BaseURL, &record.Kind, &record.RawJSON, &record.ChannelKeyEncrypted, &record.ModelCount, &record.SampleModelsJSON, &record.ModelsSource, &record.ModelsStatus, &record.ModelsLastSyncedAt, &record.ModelsMessage); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
 }

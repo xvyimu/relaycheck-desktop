@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
-import { formatConfidence, formatTime } from "@/lib/format";
-import type { UpstreamSite } from "@/types";
+import { formatConfidence, formatDuration, formatTime } from "@/lib/format";
+import type { NextRunItem, NavigationIntent, UpstreamSite } from "@/types";
+import { useNextRuns } from "@/hooks/useNextRuns";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
 
 type SitesPanelProps = {
   sites: UpstreamSite[];
   onRefresh: () => Promise<void>;
+  intent?: NavigationIntent | null;
 };
 
 function isUnhealthy(status: string) {
@@ -21,10 +23,13 @@ function capabilityLabel(enabled?: boolean) {
   return enabled ? "支持" : "未知/否";
 }
 
-export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
+export function SitesPanel({ sites, onRefresh, intent }: SitesPanelProps) {
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
+  const [healthFilter, setHealthFilter] = useState<string>("all");
+  const [query, setQuery] = useState("");
   const task = useTaskProgress();
+  const { nextRuns } = useNextRuns();
 
   // 批量探测任务完成后刷新数据
   useEffect(() => {
@@ -33,15 +38,51 @@ export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
     }
   }, [task.progress?.status, onRefresh]);
 
+  // Index next-runs by site name for O(1) lookup per card
+  const nextRunBySite = useMemo(() => {
+    const map: Record<string, NextRunItem> = {};
+    for (const item of nextRuns) {
+      const key = item.siteId || item.siteName;
+      if (key && !map[key]) {
+        map[key] = item;
+      }
+    }
+    return map;
+  }, [nextRuns]);
+
+  const filteredSites = useMemo(() => {
+    let result = sites;
+    if (healthFilter === "unreachable") {
+      result = result.filter((site) => isUnhealthy(site.healthStatus));
+    }
+    if (query.trim()) {
+      const normalized = query.trim().toLowerCase();
+      result = result.filter((site) =>
+        [site.name, site.kind || "", site.baseUrl || "", site.loginUrl || "", site.homepageUrl || ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalized),
+      );
+    }
+    return result;
+  }, [sites, healthFilter, query]);
+
   const summary = useMemo(
     () => ({
-      total: sites.length,
-      healthy: sites.filter((site) => ["healthy", "ok", "success"].includes(site.healthStatus.toLowerCase())).length,
-      checkinReady: sites.filter((site) => site.supportsCheckin).length,
-      linkedAccounts: sites.reduce((total, site) => total + (site.accountCount || 0), 0),
+      total: filteredSites.length,
+      healthy: filteredSites.filter((site) => ["healthy", "ok", "success"].includes(site.healthStatus.toLowerCase())).length,
+      checkinReady: filteredSites.filter((site) => site.supportsCheckin).length,
+      linkedAccounts: filteredSites.reduce((total, site) => total + (site.accountCount || 0), 0),
     }),
-    [sites],
+    [filteredSites],
   );
+
+  // React to navigation intent from Action Center
+  useEffect(() => {
+    if (!intent) return;
+    if (intent.siteHealth === "unreachable") setHealthFilter("unreachable");
+    if (typeof intent.query === "string") setQuery(intent.query);
+  }, [intent]);
 
   async function detect(site: UpstreamSite) {
     setBusyId(site.id);
@@ -99,14 +140,43 @@ export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
 
       {message ? <div className="problem-hint">{message}</div> : null}
 
+      <div className="site-toolbar card">
+        <div className="proxy-form-grid">
+          <label className="field">
+            <span>搜索</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名称、网址、类型" />
+          </label>
+          <label className="field">
+            <span>健康状态</span>
+            <select value={healthFilter} onChange={(event) => setHealthFilter(event.target.value)}>
+              <option value="all">全部</option>
+              <option value="unreachable">不可达/异常</option>
+            </select>
+          </label>
+        </div>
+        <div className="toolbar">
+          <button type="button" className="ghost" onClick={() => { setHealthFilter("all"); setQuery(""); }}>清除筛选</button>
+        </div>
+        {healthFilter === "unreachable" ? (
+          <div className="channel-active-filter">
+            <div>
+              <strong>不可达站点筛选已启用</strong>
+              <span>仅显示健康状态异常（不可达、失败、错误、过期等）的站点。</span>
+            </div>
+            <button type="button" className="ghost" onClick={() => { setHealthFilter("all"); setQuery(""); }}>清除</button>
+          </div>
+        ) : null}
+      </div>
+
       <div className="site-grid">
-        {sites.map((site) => {
+        {filteredSites.map((site) => {
           const capabilities: Array<{ label: string; enabled?: boolean }> = [
             { label: "签到", enabled: site.supportsCheckin },
             { label: "余额", enabled: site.supportsBalance },
             { label: "模型", enabled: site.supportsModels },
             { label: "价格", enabled: site.supportsPricing },
           ];
+          const run = nextRunBySite[site.id] || nextRunBySite[site.name];
 
           return (
             <article
@@ -153,6 +223,14 @@ export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
                   <span>最近健康检查</span>
                   <strong>{formatTime(site.lastHealthCheckAt || "")}</strong>
                 </div>
+                {run ? (
+                  <div className="next-run-metric">
+                    <span>下次签到</span>
+                    <strong title={run.nextRunAt ? formatTime(run.nextRunAt) : ""}>
+                      {formatDuration(run.nextRunInSeconds)}
+                    </strong>
+                  </div>
+                ) : null}
               </div>
 
               <div className="chips secondary-chips">
@@ -180,7 +258,7 @@ export function SitesPanel({ sites, onRefresh }: SitesPanelProps) {
           );
         })}
 
-        {!sites.length ? (
+        {!filteredSites.length ? (
           <div className="empty-state">
             <div className="empty-mark">RC</div>
             <strong>暂无上游站点</strong>

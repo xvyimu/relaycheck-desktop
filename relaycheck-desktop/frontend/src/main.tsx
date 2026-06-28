@@ -9,14 +9,17 @@ import { Sidebar, type Tab, TABS } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { NotificationsPanel } from "@/components/notifications/NotificationsPanel";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
+import { ScanPanel } from "@/components/scan/ScanPanel";
 import { Settings as SettingsPanel } from "@/components/settings/Settings";
 import { SitesPanel } from "@/components/sites/SitesPanel";
 import { useAppData } from "@/hooks/useAppData";
 import { initTheme } from "@/lib/theme";
+import type { NavigationIntent, TabKey } from "@/types";
 import "./styles.css";
 
 function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
+  const [navigationIntent, setNavigationIntent] = useState<NavigationIntent | null>(null);
   const data = useAppData();
 
   useEffect(() => {
@@ -35,10 +38,21 @@ function App() {
     );
   }
 
+  function handleNavigate(nextTab: TabKey, intent?: Omit<NavigationIntent, "target">) {
+    if (!TABS.some((item) => item.key === nextTab)) return;
+    setTab(nextTab as Tab);
+    setNavigationIntent({ target: nextTab, ...intent });
+  }
+
+  function handleTabChange(nextTab: Tab) {
+    setTab(nextTab);
+    setNavigationIntent({ target: nextTab });
+  }
+
   return (
     <div className="app-shell">
       <OnboardingWizard />
-      <Sidebar activeTab={tab} onTabChange={setTab} />
+      <Sidebar activeTab={tab} onTabChange={handleTabChange} />
       <main className="main-panel">
         <Topbar activeTab={tab} onRefresh={() => void data.reload()} />
         {data.error ? <div className="notice error" aria-live="polite">{data.error}</div> : null}
@@ -55,17 +69,29 @@ function App() {
             modelOverview={data.modelOverview}
             pricingOverview={data.pricingOverview}
             usageOverview={data.usageOverview}
-            onNavigate={(nextTab) => {
-              if (TABS.some((item) => item.key === nextTab)) setTab(nextTab as Tab);
-            }}
+            onNavigate={handleNavigate}
             onRefresh={data.reload}
           />
         ) : null}
-        {tab === "channels" ? <ChannelsPanel onRefresh={data.reload} /> : null}
-        {tab === "sites" ? <SitesPanel sites={data.sites} onRefresh={data.reload} /> : null}
-        {tab === "accounts" ? <AccountsPanel accounts={data.accounts} sites={data.sites} onRefresh={data.reload} /> : null}
-        {tab === "checkins" ? <CheckinsPanel checkins={data.checkins} onRefresh={data.reload} /> : null}
-        {tab === "notifications" ? <NotificationsPanel items={data.notifications} onRefresh={data.reload} /> : null}
+        {tab === "channels" ? (
+          <ChannelsPanel
+            onRefresh={data.reload}
+            intent={navigationIntent?.target === "channels" ? navigationIntent : null}
+          />
+        ) : null}
+        {tab === "sites" ? (
+          <SitesPanel sites={data.sites} onRefresh={data.reload} intent={navigationIntent?.target === "sites" ? navigationIntent : null} />
+        ) : null}
+        {tab === "accounts" ? (
+          <AccountsPanel accounts={data.accounts} sites={data.sites} onRefresh={data.reload} intent={navigationIntent?.target === "accounts" ? navigationIntent : null} />
+        ) : null}
+        {tab === "checkins" ? (
+          <CheckinsPanel checkins={data.checkins} onRefresh={data.reload} intent={navigationIntent?.target === "checkins" ? navigationIntent : null} />
+        ) : null}
+        {tab === "scan" ? <ScanPanel onRefresh={data.reload} /> : null}
+        {tab === "notifications" ? (
+          <NotificationsPanel items={data.notifications} onRefresh={data.reload} intent={navigationIntent?.target === "notifications" ? navigationIntent : null} />
+        ) : null}
         {tab === "settings" ? (
           data.status ? <SettingsPanel status={data.status} onDone={data.reload} /> : <Empty message="正在加载设置…" />
         ) : null}

@@ -1,0 +1,6 @@
+# Sibling project artifacts — not part of relaycheck-desktop
+.claude/
+.workbuddy/
+data/
+deliverables/
+full-project-report/

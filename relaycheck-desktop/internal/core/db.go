@@ -171,18 +171,20 @@ CREATE TABLE IF NOT EXISTS scheduler_runs (
 );
 
 CREATE TABLE IF NOT EXISTS channel_schedules (
-	id TEXT PRIMARY KEY,
-	upstream_site_id TEXT NOT NULL,
-	enabled INTEGER NOT NULL DEFAULT 1,
-	checkin_time TEXT NOT NULL DEFAULT '08:00',
-	random_delay_min INTEGER NOT NULL DEFAULT 0,
-	random_delay_max INTEGER NOT NULL DEFAULT 30,
-	last_run_at TEXT,
-	next_run_at TEXT,
-	created_at TEXT NOT NULL,
-	updated_at TEXT NOT NULL,
-	FOREIGN KEY (upstream_site_id) REFERENCES upstream_sites(id) ON DELETE CASCADE
-);
+		id TEXT PRIMARY KEY,
+		upstream_site_id TEXT NOT NULL,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		checkin_time TEXT NOT NULL DEFAULT '08:00',
+		cron_expr TEXT NOT NULL DEFAULT '',
+		skip_dates_json TEXT NOT NULL DEFAULT '[]',
+		random_delay_min INTEGER NOT NULL DEFAULT 0,
+		random_delay_max INTEGER NOT NULL DEFAULT 30,
+		last_run_at TEXT,
+		next_run_at TEXT,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL,
+		FOREIGN KEY (upstream_site_id) REFERENCES upstream_sites(id) ON DELETE CASCADE
+	);
 CREATE INDEX IF NOT EXISTS idx_channel_schedules_site ON channel_schedules(upstream_site_id);
 CREATE INDEX IF NOT EXISTS idx_channel_schedules_next ON channel_schedules(next_run_at);
 
@@ -243,6 +245,8 @@ CREATE INDEX IF NOT EXISTS idx_site_pricing_cache_synced ON site_pricing_cache(l
 		{"imported_channels", "models_message", "TEXT"},
 		{"local_newapi_instances", "sync_access_token_encrypted", "TEXT"},
 		{"local_newapi_instances", "sync_access_token_masked", "TEXT"},
+		{"channel_schedules", "cron_expr", "TEXT NOT NULL DEFAULT ''"},
+		{"channel_schedules", "skip_dates_json", "TEXT NOT NULL DEFAULT '[]'"},
 	} {
 		if err := a.ensureColumn(ctx, column.table, column.name, column.columnType); err != nil {
 			return err

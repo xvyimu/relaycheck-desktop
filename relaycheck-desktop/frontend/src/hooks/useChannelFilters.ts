@@ -84,6 +84,8 @@ export interface ChannelFiltersResult {
   setSourceStatusFilter: (value: string) => void;
   kindFilter: string;
   setKindFilter: (value: string) => void;
+  healthFilter: string;
+  setHealthFilter: (value: string) => void;
   kindOptions: string[];
   visibleChannels: ImportedChannel[];
   displayedChannels: ImportedChannel[];
@@ -96,7 +98,18 @@ export interface ChannelFiltersResult {
   missingBaseUrlCount: number;
   sourceMissingCount: number;
   sourceArchivedCount: number;
+  healthRiskCount: number;
   clearFilters: () => void;
+}
+
+function isHealthRiskChannel(channel: ImportedChannel): boolean {
+  const modelsStatus = (channel.modelsStatus || "unchecked").toLowerCase();
+  const sourceStatus = channel.sourceSyncStatus || "active";
+  return (
+    sourceStatus !== "archived" &&
+    isTargetRelayKindUI(channel.upstreamKind) &&
+    ["failed", "key_invalid", "empty", "unchecked", ""].includes(modelsStatus)
+  );
 }
 
 export function useChannelFilters(
@@ -107,6 +120,7 @@ export function useChannelFilters(
   const [query, setQuery] = useState("");
   const [sourceStatusFilter, setSourceStatusFilter] = useState("not_archived");
   const [kindFilter, setKindFilter] = useState("target_relay");
+  const [healthFilter, setHealthFilter] = useState("all");
   const [visibleLimit, setVisibleLimit] = useState(CHANNELS_INITIAL_VISIBLE_LIMIT);
 
   const identifiedCount = channels.filter(
@@ -123,6 +137,7 @@ export function useChannelFilters(
   const sourceArchivedCount = channels.filter(
     (channel) => channel.sourceSyncStatus === "archived",
   ).length;
+  const healthRiskCount = channels.filter(isHealthRiskChannel).length;
 
   const kindOptions = useMemo(() => {
     return Array.from(new Set(channels.map((channel) => channel.upstreamKind || "unknown"))).sort();
@@ -136,6 +151,7 @@ export function useChannelFilters(
       if (sourceStatusFilter !== "all" && sourceStatusFilter !== "not_archived" && sourceStatus !== sourceStatusFilter) return false;
       if (kindFilter === "target_relay" && !isTargetRelayKindUI(channel.upstreamKind)) return false;
       if (kindFilter !== "all" && kindFilter !== "target_relay" && (channel.upstreamKind || "unknown") !== kindFilter) return false;
+      if (healthFilter === "risk" && !isHealthRiskChannel(channel)) return false;
       if (!normalizedQuery) return true;
       const combined = [
         channel.name,
@@ -150,13 +166,20 @@ export function useChannelFilters(
       ].join(" ").toLowerCase();
       return combined.includes(normalizedQuery);
     });
-  }, [accounts, channels, kindFilter, query, sourceStatusFilter]);
+  }, [accounts, channels, healthFilter, kindFilter, query, sourceStatusFilter]);
 
   const displayedChannels = visibleChannels.slice(0, visibleLimit);
   const hasMoreChannels = visibleChannels.length > displayedChannels.length;
 
   useEffect(() => {
     if (!intent) return;
+    if (intent.siteHealth === "risk") {
+      setSourceStatusFilter("not_archived");
+      setKindFilter("target_relay");
+      setHealthFilter("risk");
+      setQuery("");
+      return;
+    }
     if (intent.sourceStatus) setSourceStatusFilter(intent.sourceStatus);
     if (intent.channelKind) setKindFilter(intent.channelKind === "unknown" ? "unknown" : intent.channelKind);
     if (typeof intent.query === "string") setQuery(intent.query);
@@ -164,18 +187,20 @@ export function useChannelFilters(
 
   useEffect(() => {
     setVisibleLimit(CHANNELS_INITIAL_VISIBLE_LIMIT);
-  }, [query, sourceStatusFilter, kindFilter]);
+  }, [query, sourceStatusFilter, kindFilter, healthFilter]);
 
   function clearFilters() {
     setQuery("");
     setSourceStatusFilter("not_archived");
     setKindFilter("target_relay");
+    setHealthFilter("all");
   }
 
   return {
     query, setQuery,
     sourceStatusFilter, setSourceStatusFilter,
     kindFilter, setKindFilter,
+    healthFilter, setHealthFilter,
     kindOptions,
     visibleChannels,
     displayedChannels,
@@ -187,6 +212,7 @@ export function useChannelFilters(
     missingBaseUrlCount,
     sourceMissingCount,
     sourceArchivedCount,
+    healthRiskCount,
     clearFilters,
   };
 }

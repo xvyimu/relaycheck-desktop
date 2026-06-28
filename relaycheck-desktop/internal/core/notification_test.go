@@ -333,10 +333,8 @@ func enableLocalOutbound(app *App) {
 }
 
 func TestWebhookSend_Success(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	var err error
+	app := newTestApp(t)
 	defer app.Close()
 	enableLocalOutbound(app)
 
@@ -381,10 +379,8 @@ func TestWebhookSend_Success(t *testing.T) {
 }
 
 func TestWebhookSend_WithHMAC(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	var err error
+	app := newTestApp(t)
 	defer app.Close()
 	enableLocalOutbound(app)
 
@@ -425,10 +421,7 @@ func TestWebhookSend_WithHMAC(t *testing.T) {
 }
 
 func TestWebhookSend_DigestMode(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	enableLocalOutbound(app)
 
@@ -477,10 +470,7 @@ func TestWebhookSend_DigestMode(t *testing.T) {
 // ==================== DispatchNotification 测试 ====================
 
 func TestDispatchNotification_Disabled(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	enableLocalOutbound(app)
 
@@ -513,10 +503,7 @@ func TestDispatchNotification_Disabled(t *testing.T) {
 }
 
 func TestDispatchNotification_LevelFilter(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	enableLocalOutbound(app)
 
@@ -557,10 +544,7 @@ func TestDispatchNotification_LevelFilter(t *testing.T) {
 }
 
 func TestDispatchNotification_ModeFilter(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	enableLocalOutbound(app)
 
@@ -596,10 +580,7 @@ func TestDispatchNotification_ModeFilter(t *testing.T) {
 // ==================== ReloadNotificationConfig 测试 ====================
 
 func TestReloadNotificationConfig_MissingRow(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	_, _ = app.db.Exec(`DELETE FROM system_settings WHERE key = 'notification.channels'`)
@@ -615,10 +596,7 @@ func TestReloadNotificationConfig_MissingRow(t *testing.T) {
 }
 
 func TestReloadNotificationConfig_DecryptFailureFallback(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	badEncrypted := `{"enabled":true,"defaultLevels":["warning"],"channels":[{"type":"webhook","name":"bad","enabled":true,"config":{"url":"https://example.com/hook","hmacSecret":"v1.badbadbad","mode":"all","timeoutSeconds":10}}]}`
@@ -637,10 +615,7 @@ func TestReloadNotificationConfig_DecryptFailureFallback(t *testing.T) {
 // ==================== 加密解密测试 ====================
 
 func TestEncryptDecryptChannelEntrySecrets(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	entries := []struct {
@@ -839,10 +814,7 @@ func TestBuildEmailMessage(t *testing.T) {
 // ==================== BuildChannelFromConfig 测试 ====================
 
 func TestBuildChannelFromConfig_Webhook(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	entry := channelEntry{
@@ -861,10 +833,7 @@ func TestBuildChannelFromConfig_Webhook(t *testing.T) {
 }
 
 func TestBuildChannelFromConfig_Webhook_Digest(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	entry := channelEntry{
@@ -887,10 +856,7 @@ func TestBuildChannelFromConfig_Webhook_Digest(t *testing.T) {
 }
 
 func TestBuildChannelFromConfig_InvalidConfig(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	entry := channelEntry{
@@ -906,10 +872,7 @@ func TestBuildChannelFromConfig_InvalidConfig(t *testing.T) {
 }
 
 func TestBuildChannelFromConfig_EmptyConfig(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	entry := channelEntry{
@@ -925,10 +888,7 @@ func TestBuildChannelFromConfig_EmptyConfig(t *testing.T) {
 }
 
 func TestBuildChannelFromConfig_UnknownType(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	entry := channelEntry{
@@ -946,10 +906,7 @@ func TestBuildChannelFromConfig_UnknownType(t *testing.T) {
 // ==================== WebhookSend mode filter test ====================
 
 func TestWebhookSend_ModeFilter(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	enableLocalOutbound(app)
 
@@ -983,10 +940,8 @@ func TestWebhookSend_ModeFilter(t *testing.T) {
 // ==================== Bark URL building test ====================
 
 func TestBarkURLBuilding(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	var err error
+	app := newTestApp(t)
 	defer app.Close()
 	enableLocalOutbound(app)
 
@@ -1090,10 +1045,7 @@ func TestValidateNotificationChannelsConfig_CollectsWarnings(t *testing.T) {
 // ==================== Encrypt empty field does nothing ====================
 
 func TestEncryptChannelEntrySecrets_EmptyField(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	entry := &channelEntry{
@@ -1113,10 +1065,8 @@ func TestEncryptChannelEntrySecrets_EmptyField(t *testing.T) {
 // ==================== Telegram Send mode filter test ====================
 
 func TestTelegramSend_ModeFilter(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	var err error
+	app := newTestApp(t)
 	defer app.Close()
 
 	ch := &telegramChannel{
@@ -1137,10 +1087,7 @@ func TestTelegramSend_ModeFilter(t *testing.T) {
 // ==================== HealthCheckNotificationChannels test ====================
 
 func TestHealthCheckNotificationChannels(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	// Disabled config
@@ -1195,10 +1142,7 @@ func TestHealthCheckNotificationChannels(t *testing.T) {
 // ==================== Integration: notify -> dispatchNotification ====================
 
 func TestNotifyTriggersDispatch(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	enableLocalOutbound(app)
 
@@ -1235,15 +1179,64 @@ func TestNotifyTriggersDispatch(t *testing.T) {
 // ==================== ensureDefaultSettings includes notification.channels ====================
 
 func TestEnsureDefaultSettings_IncludesNotificationChannels(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	var count int
 	_ = app.db.QueryRow(`SELECT COUNT(*) FROM system_settings WHERE key = 'notification.channels'`).Scan(&count)
 	if count == 0 {
 		t.Fatal("expected notification.channels to be inserted by ensureDefaultSettings")
+	}
+}
+
+func TestEnsureDefaultSettings_NotificationChannelNamesAreUTF8(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	cfg, err := app.loadNotificationChannelsConfig(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(cfg.Channels))
+	for _, channel := range cfg.Channels {
+		names = append(names, channel.Name)
+	}
+
+	expected := []string{"默认 Webhook", "SMTP 邮件", "桌面通知"}
+	for _, name := range expected {
+		found := false
+		for _, actual := range names {
+			if actual == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected default notification channel %q in %v", name, names)
+		}
+	}
+}
+
+func TestEnsureDefaultSettingsIncludesChannelHealthNotificationTypes(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	cfg, err := app.loadNotificationChannelsConfig(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found := false
+	for _, channel := range cfg.Channels {
+		if channel.Type != "webhook" {
+			continue
+		}
+		if stringInSlice("scheduled_channel_health_probe_failed", channel.Types) && stringInSlice("scheduled_channel_health_probe_warning", channel.Types) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected default webhook notification types to include scheduled channel health probe alerts: %#v", cfg.Channels)
 	}
 }

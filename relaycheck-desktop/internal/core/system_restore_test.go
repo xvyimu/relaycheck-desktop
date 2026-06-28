@@ -12,10 +12,7 @@ import (
 
 // TestSystemRestoreRejectsWrongMethod 验证：非 POST 请求被拒绝。
 func TestSystemRestoreRejectsWrongMethod(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/system/restore", nil)
@@ -28,10 +25,7 @@ func TestSystemRestoreRejectsWrongMethod(t *testing.T) {
 
 // TestSystemRestoreRejectsMissingFileName 验证：缺少 fileName 的请求被拒绝。
 func TestSystemRestoreRejectsMissingFileName(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	cases := []struct {
@@ -57,10 +51,7 @@ func TestSystemRestoreRejectsMissingFileName(t *testing.T) {
 
 // TestSystemRestoreRejectsNonExistentBackup 验证：指定的备份文件不存在时返回 404。
 func TestSystemRestoreRejectsNonExistentBackup(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	body := `{"fileName":"nonexistent-backup.db"}`
@@ -80,10 +71,7 @@ func TestSystemRestoreRejectsNonExistentBackup(t *testing.T) {
 // TestSystemRestoreRejectsPathTraversal 验证：fileName 含路径遍历（../）会被 backupPath 拒绝，
 // 防止攻击者通过构造 fileName 读取任意文件。
 func TestSystemRestoreRejectsPathTraversal(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	cases := []string{
@@ -110,11 +98,9 @@ func TestSystemRestoreRejectsPathTraversal(t *testing.T) {
 // TestSystemRestoreCreatesBeforeBackupAndRestores 验证：恢复操作会先创建 before-restore 快照，
 // 然后从指定备份恢复，响应包含 beforeBackup 字段，且数据库内容被替换。
 func TestSystemRestoreCreatesBeforeBackupAndRestores(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	// 1. 在主数据库插入一条标记账号
 	siteID := newID()
@@ -207,10 +193,7 @@ func TestSystemRestoreCreatesBeforeBackupAndRestores(t *testing.T) {
 // TestSystemRestoreWritesAuditLog 验证：恢复操作会写入审计日志，
 // 记录恢复的文件名和 before-restore 快照。
 func TestSystemRestoreWritesAuditLog(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 
 	// 创建一个备份用于恢复

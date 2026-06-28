@@ -1,5 +1,8 @@
+import { useMemo } from "react";
+import { useApi } from "@/hooks/useApi";
 import { formatCompactNumber, formatTime } from "@/lib/format";
 import { diagnosticLevelLabel, schedulerStatusLabel } from "@/lib/labels";
+import { actionItemNavigationIntent } from "@/lib/navigation";
 import { LoadingSkeleton } from "../loading-skeleton";
 import type {
   ActionCenter,
@@ -10,6 +13,7 @@ import type {
   UsageOverview,
   TabKey,
   NavigationIntent,
+  ScheduleCalendarItem,
 } from "@/types";
 
 export interface HubRadarProps {
@@ -23,33 +27,15 @@ export interface HubRadarProps {
   onRefresh: () => void;
 }
 
-function actionNavigationIntent(
-  item: { target: TabKey; filter?: string }
-): NavigationIntent {
-  switch (item.target) {
-    case "accounts":
-      return { target: "accounts", accountStatus: item.filter === "problem" ? "problem" : "all" };
-    case "checkins":
-      return { target: "checkins", checkinStatus: item.filter === "problem" ? "problem" : "all" };
-    case "channels":
-      if (item.filter === "missing") return { target: "channels", sourceStatus: "missing" };
-      if (item.filter === "unknown")
-        return { target: "channels", channelKind: "unknown", sourceStatus: "not_archived" };
-      return { target: "channels" };
-    case "balances":
-      return { target: "balances" };
-    case "sites":
-      return { target: "sites", siteHealth: item.filter === "unreachable" ? "unreachable" : "all" };
-    case "notifications":
-      return { target: "notifications", unreadOnly: item.filter === "unread" };
-    case "scan":
-      return { target: "scan" };
-    case "settings":
-      return { target: "settings" };
-    default:
-      return { target: "dashboard" };
-  }
-}
+type ScheduleCalendarResponse = {
+  generatedAt: string;
+  items: ScheduleCalendarItem[];
+};
+
+const emptyScheduleCalendar: ScheduleCalendarResponse = {
+  generatedAt: "",
+  items: [],
+};
 
 export function HubRadar({
   status,
@@ -61,6 +47,12 @@ export function HubRadar({
   onNavigate,
   onRefresh,
 }: HubRadarProps) {
+  const { data: calendarData, loading: calendarBusy, refresh: refreshCalendar } = useApi<ScheduleCalendarResponse>(
+    "/api/scheduler/calendar?days=2",
+    emptyScheduleCalendar,
+  );
+  const calendarItems = calendarData.items || [];
+
   const issueItems = (actionCenter?.items || []).filter((item) => item.level === "danger" || item.level === "warning");
   const topIssue = issueItems[0];
   const schedulerJobs = status.scheduler?.jobs || [];
@@ -81,6 +73,15 @@ export function HubRadar({
         .map(([k, v]) => `${k}:${v}`)
         .join(" ")
     : "快照待刷新";
+
+  const calendarGroups = useMemo(() => {
+    const groups: Record<string, ScheduleCalendarItem[]> = {};
+    for (const item of calendarItems) {
+      if (!groups[item.date]) groups[item.date] = [];
+      groups[item.date].push(item);
+    }
+    return groups;
+  }, [calendarItems]);
 
   return (
     <section className="hub-radar" aria-label="AI API Hub 雷达">
@@ -143,10 +144,10 @@ export function HubRadar({
 
         <article className={`hub-radar-card ops-card ${issueItems.length ? "is-warning" : ""}`}>
           <div className="radar-card-top">
-            <span>自动化 / 健康</span>
+            <span>{topIssue?.category ? `运营 / ${topIssue.category}` : "自动化 / 健康"}</span>
             <strong>{issueItems.length}</strong>
           </div>
-          <p>{topIssue ? topIssue.title : `系统状态 ${healthLabel}`}</p>
+          <p>{topIssue ? `${topIssue.title}：${topIssue.impact || topIssue.description}` : `系统状态 ${healthLabel}`}</p>
           <div className="radar-metrics">
             <span>签到 {checkinJob?.nextRunAt ? formatTime(checkinJob.nextRunAt) : schedulerStatusLabel(checkinJob?.status || "idle")}</span>
             <span>同步 {syncJob?.nextRunAt ? formatTime(syncJob.nextRunAt) : schedulerStatusLabel(syncJob?.status || "idle")}</span>
@@ -154,19 +155,49 @@ export function HubRadar({
           <div className="radar-actions">
             <button
               type="button"
-              onClick={() =>
-                topIssue
-                  ? (() => {
-                      const intent = actionNavigationIntent(topIssue);
-                      const { target, ...nextIntent } = intent;
-                      onNavigate(target, nextIntent);
-                    })()
-                  : onNavigate("dashboard")
-              }
+              onClick={() => {
+                if (!topIssue) { onNavigate("dashboard"); return; }
+                const intent = actionItemNavigationIntent(topIssue);
+                const { target, ...nextIntent } = intent;
+                onNavigate(target, nextIntent);
+              }}
             >
               {topIssue ? "处理问题" : "查看自检"}
             </button>
             <button type="button" className="ghost" onClick={() => onNavigate("settings")}>调度</button>
+          </div>
+        </article>
+
+        <article className="hub-radar-card schedule-card">
+          <div className="radar-card-top">
+            <span>排程日预览</span>
+            <strong>{calendarItems.length}</strong>
+          </div>
+          {calendarBusy ? (
+            <p className="text-sm text-muted-foreground">加载中…</p>
+          ) : calendarItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">暂无排程或获取失败</p>
+          ) : (
+            <div className="schedule-day-group">
+              {Object.entries(calendarGroups).map(([date, items]) => (
+                  <div key={date} className="schedule-day">
+                    <div className="schedule-day-label">{date.split("-").slice(1).join("-")}</div>
+                    {items.map((item, i) => (
+                      <div key={i} className="schedule-item">
+                        <span className="schedule-item-time">{item.time.slice(0, 5)}</span>
+                        <span className="schedule-item-name">{item.siteName || "未命名"}</span>
+                        <span className={`schedule-item-badge ${item.jobType === "sync" ? "badge-sync" : "badge-checkin"}`}>
+                          {item.jobType === "sync" ? "同步" : "签到"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+            </div>
+          )}
+          <div className="radar-actions">
+            <button type="button" onClick={() => onNavigate("settings")}>排程设置</button>
+            <button type="button" className="ghost" onClick={() => void refreshCalendar()}>刷新</button>
           </div>
         </article>
       </div>

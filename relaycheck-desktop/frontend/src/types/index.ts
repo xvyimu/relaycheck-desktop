@@ -152,12 +152,15 @@ export type ActionItem = {
   id: string;
   priority: number;
   level: "success" | "info" | "warning" | "danger" | string;
+  category: string;
   title: string;
   description: string;
+  impact?: string;
   count: number;
   target: TabKey;
   filter?: string;
   action: string;
+  recommendedAction?: string;
   samples?: string[];
 };
 
@@ -221,6 +224,7 @@ export type CheckinStatus = {
     unsupportedCount: number;
     authExpiredCount: number;
     dueAccounts: number;
+    logs: CheckinLog[];
   };
   schedule: {
     enabled: boolean;
@@ -247,6 +251,49 @@ export type SyncScheduleConfig = {
   intervalMinutes: number;
   mode: string;
   runOnStartup: boolean;
+};
+
+export type ChannelHealthScheduleConfig = {
+  enabled: boolean;
+  intervalMinutes: number;
+  runOnStartup: boolean;
+  limit: number;
+  onlyRisky: boolean;
+};
+
+export type ChannelSchedule = {
+  id: string;
+  upstreamSiteId: string;
+  siteName: string;
+  enabled: boolean;
+  checkinTime: string; // "HH:MM"
+  cronExpr: string;
+  skipDates: string[];
+  randomDelayMin: number;
+  randomDelayMax: number;
+  lastRunAt?: string;
+  nextRunAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ScheduleCalendarItem = {
+  date: string; // "YYYY-MM-DD"
+  time: string; // "HH:MM"
+  siteName: string;
+  siteId: string;
+  jobType: "checkin" | "sync";
+  enabled: boolean;
+};
+
+export type NextRunItem = {
+  jobKey: string;
+  label: string;
+  nextRunAt: string;
+  nextRunInSeconds: number;
+  status: string;
+  siteId?: string;
+  siteName?: string;
 };
 
 export type ProxyTestResult = {
@@ -447,11 +494,13 @@ export type UnsupportedCheckinCleanupResult = {
 export type CheckinLog = {
   id: string;
   accountName: string;
+  siteName?: string;
   upstreamSiteName: string;
   status: string;
   message?: string;
   reward?: string;
   startedAt: string;
+  createdAt?: string;
 };
 
 export type BalanceSnapshot = {
@@ -698,6 +747,44 @@ export type ChannelModelOverview = {
   uncheckedCount: number;
   items: ChannelModelSyncItem[];
   models: ChannelModelCoverageItem[];
+};
+
+export type ChannelHealthSite = {
+  siteId: string;
+  siteName: string;
+  baseUrl: string;
+  kind: string;
+  level: "success" | "info" | "warning" | "danger" | string;
+  healthStatus: string;
+  accountCount: number;
+  validKeyCount: number;
+  invalidKeyCount: number;
+  uncheckedKeyCount: number;
+  modelChannelCount: number;
+  liveModelChannelCount: number;
+  failedModelChannelCount: number;
+  uncheckedModelChannelCount: number;
+  modelCount: number;
+  lastCheckedAt?: string;
+  message?: string;
+  recommendedAction?: string;
+  samples?: string[];
+};
+
+export type ChannelHealthOverview = {
+  generatedAt: string;
+  overall: string;
+  siteCount: number;
+  healthySiteCount: number;
+  unreachableSiteCount: number;
+  channelCount: number;
+  liveModelChannelCount: number;
+  failedModelChannelCount: number;
+  uncheckedModelChannelCount: number;
+  validKeyCount: number;
+  invalidKeyCount: number;
+  uncheckedKeyCount: number;
+  sites: ChannelHealthSite[];
 };
 
 export type KeyExportPreviewItem = {

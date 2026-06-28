@@ -1,4 +1,4 @@
-export type Tab = "dashboard" | "channels" | "sites" | "accounts" | "checkins" | "notifications" | "settings";
+export type Tab = "dashboard" | "channels" | "sites" | "accounts" | "checkins" | "scan" | "notifications" | "settings";
 
 export const TABS: Array<{ key: Tab; label: string }> = [
   { key: "dashboard", label: "仪表盘" },
@@ -6,6 +6,7 @@ export const TABS: Array<{ key: Tab; label: string }> = [
   { key: "sites", label: "站点" },
   { key: "accounts", label: "账号" },
   { key: "checkins", label: "签到" },
+  { key: "scan", label: "本机扫描" },
   { key: "notifications", label: "通知" },
   { key: "settings", label: "设置" },
 ];

@@ -9,11 +9,9 @@ import (
 )
 
 func TestLoadBalanceRefreshAccountIDsSelectsMissingSupportedAccounts(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	supportedSiteID := newID()
 	unsupportedSiteID := newID()
@@ -58,11 +56,10 @@ func TestLoadBalanceRefreshAccountIDsSelectsMissingSupportedAccounts(t *testing.
 }
 
 func TestLoginWithPasswordReportsEveryCandidatePath(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+
+	var err error
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -82,6 +79,83 @@ func TestLoginWithPasswordReportsEveryCandidatePath(t *testing.T) {
 	for _, expected := range []string{"/api/user/login", "/api/login", "/api/auth/login", "网页登录授权保存会话"} {
 		if !strings.Contains(message, expected) {
 			t.Fatalf("expected error to contain %q, got %q", expected, message)
+		}
+	}
+}
+
+func TestLoginWithPasswordSavesCookieFromRedirectResponse(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/user/login":
+			http.SetCookie(w, &http.Cookie{Name: "session", Value: "from-redirect", Path: "/api"})
+			http.Redirect(w, r, "/dashboard", http.StatusFound)
+		case "/dashboard":
+			_, _ = w.Write([]byte(`<html>dashboard</html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	app.allowLocalOutbound = true
+	accountID := newID()
+	_, err := app.db.Exec(`
+		INSERT INTO upstream_sites (id, name, base_url, kind, health_status, created_at, updated_at)
+		VALUES (?, 'Redirect Login Site', ?, 'newapi', 'healthy', ?, ?)
+	`, "redirect-login-site", server.URL, now(), now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = app.db.Exec(`
+		INSERT INTO channel_accounts (id, upstream_site_id, display_name, auth_type, login_status, created_at, updated_at)
+		VALUES (?, 'redirect-login-site', 'Redirect Login Account', 'email_password', 'expired', ?, ?)
+	`, accountID, now(), now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = app.loginWithPassword(context.Background(), &accountAuthContext{
+		AccountID: accountID,
+		BaseURL:   server.URL,
+		LoginName: "user@example.com",
+		Password:  "password",
+		LoginPath: "/api/user/login",
+		UserAgent: "RelayCheck-Test/1.0",
+	})
+	if err != nil {
+		t.Fatalf("loginWithPassword returned error: %v", err)
+	}
+
+	var encryptedCookie, loginStatus string
+	if err := app.db.QueryRow(`SELECT COALESCE(cookie_encrypted,''), login_status FROM channel_accounts WHERE id=?`, accountID).Scan(&encryptedCookie, &loginStatus); err != nil {
+		t.Fatal(err)
+	}
+	cookie, _ := app.decryptText(encryptedCookie)
+	if cookie != "session=from-redirect" {
+		t.Fatalf("expected redirect cookie to be saved, got %q", cookie)
+	}
+	if loginStatus != "valid" {
+		t.Fatalf("expected login_status valid, got %q", loginStatus)
+	}
+}
+
+func TestResolveLoginTargetURLHandlesRelativeLoginURL(t *testing.T) {
+	got := resolveLoginTargetURL("https://relay.example/base", "/console/login?next=%2Fdashboard")
+	want := "https://relay.example/console/login?next=%2Fdashboard"
+	if got != want {
+		t.Fatalf("resolveLoginTargetURL() = %q, want %q", got, want)
+	}
+}
+
+func TestResolveLoginTargetURLRejectsUnsafeResolvedURL(t *testing.T) {
+	for _, loginURL := range []string{"//evil.example/login", "javascript:alert(1)"} {
+		got := resolveLoginTargetURL("https://relay.example/base", loginURL)
+		want := "https://relay.example/login"
+		if got != want {
+			t.Fatalf("resolveLoginTargetURL(%q) = %q, want %q", loginURL, got, want)
 		}
 	}
 }

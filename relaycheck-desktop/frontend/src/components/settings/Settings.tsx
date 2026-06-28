@@ -3,9 +3,10 @@ import { api } from "@/api/client";
 import { reopenOnboarding } from "@/components/onboarding/OnboardingWizard";
 import { formatBuildTime, formatBytes, formatTime } from "@/lib/format";
 import { auditActionLabel, auditLevelLabel, diagnosticLevelLabel, schedulerStatusLabel } from "@/lib/labels";
-import type { AuditLogItem, ExportResult, NetworkProxyConfig, PortCheckResult, ProxyTestResult, SchedulerStatus, StatusPayload, SyncScheduleConfig, SystemBackup, SystemSetting, VersionCheckResult } from "@/types";
+import type { AuditLogItem, ChannelHealthScheduleConfig, ExportResult, NetworkProxyConfig, PortCheckResult, ProxyTestResult, SchedulerStatus, StatusPayload, SyncScheduleConfig, SystemBackup, SystemSetting, VersionCheckResult } from "@/types";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusLabel } from "@/components/ui/status-label";
+import { SiteSchedules } from "@/components/settings/SiteSchedules";
 
 export function Settings({ status, onDone }: { status: StatusPayload; onDone: () => void }) {
   const [settings, setSettings] = useState<SystemSetting[]>([]);
@@ -35,6 +36,7 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
   const totalBackupSize = backups.reduce((sum, backup) => sum + backup.sizeBytes, 0);
   const defaultProxyConfig: NetworkProxyConfig = { enabled: false, url: "http://127.0.0.1:7897", bypassLocal: true };
   const defaultSyncSchedule: SyncScheduleConfig = { enabled: true, intervalMinutes: 30, mode: "local-newapi", runOnStartup: false };
+  const defaultChannelHealthSchedule: ChannelHealthScheduleConfig = { enabled: true, intervalMinutes: 60, runOnStartup: false, limit: 20, onlyRisky: false };
   const proxyConfig = useMemo(() => {
     const setting = settings.find((item) => item.key === "network.proxy");
     if (!setting) return defaultProxyConfig;
@@ -53,8 +55,18 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
       return defaultSyncSchedule;
     }
   }, [settings]);
+  const channelHealthSchedule = useMemo(() => {
+    const setting = settings.find((item) => item.key === "channel.health.schedule");
+    if (!setting) return defaultChannelHealthSchedule;
+    try {
+      return { ...defaultChannelHealthSchedule, ...(JSON.parse(setting.valueJson) as Partial<ChannelHealthScheduleConfig>) };
+    } catch {
+      return defaultChannelHealthSchedule;
+    }
+  }, [settings]);
   const checkinJob = scheduler?.jobs.find((job) => job.key === "checkin.daily");
   const syncJob = scheduler?.jobs.find((job) => job.key === "sync.local_newapi");
+  const channelHealthJob = scheduler?.jobs.find((job) => job.key === "channel.health_probe");
   const versionCheckURLSetting = settings.find((item) => item.key === "app.version_check_url");
   const currentVersionCheckURL = useMemo(() => {
     if (!versionCheckURLSetting) return "";
@@ -87,6 +99,11 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
   function updateSyncSchedule(patch: Partial<SyncScheduleConfig>) {
     const nextConfig = { ...syncSchedule, ...patch };
     upsertSetting("sync.schedule", JSON.stringify(nextConfig));
+  }
+
+  function updateChannelHealthSchedule(patch: Partial<ChannelHealthScheduleConfig>) {
+    const nextConfig = { ...channelHealthSchedule, ...patch };
+    upsertSetting("channel.health.schedule", JSON.stringify(nextConfig));
   }
 
   function toggleBackupSelection(fileName: string) {
@@ -697,6 +714,51 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
           </div>
         </article>
 
+        <article className="card settings-sync-card">
+          <div className="section-heading">
+            <div>
+              <strong>渠道健康探测</strong>
+              <span>定期刷新中转站识别、站点健康、渠道模型状态，并把异常推送到处理中心。</span>
+            </div>
+            <span className={"status-pill " + (channelHealthSchedule.enabled ? "success" : "neutral")}>
+              <StatusLabel level={channelHealthSchedule.enabled ? "enabled" : "disabled"} label={channelHealthSchedule.enabled ? "已启用" : "未启用"} />
+            </span>
+          </div>
+          <div className="proxy-toggle-row">
+            <label className="check">
+              <input type="checkbox" checked={channelHealthSchedule.enabled} onChange={(event) => updateChannelHealthSchedule({ enabled: event.target.checked })} />
+              启用自动探测
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={channelHealthSchedule.runOnStartup} onChange={(event) => updateChannelHealthSchedule({ runOnStartup: event.target.checked })} />
+              启动后立即探测
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={channelHealthSchedule.onlyRisky} onChange={(event) => updateChannelHealthSchedule({ onlyRisky: event.target.checked })} />
+              只探测风险站点
+            </label>
+          </div>
+          <div className="proxy-form-grid">
+            <label className="field">
+              <span>探测间隔（分钟）</span>
+              <input type="number" min={5} max={1440} value={channelHealthSchedule.intervalMinutes}
+                onChange={(event) => updateChannelHealthSchedule({ intervalMinutes: Math.max(5, Number(event.target.value) || 60) })} />
+            </label>
+            <label className="field">
+              <span>单次站点上限</span>
+              <input type="number" min={1} max={50} value={channelHealthSchedule.limit}
+                onChange={(event) => updateChannelHealthSchedule({ limit: Math.min(50, Math.max(1, Number(event.target.value) || 20)) })} />
+            </label>
+          </div>
+          <div className="problem-hint detail-hint">调度器会复用渠道页的“探测健康”流程，发现站点不可达、模型同步失败或 Key 状态异常时记录预警。</div>
+          <div className="proxy-actions">
+            <button disabled={busy !== "" || !settings.length} onClick={() => void saveSettings()}>
+              {busy === "settings" ? "保存中…" : "保存健康探测计划"}
+            </button>
+            <button className="ghost" disabled={busy !== ""} onClick={() => updateChannelHealthSchedule(defaultChannelHealthSchedule)}>恢复默认</button>
+          </div>
+        </article>
+
         <article className="card scheduler-card">
           <div className="section-heading">
             <div>
@@ -709,6 +771,7 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
             {[
               { key: "checkin.daily", fallback: "自动签到", job: checkinJob },
               { key: "sync.local_newapi", fallback: "NewAPI 定时同步", job: syncJob },
+              { key: "channel.health_probe", fallback: "渠道健康探测", job: channelHealthJob },
             ].map(({ key, fallback, job }) => (
               <article className={"scheduler-job " + (job?.status || "idle")} key={key}>
                 <div>
@@ -725,6 +788,8 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
             ))}
           </div>
         </article>
+
+        <SiteSchedules />
 
         <article className="card audit-log-card">
           <div className="section-heading">

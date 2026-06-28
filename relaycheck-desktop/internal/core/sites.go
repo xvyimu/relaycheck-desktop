@@ -28,8 +28,9 @@ func (a *App) listUpstreamSites(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(s.detection_json,''), COALESCE(s.last_health_check_at,''), s.created_at, s.updated_at,
 		       (SELECT COUNT(*) FROM channel_accounts a WHERE a.upstream_site_id = s.id)
 		FROM upstream_sites s
+		WHERE s.id <> ?
 		ORDER BY s.updated_at DESC
-	`)
+	`, globalScheduleSiteID)
 		if err != nil {
 			return nil, err
 		}
@@ -203,10 +204,11 @@ func (a *App) handleBulkDetectUpstreamSites(w http.ResponseWriter, r *http.Reque
 		SELECT id, name, base_url
 		FROM upstream_sites
 		WHERE COALESCE(base_url,'') <> ''
+		  AND id <> ?
 		  AND lower(name) NOT LIKE '%9router%'
 		  AND lower(base_url) <> 'http://localhost:20128'
 	`
-	args := []interface{}{}
+	args := []interface{}{globalScheduleSiteID}
 	if input.OnlyUnknownOrOpenAI {
 		query += ` AND kind IN ('unknown','openai_compatible')`
 	}

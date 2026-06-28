@@ -157,11 +157,9 @@ func TestSiteKindConfidence(t *testing.T) {
 }
 
 func TestDetectionWithRealApp(t *testing.T) {
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
+	var err error
 
 	ctx := context.Background()
 

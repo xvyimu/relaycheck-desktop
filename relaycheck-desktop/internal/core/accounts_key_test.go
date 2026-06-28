@@ -24,10 +24,7 @@ func TestAPIKeyCheckFetchesModelsAndSpeedTestsModel(t *testing.T) {
 	}))
 	defer server.Close()
 
-	app, err := NewApp(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := newTestApp(t)
 	defer app.Close()
 	app.client = server.Client()
 	app.allowLocalOutbound = true
