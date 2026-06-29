@@ -69,6 +69,10 @@ export function useTaskProgress() {
         }
         const taskId = payload.data.taskId as string;
 
+        // Close any previously opened EventSource before opening a new one.
+        // Without this, repeated startTask calls leak SSE connections and the
+        // old onmessage/onerror handlers keep firing into stale state.
+        cleanup();
         const es = new EventSource(`/api/tasks/${taskId}/stream`);
         eventSourceRef.current = es;
 
@@ -102,7 +106,7 @@ export function useTaskProgress() {
         });
       }
     },
-    [],
+    [cleanup],
   );
 
   const cancelTask = useCallback(async () => {

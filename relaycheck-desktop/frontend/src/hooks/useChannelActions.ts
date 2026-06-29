@@ -61,6 +61,11 @@ export function useChannelActions(): ChannelActionsResult {
       setModelOverview(overview);
       setMessage(`已同步 ${overview.syncedChannels || 0} 个渠道，识别 ${overview.modelCount} 个模型`);
       setChannels(await api<ImportedChannel[]>("/api/channels"));
+    } catch (err) {
+      // Without this catch the rejected promise bubbles up as an unhandled
+      // rejection (callers invoke syncChannelModels() with `void`), and the
+      // user sees "正在同步渠道模型…" forever with no error feedback.
+      setMessage(err instanceof Error ? `同步失败：${err.message}` : "同步渠道模型失败");
     } finally {
       setModelSyncing(false);
     }

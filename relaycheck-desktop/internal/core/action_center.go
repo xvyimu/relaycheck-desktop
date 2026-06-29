@@ -34,6 +34,7 @@ func (a *App) actionCenter(r *http.Request) (ActionCenter, error) {
 		recommendedAction string
 		countSQL          string
 		sampleSQL         string
+		args              []interface{}
 	}
 	queries := []actionQuery{
 		{
@@ -154,7 +155,7 @@ func (a *App) actionCenter(r *http.Request) (ActionCenter, error) {
 			action:            "进入渠道页查看健康监控，优先处理不可达站点和模型异常渠道。",
 			recommendedAction: "先刷新健康概览；不可达站点重跑探测，模型异常渠道同步模型并检查 Key 权限。",
 			countSQL: `SELECT COUNT(*) FROM upstream_sites s
-				WHERE s.id <> '` + globalScheduleSiteID + `'
+				WHERE s.id <> ?
 				  AND (
 				    s.health_status IN ('unreachable','down','failed','error')
 				    OR EXISTS (
@@ -171,8 +172,8 @@ func (a *App) actionCenter(r *http.Request) (ActionCenter, error) {
 				        AND COALESCE(a.api_key_status,'unchecked') NOT IN ('valid','unchecked','untested','')
 				    )
 				  )`,
-			sampleSQL: `SELECT s.name || ' · ' || s.health_status FROM upstream_sites s
-				WHERE s.id <> '` + globalScheduleSiteID + `'
+		sampleSQL: `SELECT s.name || ' · ' || s.health_status FROM upstream_sites s
+				WHERE s.id <> ?
 				  AND (
 				    s.health_status IN ('unreachable','down','failed','error')
 				    OR EXISTS (
@@ -190,6 +191,7 @@ func (a *App) actionCenter(r *http.Request) (ActionCenter, error) {
 				    )
 				  )
 				ORDER BY s.updated_at DESC LIMIT 4`,
+		args: []interface{}{globalScheduleSiteID},
 		},
 		{
 			id:                "missing-channels",
@@ -239,14 +241,14 @@ func (a *App) actionCenter(r *http.Request) (ActionCenter, error) {
 	}
 
 	for _, query := range queries {
-		count, err := a.queryActionCount(r, query.countSQL)
+		count, err := a.queryActionCount(r, query.countSQL, query.args)
 		if err != nil {
 			return ActionCenter{}, err
 		}
 		if count <= 0 {
 			continue
 		}
-		samples, err := a.queryActionSamples(r, query.sampleSQL)
+		samples, err := a.queryActionSamples(r, query.sampleSQL, query.args)
 		if err != nil {
 			return ActionCenter{}, err
 		}
@@ -277,14 +279,14 @@ func (a *App) actionCenter(r *http.Request) (ActionCenter, error) {
 	}, nil
 }
 
-func (a *App) queryActionCount(r *http.Request, query string) (int, error) {
+func (a *App) queryActionCount(r *http.Request, query string, args []interface{}) (int, error) {
 	var count int
-	err := a.db.QueryRowContext(r.Context(), query).Scan(&count)
+	err := a.db.QueryRowContext(r.Context(), query, args...).Scan(&count)
 	return count, err
 }
 
-func (a *App) queryActionSamples(r *http.Request, query string) ([]string, error) {
-	rows, err := a.db.QueryContext(r.Context(), query)
+func (a *App) queryActionSamples(r *http.Request, query string, args []interface{}) ([]string, error) {
+	rows, err := a.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -298,6 +300,11 @@ func (a *App) queryActionSamples(r *http.Request, query string) ([]string, error
 		if strings.TrimSpace(sample) != "" {
 			samples = append(samples, sample)
 		}
+	}
+	// Surface iteration errors (context cancellation, decode failures) that
+	// would otherwise be silently dropped.
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return samples, nil
 }

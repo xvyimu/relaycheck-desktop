@@ -195,7 +195,7 @@ func (a *App) handleCheckinStatus(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	status, err := a.buildCheckinStatus(r.Context(), time.Now())
+	status, err := a.buildCheckinStatus(r.Context(), nowCST())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

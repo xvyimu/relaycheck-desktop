@@ -7,8 +7,10 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
@@ -238,14 +240,76 @@ func now() string {
 // action center, and the diagnostics endpoint agree on what "today" means
 // regardless of the server's local timezone.
 func todayCST() string {
-	cst := time.FixedZone("CST", 8*3600)
-	return time.Now().In(cst).Format("2006-01-02")
+	return time.Now().In(cstZone()).Format("2006-01-02")
 }
 
+// cstZone returns the China Standard Time (UTC+8) location. Centralising this
+// here so that schedulers, summaries, and date filters all share one
+// definition instead of each call site reconstructing time.FixedZone.
+func cstZone() *time.Location {
+	return time.FixedZone("CST", 8*3600)
+}
+
+// nowCST returns the current time in CST. Use for scheduler ticks so that
+// HH:MM config values like "08:00" are interpreted as 08:00 CST regardless
+// of the server's local timezone.
+func nowCST() time.Time {
+	return time.Now().In(cstZone())
+}
+
+// withSession authenticates the incoming request.
+//
+// RelayCheck Desktop binds to 127.0.0.1 and SecureLocalHandler already
+// rejects requests whose Host header does not match a loopback address
+// (preventing DNS-rebinding). However, simple cross-site form POSTs can
+// still bypass CORS preflight and trigger state-changing endpoints. To
+// close that CSRF gap, we require the Origin header (when present) to
+// point at the same loopback host:port for any state-changing method.
+//
+// Non-browser clients (curl, internal scheduler calls) do not send an
+// Origin header and are allowed through, relying on the Host check and
+// the loopback-only bind for isolation.
 func (a *App) withSession(r *http.Request) (string, error) {
+	if isStateChangingMethod(r.Method) {
+		if err := a.validateOrigin(r); err != nil {
+			return "", err
+		}
+	}
 	return "local", nil
 }
 
 func (a *App) requireSession(next http.HandlerFunc) http.HandlerFunc {
-	return next
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, err := a.withSession(r); err != nil {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
+		next(w, r)
+	}
+}
+
+func isStateChangingMethod(m string) bool {
+	switch m {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	}
+	return false
+}
+
+func (a *App) validateOrigin(r *http.Request) error {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return nil
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return errors.New("invalid origin")
+	}
+	if u.Scheme != "http" {
+		return errors.New("origin scheme not allowed")
+	}
+	if !a.allowedHost(u.Host) {
+		return errors.New("origin not allowed")
+	}
+	return nil
 }

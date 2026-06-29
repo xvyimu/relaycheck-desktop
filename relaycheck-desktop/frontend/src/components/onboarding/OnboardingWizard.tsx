@@ -254,6 +254,10 @@ export function OnboardingWizard() {
             <form
               className="onboarding-form"
               onSubmit={(event) => {
+                // Allow Enter-to-submit from the text inputs. The visible
+                // "执行" button lives outside this form and is type="button",
+                // so without this handler + hidden submit input the form's
+                // onSubmit would be dead code.
                 event.preventDefault();
                 if (!busy && canRun) {
                   void runStep();
@@ -288,6 +292,12 @@ export function OnboardingWizard() {
                 />
                 保存令牌以便后续定时同步
               </label>
+              <button
+                type="submit"
+                aria-hidden="true"
+                tabIndex={-1}
+                style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", border: 0 }}
+              />
             </form>
           ) : null}
 

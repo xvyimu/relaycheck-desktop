@@ -134,7 +134,11 @@ func (a *App) tickSchedulers(ctx context.Context) {
 	if ctx.Err() != nil {
 		return
 	}
-	nowTime := time.Now()
+	// Use CST for scheduler ticks so that HH:MM config values like "08:00"
+	// are interpreted as 08:00 CST regardless of the server's local timezone.
+	// This also keeps runKey dates and "today" boundaries aligned with the
+	// rest of the system (action center, diagnostics, checkin summaries).
+	nowTime := nowCST()
 	a.tickCheckinScheduler(ctx, nowTime)
 	a.tickChannelScheduler(ctx, nowTime)
 	a.tickSyncScheduler(ctx, nowTime)
@@ -193,10 +197,12 @@ func (a *App) tickCheckinScheduler(ctx context.Context, currentTime time.Time) {
 	if record.PlannedRunKey != plan.RunKey || !timeWithinPlan(nextRunAt, plan.Start, plan.End) {
 		runAt := randomTimeInWindow(plan.Start, plan.End)
 		plan.RunAt = runAt
-		nextRunAt = runAt.UTC().Format(time.RFC3339Nano)
+		// Preserve the CST offset in the stored string instead of normalising
+		// to UTC; the parsed value is later interpreted in CST via In(cstZone).
+		nextRunAt = runAt.Format(time.RFC3339Nano)
 		_ = a.upsertSchedulerPlan(ctx, schedulerJobCheckin, plan.RunKey, nextRunAt, "等待自动签到窗口。")
 	} else if parsed, err := time.Parse(time.RFC3339Nano, nextRunAt); err == nil {
-		plan.RunAt = parsed.Local()
+		plan.RunAt = parsed.In(cstZone())
 	}
 
 	if record.LastRunKey == plan.RunKey || currentTime.Before(plan.RunAt) || currentTime.After(plan.End) {
@@ -255,7 +261,7 @@ func (a *App) tickSyncScheduler(ctx context.Context, currentTime time.Time) {
 			due = true
 		}
 	}
-	_ = a.upsertSchedulerPlan(ctx, schedulerJobSync, runKey, nextRun.UTC().Format(time.RFC3339Nano), "等待下一次 NewAPI 同步。")
+	_ = a.upsertSchedulerPlan(ctx, schedulerJobSync, runKey, nextRun.Format(time.RFC3339Nano), "等待下一次 NewAPI 同步。")
 	if !due {
 		return
 	}
@@ -312,7 +318,7 @@ func (a *App) tickChannelHealthScheduler(ctx context.Context, currentTime time.T
 			due = true
 		}
 	}
-	_ = a.upsertSchedulerPlan(ctx, schedulerJobChannelHealth, runKey, nextRun.UTC().Format(time.RFC3339Nano), "等待下一次渠道健康探测。")
+	_ = a.upsertSchedulerPlan(ctx, schedulerJobChannelHealth, runKey, nextRun.Format(time.RFC3339Nano), "等待下一次渠道健康探测。")
 	if !due {
 		return
 	}
@@ -759,7 +765,9 @@ func timeWithinPlan(value string, start time.Time, end time.Time) bool {
 	if err != nil {
 		return false
 	}
-	local := parsed.Local()
+	// Interpret the stored timestamp in CST so the comparison is correct
+	// regardless of the server's local timezone.
+	local := parsed.In(cstZone())
 	return !local.Before(start) && !local.After(end)
 }
 

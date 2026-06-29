@@ -46,7 +46,9 @@ function App() {
 
   function handleTabChange(nextTab: Tab) {
     setTab(nextTab);
-    setNavigationIntent({ target: nextTab });
+    // Tab clicks from the sidebar are plain navigations — clear any residual
+    // rich intent so panels don't see stale data from a previous handleNavigate.
+    setNavigationIntent(null);
   }
 
   return (

@@ -144,6 +144,52 @@ func TestRequestIDRejectsUnsafeHeaderValue(t *testing.T) {
 	}
 }
 
+func TestRequireSessionRejectsCrossOriginStateChangingRequests(t *testing.T) {
+	app := newTestApp(t)
+	app.SetRuntimeAddress("127.0.0.1", 3001)
+
+	called := false
+	handler := app.requireSession(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	cases := []struct {
+		name       string
+		method     string
+		origin     string
+		wantCalled bool
+		wantStatus int
+	}{
+		{name: "POST without Origin (non-browser client)", method: http.MethodPost, origin: "", wantCalled: true, wantStatus: http.StatusNoContent},
+		{name: "POST with same-origin Origin", method: http.MethodPost, origin: "http://127.0.0.1:3001", wantCalled: true, wantStatus: http.StatusNoContent},
+		{name: "POST with localhost same-origin Origin", method: http.MethodPost, origin: "http://localhost:3001", wantCalled: true, wantStatus: http.StatusNoContent},
+		{name: "POST with cross-origin Origin", method: http.MethodPost, origin: "http://evil.example:3001", wantCalled: false, wantStatus: http.StatusForbidden},
+		{name: "POST with cross-port Origin", method: http.MethodPost, origin: "http://127.0.0.1:9999", wantCalled: false, wantStatus: http.StatusForbidden},
+		{name: "POST with https Origin", method: http.MethodPost, origin: "https://127.0.0.1:3001", wantCalled: false, wantStatus: http.StatusForbidden},
+		{name: "POST with malformed Origin", method: http.MethodPost, origin: "://bad", wantCalled: false, wantStatus: http.StatusForbidden},
+		{name: "GET with cross-origin Origin (allowed; not state-changing)", method: http.MethodGet, origin: "http://evil.example:3001", wantCalled: true, wantStatus: http.StatusNoContent},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			called = false
+			req := httptest.NewRequest(tc.method, "http://127.0.0.1:3001/api/example", nil)
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if called != tc.wantCalled {
+				t.Fatalf("handler invoked=%v, want %v (status %d)", called, tc.wantCalled, rec.Code)
+			}
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status=%d, want %d", rec.Code, tc.wantStatus)
+			}
+		})
+	}
+}
+
 func TestWriteErrorIncludesStableErrorClass(t *testing.T) {
 	rec := httptest.NewRecorder()
 	writeError(rec, http.StatusBadRequest, "请求参数不完整。")

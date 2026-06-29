@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 )
 
 func (a *App) migrate(ctx context.Context) error {
@@ -274,7 +276,36 @@ CREATE INDEX IF NOT EXISTS idx_app_notifications_read_created ON app_notificatio
 	return err
 }
 
+// identifierPattern matches SQLite-safe identifiers (table/column names).
+// Restricting to [A-Za-z_][A-Za-z0-9_]* prevents SQL injection through
+// PRAGMA / ALTER TABLE, which do not accept parameterised identifiers.
+var identifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// columnTypePattern allows common SQLite type declarations (incl. NOT NULL,
+// DEFAULT '...') without admitting statement terminators or comment markers
+// that could be used to chain arbitrary SQL through ALTER TABLE.
+var columnTypePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 _()'"\[\]:,-]*$`)
+
+// columnTypeForbiddenSubstrings blocks SQL statement separators and comment
+// markers even when the overall type string matches columnTypePattern. This
+// is defence-in-depth against future callers passing user-derived input.
+var columnTypeForbiddenSubstrings = []string{";", "--", "/*", "*/"}
+
 func (a *App) ensureColumn(ctx context.Context, table string, column string, columnType string) error {
+	if !identifierPattern.MatchString(table) {
+		return fmt.Errorf("ensureColumn: invalid table identifier %q", table)
+	}
+	if !identifierPattern.MatchString(column) {
+		return fmt.Errorf("ensureColumn: invalid column identifier %q", column)
+	}
+	for _, forbidden := range columnTypeForbiddenSubstrings {
+		if strings.Contains(columnType, forbidden) {
+			return fmt.Errorf("ensureColumn: forbidden substring %q in column type", forbidden)
+		}
+	}
+	if !columnTypePattern.MatchString(columnType) {
+		return fmt.Errorf("ensureColumn: invalid column type %q", columnType)
+	}
 	rows, err := a.db.QueryContext(ctx, "PRAGMA table_info("+table+")")
 	if err != nil {
 		return err
@@ -292,6 +323,10 @@ func (a *App) ensureColumn(ctx context.Context, table string, column string, col
 		if name == column {
 			return nil
 		}
+	}
+	// Report any iteration error (context cancellation, etc.) before running DDL.
+	if err := rows.Err(); err != nil {
+		return err
 	}
 	_, err = a.db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, columnType))
 	return err
