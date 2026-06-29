@@ -233,6 +233,15 @@ func now() string {
 	return time.Now().UTC().Format(time.RFC3339Nano)
 }
 
+// todayCST returns the current calendar date in China Standard Time (UTC+8).
+// Use this for "today" filters on logs/summaries so that the frontend, the
+// action center, and the diagnostics endpoint agree on what "today" means
+// regardless of the server's local timezone.
+func todayCST() string {
+	cst := time.FixedZone("CST", 8*3600)
+	return time.Now().In(cst).Format("2006-01-02")
+}
+
 func (a *App) withSession(r *http.Request) (string, error) {
 	return "local", nil
 }

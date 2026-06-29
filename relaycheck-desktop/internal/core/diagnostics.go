@@ -87,7 +87,7 @@ func (a *App) systemDiagnostics(r *http.Request) (SystemDiagnostics, error) {
 		"unreachableSites":    `SELECT COUNT(*) FROM upstream_sites WHERE health_status='unreachable'`,
 		"accounts":            `SELECT COUNT(*) FROM channel_accounts`,
 		"invalidAccounts":     `SELECT COUNT(*) FROM channel_accounts WHERE login_status IN ('expired','manual_required','captcha_required','two_factor_required')`,
-		"failedCheckinsToday": `SELECT COUNT(*) FROM checkin_logs WHERE status NOT IN ('success','already_checked') AND substr(started_at,1,10)=substr(datetime('now'),1,10)`,
+		"failedCheckinsToday": `SELECT COUNT(*) FROM checkin_logs WHERE status NOT IN ('success','already_checked') AND substr(started_at,1,10)=substr(datetime('now','+8 hours'),1,10)`,
 		"unreadNotifications": `SELECT COUNT(*) FROM app_notifications WHERE read=0`,
 		"cookieExpiringSoon": `SELECT COUNT(*) FROM channel_accounts WHERE cookie_expiry_at != '' AND cookie_expiry_at != '' AND datetime(cookie_expiry_at) BETWEEN datetime('now') AND datetime('now','+7 days')`,
 	}

@@ -172,7 +172,7 @@ func (a *App) handleTodayCheckins(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	today := time.Now().Format("2006-01-02")
+	today := todayCST()
 	rows, err := a.db.QueryContext(r.Context(), `
 		SELECT l.id, l.account_id, a.display_name, l.upstream_site_id, s.name, COALESCE(l.channel_id,''),
 		       l.status, COALESCE(l.reward,''), COALESCE(l.message,''), COALESCE(l.raw_response_masked,''),
@@ -411,7 +411,7 @@ func (a *App) loadDueCheckinAccounts(ctx context.Context, siteID string, limit i
 		WHERE (COALESCE(a.last_checkin_status,'') NOT IN ('success','already_checked')
 		   OR COALESCE(substr(a.last_checkin_at, 1, 10),'') <> ?)
 	`
-	args := []interface{}{time.Now().UTC().Format("2006-01-02")}
+	args := []interface{}{todayCST()}
 	if siteID != "" {
 		query += ` AND a.upstream_site_id = ?`
 		args = append(args, siteID)
@@ -604,7 +604,7 @@ func (a *App) checkinTodaySummary(ctx context.Context) (CheckinTodaySummary, err
 		FROM checkin_logs
 		WHERE substr(started_at, 1, 10)=?
 		GROUP BY status
-	`, time.Now().UTC().Format("2006-01-02"))
+	`, todayCST())
 	if err != nil {
 		return summary, err
 	}

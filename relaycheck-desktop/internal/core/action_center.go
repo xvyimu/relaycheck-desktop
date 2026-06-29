@@ -78,8 +78,8 @@ func (a *App) actionCenter(r *http.Request) (ActionCenter, error) {
 			filter:            "problem",
 			action:            "进入签到页筛选异常记录，先处理 auth_expired，再确认 unsupported 是否为站点未开启。",
 			recommendedAction: "按状态分组复查失败记录，授权问题修复后重新签到。",
-			countSQL:          `SELECT COUNT(*) FROM checkin_logs WHERE status NOT IN ('success','already_checked') AND substr(started_at,1,10)=substr(datetime('now'),1,10)`,
-			sampleSQL:         `SELECT a.display_name || ' · ' || s.name || ' · ' || l.status FROM checkin_logs l JOIN channel_accounts a ON a.id=l.account_id JOIN upstream_sites s ON s.id=l.upstream_site_id WHERE l.status NOT IN ('success','already_checked') AND substr(l.started_at,1,10)=substr(datetime('now'),1,10) ORDER BY l.started_at DESC LIMIT 4`,
+			countSQL:          `SELECT COUNT(*) FROM checkin_logs WHERE status NOT IN ('success','already_checked') AND substr(started_at,1,10)=substr(datetime('now','+8 hours'),1,10)`,
+			sampleSQL:         `SELECT a.display_name || ' · ' || s.name || ' · ' || l.status FROM checkin_logs l JOIN channel_accounts a ON a.id=l.account_id JOIN upstream_sites s ON s.id=l.upstream_site_id WHERE l.status NOT IN ('success','already_checked') AND substr(l.started_at,1,10)=substr(datetime('now','+8 hours'),1,10) ORDER BY l.started_at DESC LIMIT 4`,
 		},
 		{
 			id:                "cookie-expiring",
