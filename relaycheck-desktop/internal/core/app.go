@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -156,7 +157,9 @@ func (a *App) Close() error {
 		digestCancel()
 		a.digestWG.Wait()
 	}
-	_, _ = a.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	if _, execErr := a.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); execErr != nil {
+		log.Printf("[app] wal checkpoint failed: %v", execErr)
+	}
 	return a.db.Close()
 }
 

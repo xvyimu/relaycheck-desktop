@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -87,11 +88,13 @@ func (a *App) handleScanLocalNewAPI(w http.ResponseWriter, r *http.Request) {
 	for _, result := range results {
 		if result.Reachable && result.Score > 0 {
 			found = append(found, result)
-			_, _ = a.db.ExecContext(r.Context(), `
+			if _, execErr := a.db.ExecContext(r.Context(), `
 				INSERT INTO local_newapi_instances (id, name, base_url, detected_from, status, last_scanned_at, created_at, updated_at)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(base_url) DO UPDATE SET status=excluded.status, last_scanned_at=excluded.last_scanned_at, updated_at=excluded.updated_at
-			`, newID(), "Local "+hostLabel(result.BaseURL), result.BaseURL, "port_scan", result.Status, now(), now(), now())
+			`, newID(), "Local "+hostLabel(result.BaseURL), result.BaseURL, "port_scan", result.Status, now(), now(), now()); execErr != nil {
+				log.Printf("[scanner] local newapi instance upsert failed for %s: %v", result.BaseURL, execErr)
+			}
 		}
 	}
 	if len(found) > 0 {

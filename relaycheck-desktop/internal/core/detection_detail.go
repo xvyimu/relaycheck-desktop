@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log"
 	"strings"
 )
 
@@ -166,12 +167,14 @@ func (a *App) loadSiteDetail(ctx context.Context, id string) (SiteDetail, error)
 		detection := a.detectUpstream(ctx, detail.Site.BaseURL)
 		detail.Detection = detection
 		detail.Site.DetectionJSON = marshalDetection(&detection)
-		_, _ = a.db.ExecContext(ctx, `
+		if _, execErr := a.db.ExecContext(ctx, `
 			UPDATE upstream_sites
 			SET detection_json=?, homepage_url=?, login_url=?, kind=?, detection_confidence=?, health_status=?,
 			    supports_checkin=?, supports_balance=?, supports_models=?, supports_pricing=?, last_health_check_at=?, updated_at=?
 			WHERE id=?
-		`, detail.Site.DetectionJSON, detection.HomepageURL, detection.LoginURL, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), now(), now(), id)
+		`, detail.Site.DetectionJSON, detection.HomepageURL, detection.LoginURL, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), now(), now(), id); execErr != nil {
+			log.Printf("[detection] site detail cache update failed for site %s: %v", id, execErr)
+		}
 		detail.Site.Kind = detection.Kind
 		detail.Site.HealthStatus = detection.HealthStatus
 		detail.Site.SupportsCheckin = detection.SupportsCheckin

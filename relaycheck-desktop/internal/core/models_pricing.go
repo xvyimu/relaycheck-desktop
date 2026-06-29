@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -531,7 +532,7 @@ func (a *App) saveSitePricingCache(ctx context.Context, item sitePricingCacheIte
 	if strings.TrimSpace(rawBody) != "" {
 		rawMasked = maskResponse(rawBody)
 	}
-	_, _ = a.db.ExecContext(ctx, `
+	if _, execErr := a.db.ExecContext(ctx, `
 		INSERT INTO site_pricing_cache (id, site_id, site_name, base_url, kind, status, http_status, latency_ms, source_path, raw_response_masked, sources_json, model_count, source_count, message, last_synced_at, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(site_id, source_path) DO UPDATE SET
@@ -548,7 +549,9 @@ func (a *App) saveSitePricingCache(ctx context.Context, item sitePricingCacheIte
 			message=excluded.message,
 			last_synced_at=excluded.last_synced_at,
 			updated_at=excluded.updated_at
-	`, newID(), item.SiteID, item.SiteName, item.BaseURL, item.Kind, item.Status, item.HTTPStatus, item.LatencyMs, item.SourcePath, rawMasked, sourcesJSON, item.ModelCount, item.SourceCount, maskResponse(item.Message), item.LastSyncedAt, now(), now())
+	`, newID(), item.SiteID, item.SiteName, item.BaseURL, item.Kind, item.Status, item.HTTPStatus, item.LatencyMs, item.SourcePath, rawMasked, sourcesJSON, item.ModelCount, item.SourceCount, maskResponse(item.Message), item.LastSyncedAt, now(), now()); execErr != nil {
+		log.Printf("[pricing] site pricing cache save failed for site %s: %v", item.SiteID, execErr)
+	}
 }
 
 func (a *App) loadSitePricingCache(ctx context.Context) ([]modelPricingSource, []sitePricingCacheItem, error) {

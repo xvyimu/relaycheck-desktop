@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -51,8 +52,10 @@ func (a *App) audit(action string, level string, actor string, resourceType stri
 			metadataJSON = string(data)
 		}
 	}
-	_, _ = a.db.Exec(`
+	if _, execErr := a.db.Exec(`
 		INSERT INTO audit_log (id, action, level, actor, resource_type, resource_id, summary, metadata_json, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, newID(), action, level, actor, resourceType, resourceID, summary, metadataJSON, now())
+	`, newID(), action, level, actor, resourceType, resourceID, summary, metadataJSON, now()); execErr != nil {
+		log.Printf("[audit] insert failed action=%s resource=%s/%s: %v", action, resourceType, resourceID, execErr)
+	}
 }

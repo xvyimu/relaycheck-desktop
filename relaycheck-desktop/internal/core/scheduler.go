@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"strings"
 	"time"
@@ -176,11 +177,13 @@ func (a *App) tickChannelScheduler(ctx context.Context, currentTime time.Time) {
 
 		// Recalculate next run after execution
 		newNextRun := computeNextRun(sched.CheckinTime, sched.CronExpr, sched.SkipDates, sched.RandomDelayMin, sched.RandomDelayMax)
-		_, _ = a.db.ExecContext(ctx, `
+		if _, execErr := a.db.ExecContext(ctx, `
 			UPDATE channel_schedules
 			SET last_run_at=?, next_run_at=?, updated_at=?
 			WHERE id=?
-		`, nowStr, newNextRun, nowStr, sched.ID)
+		`, nowStr, newNextRun, nowStr, sched.ID); execErr != nil {
+			log.Printf("[scheduler] channel schedule next_run_at update failed for %s: %v", sched.ID, execErr)
+		}
 	}
 }
 

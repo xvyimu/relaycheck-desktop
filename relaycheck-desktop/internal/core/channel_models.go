@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -212,13 +213,15 @@ func (a *App) syncChannelModels(ctx context.Context, record channelModelSyncReco
 	}
 
 	message := maskResponse(item.Message)
-	_, _ = a.db.ExecContext(ctx, `
+	if _, execErr := a.db.ExecContext(ctx, `
 		UPDATE imported_channels
 		SET model_count=?, sample_models_json=?, models_source=?, models_status=?,
 		    models_last_synced_at=?, models_message=?, supports_models=CASE WHEN ? > 0 THEN 1 ELSE supports_models END,
 		    updated_at=?
 		WHERE id=?
-	`, item.ModelCount, marshalStringSliceLimit(item.SampleModels, 40), item.Source, item.Status, item.LastSyncedAt, message, item.ModelCount, now(), record.ID)
+	`, item.ModelCount, marshalStringSliceLimit(item.SampleModels, 40), item.Source, item.Status, item.LastSyncedAt, message, item.ModelCount, now(), record.ID); execErr != nil {
+		log.Printf("[channel_models] model sync update failed for channel %s: %v", record.ID, execErr)
+	}
 	item.Message = message
 	return item
 }

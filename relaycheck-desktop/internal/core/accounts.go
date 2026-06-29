@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -360,7 +361,9 @@ func (a *App) retryPasswordLogin(ctx context.Context, id string) bulkPasswordLog
 	if auth.LoginName == "" || auth.Password == "" {
 		result.Status = "manual_required"
 		result.Message = "没有可用账号密码，请网页登录授权。"
-		_, _ = a.db.ExecContext(ctx, `UPDATE channel_accounts SET login_status='manual_required', last_validated_at=?, updated_at=? WHERE id=?`, now(), now(), id)
+		if _, execErr := a.db.ExecContext(ctx, `UPDATE channel_accounts SET login_status='manual_required', last_validated_at=?, updated_at=? WHERE id=?`, now(), now(), id); execErr != nil {
+			log.Printf("[accounts] password login status update to manual_required failed for account %s: %v", id, execErr)
+		}
 		return result
 	}
 	auth.Cookie = ""
@@ -369,7 +372,9 @@ func (a *App) retryPasswordLogin(ctx context.Context, id string) bulkPasswordLog
 	if err := a.loginWithPassword(ctx, &auth); err != nil {
 		result.Status = "expired"
 		result.Message = err.Error()
-		_, _ = a.db.ExecContext(ctx, `UPDATE channel_accounts SET login_status='expired', last_validated_at=?, updated_at=? WHERE id=?`, now(), now(), id)
+		if _, execErr := a.db.ExecContext(ctx, `UPDATE channel_accounts SET login_status='expired', last_validated_at=?, updated_at=? WHERE id=?`, now(), now(), id); execErr != nil {
+			log.Printf("[accounts] password login status update to expired failed for account %s: %v", id, execErr)
+		}
 		return result
 	}
 	result.Status = "valid"
@@ -1017,11 +1022,25 @@ func (a *App) startBrowserLogin(ctx context.Context, id string) browserLoginOpen
 	a.browserSessions[id] = BrowserLoginSession{AccountID: id, Port: port, StartedAt: time.Now(), PID: cmd.Process.Pid}
 	a.mu.Unlock()
 
-	_, _ = a.db.ExecContext(ctx, `
+	// Watchdog: clean up the session entry when the Chrome process exits so
+	// the in-memory map doesn't leak entries for crashed or user-closed
+	// browser windows.
+	go func(accountID string, proc *os.Process) {
+		_, _ = proc.Wait()
+		a.mu.Lock()
+		if existing, ok := a.browserSessions[accountID]; ok && existing.PID == proc.Pid {
+			delete(a.browserSessions, accountID)
+		}
+		a.mu.Unlock()
+	}(id, cmd.Process)
+
+	if _, execErr := a.db.ExecContext(ctx, `
 		UPDATE channel_accounts
 		SET auth_type='browser_profile', browser_profile_path=?, login_status='manual_required', updated_at=?
 		WHERE id=?
-	`, profilePath, now(), id)
+	`, profilePath, now(), id); execErr != nil {
+		log.Printf("[accounts] browser login profile path update failed for account %s: %v", id, execErr)
+	}
 	a.audit("browser_auth.opened", "info", "", "account", id, "网页登录授权窗口已打开。", map[string]interface{}{"accountName": accountName, "siteName": siteName})
 
 	result.Status = "opened"
@@ -1169,7 +1188,9 @@ func (a *App) testAccountLogin(w http.ResponseWriter, r *http.Request, id string
 			status = "expired"
 		}
 	}
-	_, _ = a.db.ExecContext(r.Context(), `UPDATE channel_accounts SET login_status=?, last_validated_at=?, updated_at=? WHERE id=?`, status, now(), now(), id)
+	if _, execErr := a.db.ExecContext(r.Context(), `UPDATE channel_accounts SET login_status=?, last_validated_at=?, updated_at=? WHERE id=?`, status, now(), now(), id); execErr != nil {
+		log.Printf("[accounts] test login status update failed for account %s: %v", id, execErr)
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"status": status, "httpStatus": httpStatus})
 }
 
@@ -1346,7 +1367,7 @@ func (a *App) testAPIKeyForAccount(ctx context.Context, id string) apiKeyTestRes
 	result.Message = sanitizeAPIKeyDiagnostic(result.Message, auth.APIKey)
 	result.ModelTestMessage = sanitizeAPIKeyDiagnostic(result.ModelTestMessage, auth.APIKey)
 	sampleModelsJSON := marshalStringSlice(limitStrings(result.SampleModels, 8))
-	_, _ = a.db.ExecContext(ctx, `
+	if _, execErr := a.db.ExecContext(ctx, `
 		UPDATE channel_accounts
 		SET api_key_fingerprint=?, api_key_status=?, api_key_last_checked_at=?,
 		    api_key_model_count=?, api_key_sample_models_json=?, api_key_test_model=?,
@@ -1355,7 +1376,9 @@ func (a *App) testAPIKeyForAccount(ctx context.Context, id string) apiKeyTestRes
 		    login_status=CASE WHEN ?='valid' THEN 'valid' WHEN ?='expired' THEN 'expired' ELSE login_status END,
 		    last_validated_at=?, updated_at=?
 		WHERE id=?
-	`, result.Fingerprint, result.Status, now(), result.ModelCount, sampleModelsJSON, result.TestedModel, boolInt(result.ModelUsable), result.ModelTestLatencyMs, result.ModelTestHTTPStatus, result.ModelTestMessage, result.ModelTestPath, result.Status, result.Status, now(), now(), id)
+	`, result.Fingerprint, result.Status, now(), result.ModelCount, sampleModelsJSON, result.TestedModel, boolInt(result.ModelUsable), result.ModelTestLatencyMs, result.ModelTestHTTPStatus, result.ModelTestMessage, result.ModelTestPath, result.Status, result.Status, now(), now(), id); execErr != nil {
+		log.Printf("[accounts] api key test result update failed for account %s: %v", id, execErr)
+	}
 	return result
 }
 
@@ -1571,7 +1594,9 @@ func (a *App) clearAccountSession(w http.ResponseWriter, r *http.Request, id str
 	a.mu.Unlock()
 	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(browser_profile_path,'') FROM channel_accounts WHERE id=?`, id).Scan(&profilePath)
 	if profilePath != "" && strings.HasPrefix(filepath.Clean(profilePath), filepath.Clean(a.dataDir)) {
-		_ = os.RemoveAll(profilePath)
+		if rmErr := os.RemoveAll(profilePath); rmErr != nil {
+			log.Printf("[accounts] clearAccountSession: remove profile %s failed: %v", profilePath, rmErr)
+		}
 	}
 	_, err := a.db.ExecContext(r.Context(), `
 		UPDATE channel_accounts
@@ -1800,19 +1825,25 @@ func (a *App) deleteUnsupportedCheckinAccounts(ctx context.Context, limit int, i
 		}
 	}()
 
-	for _, item := range items {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM checkin_logs WHERE account_id = ?`, item.AccountID); err != nil {
+	if len(items) > 0 {
+		ids := make([]interface{}, 0, len(items))
+		for _, item := range items {
+			ids = append(ids, item.AccountID)
+		}
+		placeholders := strings.Repeat("?,", len(ids))
+		placeholders = placeholders[:len(placeholders)-1]
+		if _, err := tx.ExecContext(ctx, `DELETE FROM checkin_logs WHERE account_id IN (`+placeholders+`)`, ids...); err != nil {
 			return result, err
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM balance_snapshots WHERE account_id = ?`, item.AccountID); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM balance_snapshots WHERE account_id IN (`+placeholders+`)`, ids...); err != nil {
 			return result, err
 		}
-		deleted, err := tx.ExecContext(ctx, `DELETE FROM channel_accounts WHERE id = ?`, item.AccountID)
+		deleted, err := tx.ExecContext(ctx, `DELETE FROM channel_accounts WHERE id IN (`+placeholders+`)`, ids...)
 		if err != nil {
 			return result, err
 		}
 		if affected, _ := deleted.RowsAffected(); affected > 0 {
-			result.Deleted++
+			result.Deleted = int(affected)
 		}
 	}
 	if err := tx.Commit(); err != nil {

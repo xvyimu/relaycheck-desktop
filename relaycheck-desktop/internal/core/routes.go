@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -186,6 +187,19 @@ func (a *App) handleNotifications(w http.ResponseWriter, r *http.Request) {
 	levelFilter := r.URL.Query().Get("level")
 	typeFilter := r.URL.Query().Get("type")
 	unreadOnly := r.URL.Query().Get("unread") == "1"
+	limit := 100
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			limit = v
+		}
+	}
+	limit = clampBatchLimit(limit, 100)
+	offset := 0
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v >= 0 {
+			offset = v
+		}
+	}
 
 	query := `SELECT id, type, level, title, content, read, created_at FROM app_notifications WHERE 1=1`
 	var args []interface{}
@@ -200,7 +214,8 @@ func (a *App) handleNotifications(w http.ResponseWriter, r *http.Request) {
 	if unreadOnly {
 		query += ` AND read = 0`
 	}
-	query += ` ORDER BY created_at DESC LIMIT 100`
+	query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
 
 	rows, err := a.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
@@ -314,10 +329,12 @@ func (a *App) notify(kind, level, title, content, relatedType, relatedID string)
 	if a.recentNotificationExists(context.Background(), kind, relatedType, relatedID, content, dedupWindow) {
 		return
 	}
-	_, _ = a.db.Exec(`
+	if _, execErr := a.db.Exec(`
 		INSERT INTO app_notifications (id, type, level, title, content, read, related_type, related_id, created_at)
 		VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
-	`, newID(), kind, level, title, content, relatedType, relatedID, now())
+	`, newID(), kind, level, title, content, relatedType, relatedID, now()); execErr != nil {
+		log.Printf("[notify] notification insert failed: %v", execErr)
+	}
 	a.invalidateReadCache()
 
 	// 异步分发到外部通知渠道
