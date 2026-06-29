@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { AccountCard } from "@/components/accounts/AccountCard";
 import { AccountDetailContent } from "@/components/accounts/AccountDetailContent";
 import { AccountForm } from "@/components/accounts/AccountForm";
@@ -14,7 +14,7 @@ export interface AccountsPanelProps {
   intent?: NavigationIntent | null;
 }
 
-export function AccountsPanel({ accounts, sites, onRefresh, intent }: AccountsPanelProps) {
+function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanelProps) {
   const [detailAccount, setDetailAccount] = useState<Account | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
@@ -116,3 +116,5 @@ export function AccountsPanel({ accounts, sites, onRefresh, intent }: AccountsPa
     </section>
   );
 }
+
+export const AccountsPanel = memo(AccountsPanelBase);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
 import { reopenOnboarding } from "@/components/onboarding/OnboardingWizard";
 import { formatBuildTime, formatBytes, formatTime } from "@/lib/format";
@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatusLabel } from "@/components/ui/status-label";
 import { SiteSchedules } from "@/components/settings/SiteSchedules";
 
-export function Settings({ status, onDone }: { status: StatusPayload; onDone: () => void }) {
+function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () => void }) {
   const [settings, setSettings] = useState<SystemSetting[]>([]);
   const [backups, setBackups] = useState<SystemBackup[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
@@ -884,3 +884,5 @@ export function Settings({ status, onDone }: { status: StatusPayload; onDone: ()
     </section>
   );
 }
+
+export const Settings = memo(SettingsBase);

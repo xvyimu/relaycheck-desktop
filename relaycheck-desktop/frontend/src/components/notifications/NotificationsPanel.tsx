@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
 import { formatTime } from "@/lib/format";
@@ -11,7 +11,7 @@ type NotificationsPanelProps = {
   intent?: NavigationIntent | null;
 };
 
-export function NotificationsPanel({ items, onRefresh, intent }: NotificationsPanelProps) {
+function NotificationsPanelBase({ items, onRefresh, intent }: NotificationsPanelProps) {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [showRead, setShowRead] = useState(true);
@@ -160,3 +160,5 @@ export function NotificationsPanel({ items, onRefresh, intent }: NotificationsPa
     </section>
   );
 }
+
+export const NotificationsPanel = memo(NotificationsPanelBase);

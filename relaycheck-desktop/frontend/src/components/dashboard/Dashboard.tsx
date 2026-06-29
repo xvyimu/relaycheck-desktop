@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { Empty } from "@/components/ui/empty";
 import { HubRadar } from "@/components/dashboard/HubRadar";
 import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
@@ -96,7 +96,7 @@ function navigateAction(onNavigate: DashboardProps["onNavigate"], item: ActionIt
   onNavigate(target, nextIntent);
 }
 
-export function Dashboard({
+function DashboardBase({
   status,
   channels,
   sites,
@@ -254,3 +254,5 @@ export function Dashboard({
     </>
   );
 }
+
+export const Dashboard = memo(DashboardBase);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 
 import { api } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,7 @@ type ScanPanelProps = {
   onRefresh: () => Promise<void>;
 };
 
-export function ScanPanel({ onRefresh }: ScanPanelProps) {
+function ScanPanelBase({ onRefresh }: ScanPanelProps) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<AutoDetectResponse | null>(null);
 
@@ -152,3 +152,5 @@ export function ScanPanel({ onRefresh }: ScanPanelProps) {
     </section>
   );
 }
+
+export const ScanPanel = memo(ScanPanelBase);

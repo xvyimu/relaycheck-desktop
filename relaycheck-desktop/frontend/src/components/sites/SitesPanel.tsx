@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
 import { formatConfidence, formatDuration, formatTime } from "@/lib/format";
@@ -23,7 +23,7 @@ function capabilityLabel(enabled?: boolean) {
   return enabled ? "支持" : "未知/否";
 }
 
-export function SitesPanel({ sites, onRefresh, intent }: SitesPanelProps) {
+function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
   const [healthFilter, setHealthFilter] = useState<string>("all");
@@ -269,3 +269,5 @@ export function SitesPanel({ sites, onRefresh, intent }: SitesPanelProps) {
     </section>
   );
 }
+
+export const SitesPanel = memo(SitesPanelBase);

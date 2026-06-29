@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AccountsPanel } from "@/components/accounts/AccountsPanel";
 import { CheckinsPanel } from "@/components/checkins/CheckinsPanel";
@@ -20,12 +20,48 @@ import "./styles.css";
 function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [navigationIntent, setNavigationIntent] = useState<NavigationIntent | null>(null);
+  // Track visited tabs so we can keep their panels mounted (preserving filter
+  // state, scroll position, etc.) while hiding non-active ones.
+  const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(["dashboard"]));
   const data = useAppData();
 
   useEffect(() => {
     const cleanup = initTheme();
     return cleanup;
   }, []);
+
+  const handleNavigate = useCallback(
+    (nextTab: TabKey, intent?: Omit<NavigationIntent, "target">) => {
+      if (!TABS.some((item) => item.key === nextTab)) return;
+      const target = nextTab as Tab;
+      setTab(target);
+      setNavigationIntent({ target, ...intent });
+      setVisitedTabs((prev) => {
+        if (prev.has(target)) return prev;
+        const next = new Set(prev);
+        next.add(target);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleTabChange = useCallback((nextTab: Tab) => {
+    setTab(nextTab);
+    // Tab clicks from the sidebar are plain navigations — clear any residual
+    // rich intent so panels don't see stale data from a previous handleNavigate.
+    setNavigationIntent(null);
+    setVisitedTabs((prev) => {
+      if (prev.has(nextTab)) return prev;
+      const next = new Set(prev);
+      next.add(nextTab);
+      return next;
+    });
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    void data.reload();
+  }, [data.reload]);
 
   if (data.loading) {
     return (
@@ -38,64 +74,71 @@ function App() {
     );
   }
 
-  function handleNavigate(nextTab: TabKey, intent?: Omit<NavigationIntent, "target">) {
-    if (!TABS.some((item) => item.key === nextTab)) return;
-    setTab(nextTab as Tab);
-    setNavigationIntent({ target: nextTab, ...intent });
-  }
-
-  function handleTabChange(nextTab: Tab) {
-    setTab(nextTab);
-    // Tab clicks from the sidebar are plain navigations — clear any residual
-    // rich intent so panels don't see stale data from a previous handleNavigate.
-    setNavigationIntent(null);
-  }
+  const show = (key: Tab) => (tab === key ? undefined : "none");
 
   return (
     <div className="app-shell">
       <OnboardingWizard />
       <Sidebar activeTab={tab} onTabChange={handleTabChange} />
       <main className="main-panel">
-        <Topbar activeTab={tab} onRefresh={() => void data.reload()} />
+        <Topbar activeTab={tab} onRefresh={handleRefresh} />
         {data.error ? <div className="notice error" aria-live="polite">{data.error}</div> : null}
-        {tab === "dashboard" ? (
-          <Dashboard
-            status={data.status}
-            channels={data.channels}
-            sites={data.sites}
-            accounts={data.accounts}
-            checkins={data.checkins}
-            notifications={data.notifications}
-            diagnostics={data.diagnostics}
-            actionCenter={data.actionCenter}
-            modelOverview={data.modelOverview}
-            pricingOverview={data.pricingOverview}
-            usageOverview={data.usageOverview}
-            onNavigate={handleNavigate}
-            onRefresh={data.reload}
-          />
+        {visitedTabs.has("dashboard") ? (
+          <div style={{ display: show("dashboard") }}>
+            <Dashboard
+              status={data.status}
+              channels={data.channels}
+              sites={data.sites}
+              accounts={data.accounts}
+              checkins={data.checkins}
+              notifications={data.notifications}
+              diagnostics={data.diagnostics}
+              actionCenter={data.actionCenter}
+              modelOverview={data.modelOverview}
+              pricingOverview={data.pricingOverview}
+              usageOverview={data.usageOverview}
+              onNavigate={handleNavigate}
+              onRefresh={data.reload}
+            />
+          </div>
         ) : null}
-        {tab === "channels" ? (
-          <ChannelsPanel
-            onRefresh={data.reload}
-            intent={navigationIntent?.target === "channels" ? navigationIntent : null}
-          />
+        {visitedTabs.has("channels") ? (
+          <div style={{ display: show("channels") }}>
+            <ChannelsPanel
+              onRefresh={data.reload}
+              intent={navigationIntent?.target === "channels" ? navigationIntent : null}
+            />
+          </div>
         ) : null}
-        {tab === "sites" ? (
-          <SitesPanel sites={data.sites} onRefresh={data.reload} intent={navigationIntent?.target === "sites" ? navigationIntent : null} />
+        {visitedTabs.has("sites") ? (
+          <div style={{ display: show("sites") }}>
+            <SitesPanel sites={data.sites} onRefresh={data.reload} intent={navigationIntent?.target === "sites" ? navigationIntent : null} />
+          </div>
         ) : null}
-        {tab === "accounts" ? (
-          <AccountsPanel accounts={data.accounts} sites={data.sites} onRefresh={data.reload} intent={navigationIntent?.target === "accounts" ? navigationIntent : null} />
+        {visitedTabs.has("accounts") ? (
+          <div style={{ display: show("accounts") }}>
+            <AccountsPanel accounts={data.accounts} sites={data.sites} onRefresh={data.reload} intent={navigationIntent?.target === "accounts" ? navigationIntent : null} />
+          </div>
         ) : null}
-        {tab === "checkins" ? (
-          <CheckinsPanel checkins={data.checkins} onRefresh={data.reload} intent={navigationIntent?.target === "checkins" ? navigationIntent : null} />
+        {visitedTabs.has("checkins") ? (
+          <div style={{ display: show("checkins") }}>
+            <CheckinsPanel checkins={data.checkins} onRefresh={data.reload} intent={navigationIntent?.target === "checkins" ? navigationIntent : null} />
+          </div>
         ) : null}
-        {tab === "scan" ? <ScanPanel onRefresh={data.reload} /> : null}
-        {tab === "notifications" ? (
-          <NotificationsPanel items={data.notifications} onRefresh={data.reload} intent={navigationIntent?.target === "notifications" ? navigationIntent : null} />
+        {visitedTabs.has("scan") ? (
+          <div style={{ display: show("scan") }}>
+            <ScanPanel onRefresh={data.reload} />
+          </div>
         ) : null}
-        {tab === "settings" ? (
-          data.status ? <SettingsPanel status={data.status} onDone={data.reload} /> : <Empty message="正在加载设置…" />
+        {visitedTabs.has("notifications") ? (
+          <div style={{ display: show("notifications") }}>
+            <NotificationsPanel items={data.notifications} onRefresh={data.reload} intent={navigationIntent?.target === "notifications" ? navigationIntent : null} />
+          </div>
+        ) : null}
+        {visitedTabs.has("settings") ? (
+          <div style={{ display: show("settings") }}>
+            {data.status ? <SettingsPanel status={data.status} onDone={data.reload} /> : <Empty message="正在加载设置…" />}
+          </div>
         ) : null}
       </main>
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 
 import { formatTime } from "@/lib/format";
 import type { CheckinLog, CheckinStatus, NavigationIntent } from "@/types";
@@ -30,7 +30,7 @@ function MetricTile({ label, value }: { label: string; value: number | string })
   );
 }
 
-export function CheckinsPanel({ checkins, onRefresh, intent }: CheckinsPanelProps) {
+function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) {
   const [message, setMessage] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
@@ -286,8 +286,10 @@ export function CheckinsPanel({ checkins, onRefresh, intent }: CheckinsPanelProp
             <dd>{formatCountdown(schedule?.nextRunInSeconds)}</dd>
           </dl>
           {schedule?.message ? <div className="note">{schedule.message}</div> : null}
-        </article>
+      </article>
       </div>
     </section>
   );
 }
+
+export const CheckinsPanel = memo(CheckinsPanelBase);

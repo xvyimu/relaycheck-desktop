@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { ChannelTable } from "@/components/channels/ChannelTable";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
 import { useApi } from "@/hooks/useApi";
@@ -39,7 +39,7 @@ function topHealthRisks(sites: ChannelHealthSite[]) {
   return sites.filter((site) => site.level === "danger" || site.level === "warning").slice(0, 4);
 }
 
-export function ChannelsPanel({ onRefresh, intent }: ChannelsPanelProps) {
+function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
   const actions = useChannelActions();
   const filters = useChannelFilters(actions.channels, actions.accounts, intent);
   const health = useApi<ChannelHealthOverview>("/api/channels/health/overview", emptyHealthOverview);
@@ -281,3 +281,5 @@ export function ChannelsPanel({ onRefresh, intent }: ChannelsPanelProps) {
     </section>
   );
 }
+
+export const ChannelsPanel = memo(ChannelsPanelBase);
