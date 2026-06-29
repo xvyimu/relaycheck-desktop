@@ -83,9 +83,12 @@ type desktopConfig struct {
 	Sound bool   `json:"sound"` // play sound on notification
 }
 
-// desktopChannel pushes notifications to the in-app notification table and
-// marks them for desktop push (the frontend SSE listener will trigger
-// browser Notification API when it sees desktop-push flagged items).
+// desktopChannel is a no-op marker channel. The in-app notification record
+// is already inserted by App.notify() in routes.go; desktopChannel.Send()
+// previously inserted a duplicate row with related_type='desktop-push', which
+// caused duplicate notifications in the frontend (same title/content, different
+// id). The frontend does not consume related_type, so the duplicate INSERT was
+// pure redundancy. Send() is now a no-op.
 type desktopChannel struct {
 	app    *App
 	config desktopConfig
@@ -104,12 +107,12 @@ func (c *desktopChannel) Send(ctx context.Context, kind, level, title, content s
 	if !levelMatchesMode(c.config.Mode, level) {
 		return nil
 	}
-	// Create an in-app notification flagged for desktop push
-	_, err := c.app.db.ExecContext(ctx, `
-		INSERT INTO app_notifications (id, type, level, title, content, read, related_type, created_at)
-		VALUES (?, ?, ?, ?, ?, 0, 'desktop-push', ?)
-	`, newID(), kind, level, title, content, now())
-	return err
+	// No-op: App.notify() already inserted the in-app notification record.
+	// Previously this method inserted a duplicate row with
+	// related_type='desktop-push', causing duplicate notifications in the
+	// frontend. The frontend does not consume related_type, so we skip the
+	// redundant INSERT entirely.
+	return nil
 }
 
 func (c *desktopChannel) EncryptedFields() []string { return nil }

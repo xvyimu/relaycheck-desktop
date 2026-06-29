@@ -234,8 +234,8 @@ export function CheckinsPanel({ checkins, onRefresh, intent }: CheckinsPanelProp
           {logs.length > 0 && (
             <div className="checkin-logs">
               <div className="log-list">
-                {logs.map((log: CheckinLog, index: number) => (
-                  <div key={index} className={`log-item ${log.status}`}>
+                {logs.map((log: CheckinLog) => (
+                  <div key={log.id} className={`log-item ${log.status}`}>
                     <div className="log-main">
                       <span className="log-account">{log.accountName || "未知账号"}</span>
                       <span className="log-site">{log.siteName || "未知站点"}</span>

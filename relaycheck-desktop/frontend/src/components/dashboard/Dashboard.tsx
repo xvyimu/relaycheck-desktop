@@ -116,7 +116,7 @@ export function Dashboard({
   const unread = notifications.filter((item) => !item.read).length;
   const schedulerJobs = status?.scheduler?.jobs || [];
   const actionItems = actionCenter?.items || [];
-  const priorityActions = actionItems.slice(0, 4);
+  const priorityActions = actionItems;
 
   const { nextRuns, loading: nextRunsBusy } = useNextRuns();
 

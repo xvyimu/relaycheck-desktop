@@ -299,7 +299,15 @@ func (a *App) handleMarkNotificationRead(w http.ResponseWriter, r *http.Request)
 }
 
 func (a *App) notify(kind, level, title, content, relatedType, relatedID string) {
-	if kind == "scheduled_channel_health_probe_warning" && a.recentNotificationExists(context.Background(), kind, relatedType, relatedID, content, 30*time.Minute) {
+	// Deduplicate: skip if an identical notification (same kind+relatedType+
+	// relatedID+content) was inserted within the dedup window. This prevents
+	// recurring events (e.g. "checkin_unsupported" for sites without a checkin
+	// endpoint) from flooding the notification table on every scheduler tick.
+	dedupWindow := 30 * time.Minute
+	if kind == "scheduled_channel_health_probe_warning" {
+		dedupWindow = 30 * time.Minute
+	}
+	if a.recentNotificationExists(context.Background(), kind, relatedType, relatedID, content, dedupWindow) {
 		return
 	}
 	_, _ = a.db.Exec(`
