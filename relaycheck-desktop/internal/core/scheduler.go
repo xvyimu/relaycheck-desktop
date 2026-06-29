@@ -16,6 +16,13 @@ const (
 	schedulerJobCheckin       = "checkin.daily"
 	schedulerJobSync          = "sync.local_newapi"
 	schedulerJobChannelHealth = "channel.health_probe"
+
+	schedulerTickInterval   = 30 * time.Second
+	checkinJobTimeout       = 20 * time.Minute
+	syncJobTimeout          = 10 * time.Minute
+	channelHealthJobTimeout = 12 * time.Minute
+	minScheduleInterval     = 5 * time.Minute
+	defaultScheduleInterval = 30 * time.Minute
 )
 
 type syncJobRunState struct {
@@ -97,6 +104,7 @@ func (r scheduledSyncResult) Summary() string {
 	return strings.Join(parts, "，")
 }
 
+// StartSchedulers launches the checkin, sync, and channel-health scheduler goroutines.
 func (a *App) StartSchedulers(parent context.Context) {
 	a.mu.Lock()
 	if a.schedulerCancel != nil {
@@ -119,7 +127,7 @@ func (a *App) schedulerLoop(ctx context.Context) {
 	_ = a.resetInterruptedSchedulerRuns(context.Background())
 	a.tickSchedulers(ctx)
 
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(schedulerTickInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -215,7 +223,7 @@ func (a *App) tickCheckinScheduler(ctx context.Context, currentTime time.Time) {
 		return
 	}
 
-	jobCtx, cancel := context.WithTimeout(ctx, 20*time.Minute)
+	jobCtx, cancel := context.WithTimeout(ctx, checkinJobTimeout)
 	defer cancel()
 	results, err := a.runDueCheckins(jobCtx, "scheduled")
 	status := "success"
@@ -240,8 +248,8 @@ func (a *App) tickSyncScheduler(ctx context.Context, currentTime time.Time) {
 	}
 
 	interval := time.Duration(config.IntervalMinutes) * time.Minute
-	if interval < 5*time.Minute {
-		interval = 30 * time.Minute
+	if interval < minScheduleInterval {
+		interval = defaultScheduleInterval
 	}
 
 	due := false
@@ -272,7 +280,7 @@ func (a *App) tickSyncScheduler(ctx context.Context, currentTime time.Time) {
 		return
 	}
 
-	jobCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	jobCtx, cancel := context.WithTimeout(ctx, syncJobTimeout)
 	defer cancel()
 	result := a.runScheduledLocalNewAPISync(jobCtx)
 	status := "success"
@@ -297,8 +305,8 @@ func (a *App) tickChannelHealthScheduler(ctx context.Context, currentTime time.T
 	}
 
 	interval := time.Duration(config.IntervalMinutes) * time.Minute
-	if interval < 5*time.Minute {
-		interval = 30 * time.Minute
+	if interval < minScheduleInterval {
+		interval = defaultScheduleInterval
 	}
 
 	due := false
@@ -329,7 +337,7 @@ func (a *App) tickChannelHealthScheduler(ctx context.Context, currentTime time.T
 		return
 	}
 
-	jobCtx, cancel := context.WithTimeout(ctx, 12*time.Minute)
+	jobCtx, cancel := context.WithTimeout(ctx, channelHealthJobTimeout)
 	defer cancel()
 	result, err := a.runScheduledChannelHealthProbe(jobCtx, config)
 	status := "success"

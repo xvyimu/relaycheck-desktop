@@ -16,6 +16,7 @@ const (
 	buildTime      = "local build"
 )
 
+// RegisterRoutes registers all HTTP handlers on the given mux.
 func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/health", a.handleHealth)
 	mux.HandleFunc("/api/analytics", a.requireSession(a.handleAnalytics))

@@ -38,34 +38,5 @@ export const CHANNEL_RAW_SEARCH_KEYS: ReadonlySet<string> = new Set([
   "desc",
 ]);
 
-export const DIALOG_FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "textarea:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
-
-export const IMPORTANT_NOTIFICATION_LEVELS: ReadonlySet<string> = new Set(["danger", "error", "warning"]);
-export const IMPORTANT_NOTIFICATION_KEYWORDS = [
-  "失败",
-  "失效",
-  "授权",
-  "低余额",
-  "不可达",
-  "需要",
-  "failed",
-  "expired",
-  "auth",
-  "unreachable",
-  "low_balance",
-] as const;
-
 export const CHANNELS_INITIAL_VISIBLE_LIMIT = 24;
 export const CHANNELS_VISIBLE_INCREMENT = 24;
-export const CHECKINS_INITIAL_VISIBLE_LIMIT = 40;
-export const CHECKINS_VISIBLE_INCREMENT = 40;
-export const NOTIFICATIONS_INITIAL_VISIBLE_LIMIT = 30;
-export const NOTIFICATIONS_VISIBLE_INCREMENT = 30;
-export const API_KEY_STALE_MS = 24 * 60 * 60 * 1000;

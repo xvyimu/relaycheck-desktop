@@ -113,6 +113,7 @@ func clampInt(value int, min int, max int, fallback int) int {
 	return value
 }
 
+// SecureLocalHandler wraps an http.Handler with local-only access enforcement.
 func (a *App) SecureLocalHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()

@@ -79,6 +79,7 @@ type BrowserLoginSession struct {
 	PID       int
 }
 
+// NewApp creates a new App instance rooted at the given directory.
 func NewApp(root string) (*App, error) {
 	dataDir := filepath.Join(root, "data")
 	if err := os.MkdirAll(filepath.Join(dataDir, "keys"), 0o700); err != nil {
@@ -142,6 +143,7 @@ func NewApp(root string) (*App, error) {
 	return app, nil
 }
 
+// Close releases resources held by the App, including the database.
 func (a *App) Close() error {
 	a.mu.Lock()
 	cancel := a.schedulerCancel
@@ -166,6 +168,7 @@ func (a *App) Close() error {
 // DataDir returns the application data directory path.
 func (a *App) DataDir() string { return a.dataDir }
 
+// SetRuntimeAddress configures the bind address and port used for Origin validation.
 func (a *App) SetRuntimeAddress(bind string, port int) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -173,6 +176,7 @@ func (a *App) SetRuntimeAddress(bind string, port int) {
 	a.port = port
 }
 
+// SetPortConflict records the preferred port and whether it conflicted at startup.
 func (a *App) SetPortConflict(preferredPort int, conflict bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

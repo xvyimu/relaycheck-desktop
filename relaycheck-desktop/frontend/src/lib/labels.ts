@@ -1,21 +1,5 @@
 import type { APIKeyTestResult, ModelPricingSource } from "@/types";
 
-export function errorClassLabel(errorClass: string): string {
-  const labels: Record<string, string> = {
-    validation_error: "参数错误",
-    auth_error: "登录失效",
-    permission_error: "权限不足",
-    not_found: "资源不存在",
-    method_not_allowed: "方法不支持",
-    conflict: "状态冲突",
-    rate_limited: "请求过快",
-    server_error: "服务异常",
-    request_error: "请求异常",
-    bad_response: "响应异常",
-  };
-  return labels[errorClass] || errorClass;
-}
-
 export function diagnosticLevelLabel(level: string): string {
   const labels: Record<string, string> = {
     success: "正常",
@@ -46,53 +30,6 @@ export function channelSourceSyncLabel(value: string): string {
   return labels[value] || value || "源端存在";
 }
 
-export function localNewAPISourceLabel(source: string): string {
-  const labels: Record<string, string> = {
-    sqlite_import: "SQLite",
-    admin_api_import: "后台 API",
-    port_scan: "端口扫描",
-  };
-  return labels[source] || source || "未知来源";
-}
-
-export function syncCapabilityLabel(value: string): string {
-  const labels: Record<string, string> = {
-    sqlite: "可直接同步",
-    admin_api_saved_token: "已保存令牌",
-    admin_api_token_required: "需访问令牌",
-    unsupported: "暂不可同步",
-  };
-  return labels[value] || value || "暂不可同步";
-}
-
-export function syncSourceLabel(value: string): string {
-  const labels: Record<string, string> = {
-    sqlite: "SQLite",
-    admin_api: "后台 API",
-  };
-  return labels[value] || value || "未知来源";
-}
-
-export function syncActionLabel(value: string): string {
-  const labels: Record<string, string> = {
-    new: "新增",
-    changed: "变更",
-    unchanged: "不变",
-    skipped: "跳过",
-    removed: "移除",
-  };
-  return labels[value] || value || "未知";
-}
-
-export function syncSummaryScopeLabel(value: string): string {
-  const labels: Record<string, string> = {
-    single: "单实例",
-    all: "全部实例",
-    "mark-missing": "源端对齐",
-  };
-  return labels[value] || value || "同步结果";
-}
-
 export function upstreamKindLabel(kind: string): string {
   const labels: Record<string, string> = {
     newapi: "NewAPI",
@@ -104,19 +41,6 @@ export function upstreamKindLabel(kind: string): string {
     unknown: "待识别",
   };
   return labels[kind] || kind || "待识别";
-}
-
-export function channelStatusLabel(status?: string): string {
-  const labels: Record<string, string> = {
-    enabled: "启用",
-    disabled: "停用",
-    healthy: "正常",
-    degraded: "异常",
-    auth_required: "需授权",
-    unreachable: "不可达",
-    unknown: "未知",
-  };
-  return labels[status || ""] || status || "未知";
 }
 
 export function channelModelStatusLabel(status: string): string {
@@ -203,15 +127,6 @@ export function apiKeyStatusLabel(status: string): string {
     missing: "无密钥",
   };
   return labels[status] || status || "密钥未测";
-}
-
-export function usageTrendLabel(trend: string): string {
-  const labels: Record<string, string> = {
-    down: "余额下降",
-    up: "余额回升",
-    flat: "基本持平",
-  };
-  return labels[trend] || trend || "未知趋势";
 }
 
 export function priceLevelLabel(level: string): string {

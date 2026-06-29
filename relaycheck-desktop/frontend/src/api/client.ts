@@ -4,8 +4,6 @@ const clientReadCacheTTL = 1500;
 const clientReadCache = new Map<string, ClientReadCacheEntry>();
 const uncachedReadPrefixes = ["/api/checkins/status"];
 
-const apiErrorListeners = new Set<(error: GlobalApiError) => void>();
-
 class ApiError extends Error {
   errorClass?: string;
   status?: number;
@@ -20,17 +18,6 @@ class ApiError extends Error {
     this.url = details.url;
     this.method = details.method;
   }
-}
-
-export function subscribeApiErrors(listener: (error: GlobalApiError) => void) {
-  apiErrorListeners.add(listener);
-  return () => {
-    apiErrorListeners.delete(listener);
-  };
-}
-
-function publishApiError(error: GlobalApiError) {
-  apiErrorListeners.forEach((listener) => listener(error));
 }
 
 function shouldCacheRead(url: string, method: string, options?: RequestInit) {
@@ -66,14 +53,6 @@ export async function api<T>(url: string, options?: RequestInit): Promise<T> {
         status: response.status,
         url,
         method,
-      });
-      publishApiError({
-        message: error.message,
-        errorClass: error.errorClass,
-        status: error.status,
-        url,
-        method,
-        occurredAt: Date.now(),
       });
       throw error;
     }
