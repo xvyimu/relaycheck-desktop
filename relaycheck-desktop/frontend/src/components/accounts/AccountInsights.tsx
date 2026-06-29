@@ -10,6 +10,8 @@ import { TaskProgressView } from "@/components/ui/TaskProgressView";
 
 const API_KEY_STALE_MS = 24 * 60 * 60 * 1000;
 const UNSUPPORTED_CLEANUP_LIMIT = 10;
+const LABELS_TEST_KEYS = { title: "批量测试 Key" } as const;
+const LABELS_REFRESH_BALANCE = { title: "批量刷新余额" } as const;
 
 function isStaleAPIKeyCheck(account: Account) {
   if (!account.apiKeyFingerprint) return false;
@@ -618,7 +620,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
           error={keyTask.error}
           onCancel={keyTask.cancelTask}
           onDismiss={keyTask.reset}
-          labels={{ title: "批量测试 Key" }}
+          labels={LABELS_TEST_KEYS}
         />
       ) : null}
       {balanceTask.progress || balanceTask.loading || balanceTask.error ? (
@@ -628,7 +630,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
           error={balanceTask.error}
           onCancel={balanceTask.cancelTask}
           onDismiss={balanceTask.reset}
-          labels={{ title: "批量刷新余额" }}
+          labels={LABELS_REFRESH_BALANCE}
         />
       ) : null}
       {message ? <span className="muted">{message}</span> : null}

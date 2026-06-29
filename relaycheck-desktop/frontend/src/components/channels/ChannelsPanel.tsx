@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { ChannelTable } from "@/components/channels/ChannelTable";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
 import { useApi } from "@/hooks/useApi";
@@ -7,6 +7,8 @@ import { useChannelFilters } from "@/hooks/useChannelFilters";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { formatTime } from "@/lib/format";
 import type { ChannelHealthOverview, ChannelHealthSite, NavigationIntent } from "@/types";
+
+const LABELS_HEALTH_PROBE = { title: "渠道健康探测" } as const;
 
 const emptyHealthOverview: ChannelHealthOverview = {
   generatedAt: "",
@@ -45,7 +47,7 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
   const health = useApi<ChannelHealthOverview>("/api/channels/health/overview", emptyHealthOverview);
   const healthTask = useTaskProgress();
   const [healthProbeMessage, setHealthProbeMessage] = useState("");
-  const riskSites = topHealthRisks(health.data.sites);
+  const riskSites = useMemo(() => topHealthRisks(health.data.sites), [health.data.sites]);
 
   useEffect(() => {
     void actions.refresh();
@@ -60,11 +62,11 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [actions.drawer, actions.setDrawer]);
 
-  async function refreshAll() {
+  const refreshAll = useCallback(async () => {
     await actions.refresh();
     await health.refresh();
     await onRefresh();
-  }
+  }, [actions.refresh, health.refresh, onRefresh]);
 
   async function refreshHealthProbe() {
     setHealthProbeMessage("健康探测任务已启动，结果会自动刷新。");
@@ -142,7 +144,7 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
             error={healthTask.error}
             onCancel={healthTask.cancelTask}
             onDismiss={healthTask.reset}
-            labels={{ title: "渠道健康探测" }}
+            labels={LABELS_HEALTH_PROBE}
           />
         ) : null}
         {healthProbeMessage ? <div className="note">{healthProbeMessage}</div> : null}

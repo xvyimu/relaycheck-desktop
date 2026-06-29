@@ -107,7 +107,7 @@ function BalanceTrendChart({
         const isSelected = selectedDate === p.date;
         return (
           <circle
-            key={i}
+            key={p.date}
             cx={p.x}
             cy={p.y}
             r={isSelected ? 4 : 2.5}
@@ -161,7 +161,7 @@ function BalanceDeltaChart({ data }: { data: BalanceDeltaPoint[] }) {
         const y = positive ? zeroY - barH : zeroY;
         return (
           <rect
-            key={i}
+            key={d.date}
             x={x}
             y={y}
             width={barW}
@@ -272,7 +272,7 @@ function ResponseTimeChart({ data }: { data: ResponseTimePoint[] | null }) {
         const width = (item.latencyMs / maxLatency) * chartWidth;
         const color = item.status === "valid" ? "var(--v4-green)" : item.status === "rate_limited" ? "var(--v4-amber)" : "var(--v4-red)";
         return (
-          <div key={i} className="response-time-row" style={{ top: i * (barHeight + gap) }}>
+          <div key={`${item.accountName}-${item.siteName}`} className="response-time-row" style={{ top: i * (barHeight + gap) }}>
             <div className="response-time-label" style={{ width: labelWidth }}>
               <span className="response-time-name">{item.accountName}</span>
               <span className="response-time-site">{item.siteName}</span>

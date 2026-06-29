@@ -111,9 +111,12 @@ function DashboardBase({
   onNavigate,
   onRefresh,
 }: DashboardProps) {
-  const problemChannels = channels.filter((item) => item.sourceSyncStatus === "missing" || item.upstreamKind === "unknown").length;
-  const problemAccounts = accounts.filter((item) => ["expired", "invalid", "failed"].includes((item.loginStatus || "").toLowerCase())).length;
-  const unread = notifications.filter((item) => !item.read).length;
+  const { problemChannels, problemAccounts, unread } = useMemo(() => {
+    const problemChannels = channels.filter((item) => item.sourceSyncStatus === "missing" || item.upstreamKind === "unknown").length;
+    const problemAccounts = accounts.filter((item) => ["expired", "invalid", "failed"].includes((item.loginStatus || "").toLowerCase())).length;
+    const unread = notifications.filter((item) => !item.read).length;
+    return { problemChannels, problemAccounts, unread };
+  }, [channels, accounts, notifications]);
   const schedulerJobs = status?.scheduler?.jobs || [];
   const actionItems = actionCenter?.items || [];
   const priorityActions = actionItems;

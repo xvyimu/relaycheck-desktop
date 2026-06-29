@@ -101,7 +101,7 @@ function ScanPanelBase({ onRefresh }: ScanPanelProps) {
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {result.results.map((item, i) => (
                   <div
-                    key={i}
+                    key={item.dbPath}
                     style={{
                       display: "flex",
                       flexWrap: "wrap",

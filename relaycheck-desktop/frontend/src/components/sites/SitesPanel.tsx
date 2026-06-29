@@ -7,6 +7,8 @@ import { useNextRuns } from "@/hooks/useNextRuns";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
 
+const LABELS_BATCH_DETECT = { title: "批量识别" } as const;
+
 type SitesPanelProps = {
   sites: UpstreamSite[];
   onRefresh: () => Promise<void>;
@@ -135,7 +137,7 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
         error={task.error}
         onCancel={task.cancelTask}
         onDismiss={task.reset}
-        labels={{ title: "批量识别" }}
+        labels={LABELS_BATCH_DETECT}
       />
 
       {message ? <div className="problem-hint">{message}</div> : null}

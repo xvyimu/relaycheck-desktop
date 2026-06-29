@@ -183,7 +183,7 @@ export function HubRadar({
                   <div key={date} className="schedule-day">
                     <div className="schedule-day-label">{date.split("-").slice(1).join("-")}</div>
                     {items.map((item, i) => (
-                      <div key={i} className="schedule-item">
+                      <div key={`${item.siteId}-${item.time}-${item.jobType}`} className="schedule-item">
                         <span className="schedule-item-time">{item.time.slice(0, 5)}</span>
                         <span className="schedule-item-name">{item.siteName || "未命名"}</span>
                         <span className={`schedule-item-badge ${item.jobType === "sync" ? "badge-sync" : "badge-checkin"}`}>

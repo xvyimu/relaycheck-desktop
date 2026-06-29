@@ -5,6 +5,8 @@ import type { CheckinLog, CheckinStatus, NavigationIntent } from "@/types";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
 
+const LABELS_BATCH_CHECKIN = { title: "批量签到" } as const;
+
 type CheckinsPanelProps = {
   checkins: CheckinStatus | null;
   onRefresh: () => Promise<void>;
@@ -211,7 +213,7 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
             error={task.error}
             onCancel={task.cancelTask}
             onDismiss={task.reset}
-            labels={{ title: "批量签到" }}
+            labels={LABELS_BATCH_CHECKIN}
           />
         </article>
 
