@@ -424,8 +424,8 @@ export function AnalyticsPanel() {
       setDrillLoading(true);
       try {
         const [snapshots, logs] = await Promise.all([
-          selectedDate ? api<BalanceSnapshot[]>("/api/balances/snapshots") : Promise.resolve(balanceSnapshots),
-          selectedStatus ? api<CheckinLog[]>("/api/checkins/logs") : Promise.resolve(checkinLogs),
+          selectedDate ? api<BalanceSnapshot[]>("/api/balances/snapshots") : Promise.resolve([] as BalanceSnapshot[]),
+          selectedStatus ? api<CheckinLog[]>("/api/checkins/logs") : Promise.resolve([] as CheckinLog[]),
         ]);
         if (!cancelled) {
           if (selectedDate) setBalanceSnapshots(snapshots);
@@ -439,7 +439,6 @@ export function AnalyticsPanel() {
     }
     void loadDrill();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, selectedStatus]);
 
   const selectedDistItem = useMemo(

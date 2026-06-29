@@ -328,8 +328,13 @@ func (a *App) handleBulkPasswordLogin(w http.ResponseWriter, r *http.Request) {
 	_ = rows.Close()
 
 	results := []bulkPasswordLoginResult{}
+	auths, _ := a.loadAccountAuths(r.Context(), accountIDs)
 	for _, id := range accountIDs {
-		results = append(results, a.retryPasswordLogin(r.Context(), id))
+		var auth *accountAuthContext
+		if loaded, ok := auths[id]; ok {
+			auth = &loaded
+		}
+		results = append(results, a.retryPasswordLogin(r.Context(), id, auth))
 	}
 	successCount := 0
 	for _, result := range results {
@@ -348,10 +353,13 @@ func (a *App) handleBulkPasswordLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *App) retryPasswordLogin(ctx context.Context, id string) bulkPasswordLoginResult {
-	auth, err := a.loadAccountAuth(ctx, id)
-	if err != nil {
-		return bulkPasswordLoginResult{AccountID: id, Status: "failed", Message: err.Error()}
+func (a *App) retryPasswordLogin(ctx context.Context, id string, auth *accountAuthContext) bulkPasswordLoginResult {
+	if auth == nil {
+		loaded, err := a.loadAccountAuth(ctx, id)
+		if err != nil {
+			return bulkPasswordLoginResult{AccountID: id, Status: "failed", Message: err.Error()}
+		}
+		auth = &loaded
 	}
 	result := bulkPasswordLoginResult{
 		AccountID:   auth.AccountID,
@@ -369,7 +377,7 @@ func (a *App) retryPasswordLogin(ctx context.Context, id string) bulkPasswordLog
 	auth.Cookie = ""
 	auth.AccessToken = ""
 	auth.AuthUserID = ""
-	if err := a.loginWithPassword(ctx, &auth); err != nil {
+	if err := a.loginWithPassword(ctx, auth); err != nil {
 		result.Status = "expired"
 		result.Message = err.Error()
 		if _, execErr := a.db.ExecContext(ctx, `UPDATE channel_accounts SET login_status='expired', last_validated_at=?, updated_at=? WHERE id=?`, now(), now(), id); execErr != nil {
@@ -419,8 +427,13 @@ func (a *App) handleBulkOpenBrowserLogin(w http.ResponseWriter, r *http.Request)
 
 	results := []browserLoginOpenResult{}
 	opened := 0
+	auths, _ := a.loadAccountAuths(r.Context(), accountIDs)
 	for _, id := range accountIDs {
-		result := a.startBrowserLogin(r.Context(), id)
+		var auth *accountAuthContext
+		if loaded, ok := auths[id]; ok {
+			auth = &loaded
+		}
+		result := a.startBrowserLogin(r.Context(), id, auth)
 		if result.Status == "opened" || result.Status == "already_open" {
 			opened++
 		}
@@ -455,8 +468,13 @@ func (a *App) handleBulkFinishBrowserLogin(w http.ResponseWriter, r *http.Reques
 	if len(accountIDs) > 10 {
 		accountIDs = accountIDs[:10]
 	}
+	auths, _ := a.loadAccountAuths(r.Context(), accountIDs)
 	for _, id := range accountIDs {
-		result := a.saveBrowserLoginSession(r.Context(), id)
+		var auth *accountAuthContext
+		if loaded, ok := auths[id]; ok {
+			auth = &loaded
+		}
+		result := a.saveBrowserLoginSession(r.Context(), id, auth)
 		if result.Status == "saved" {
 			saved++
 		}
@@ -888,7 +906,7 @@ func (a *App) checkinAccount(w http.ResponseWriter, r *http.Request, id string) 
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	result, err := a.runAccountCheckin(r.Context(), id)
+	result, err := a.runAccountCheckin(r.Context(), id, nil)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -900,7 +918,7 @@ func (a *App) refreshBalanceAccount(w http.ResponseWriter, r *http.Request, id s
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	result, err := a.refreshAccountBalance(r.Context(), id)
+	result, err := a.refreshAccountBalance(r.Context(), id, nil)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -912,7 +930,7 @@ func (a *App) openBrowserLogin(w http.ResponseWriter, r *http.Request, id string
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	result := a.startBrowserLogin(r.Context(), id)
+	result := a.startBrowserLogin(r.Context(), id, nil)
 	if result.Status == "failed" {
 		writeError(w, http.StatusInternalServerError, result.Message)
 		return
@@ -924,7 +942,7 @@ func (a *App) finishBrowserLogin(w http.ResponseWriter, r *http.Request, id stri
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	result := a.saveBrowserLoginSession(r.Context(), id)
+	result := a.saveBrowserLoginSession(r.Context(), id, nil)
 	if result.Status == "failed" {
 		writeError(w, http.StatusBadRequest, result.Message)
 		return
@@ -936,7 +954,14 @@ func (a *App) finishBrowserLogin(w http.ResponseWriter, r *http.Request, id stri
 	writeJSON(w, http.StatusOK, result)
 }
 
-func (a *App) startBrowserLogin(ctx context.Context, id string) browserLoginOpenResult {
+func (a *App) startBrowserLogin(ctx context.Context, id string, auth *accountAuthContext) browserLoginOpenResult {
+	if auth == nil {
+		loaded, err := a.loadAccountAuth(ctx, id)
+		if err != nil {
+			return browserLoginOpenResult{Status: "failed", Message: err.Error()}
+		}
+		auth = &loaded
+	}
 	var accountName, siteName, baseURL, loginURL, profilePath string
 	err := a.db.QueryRowContext(ctx, `
 		SELECT a.display_name, s.name, s.base_url, COALESCE(s.login_url,''), COALESCE(a.browser_profile_path,'')
@@ -1078,7 +1103,14 @@ func resolveLoginTargetURL(baseURL string, loginURL string) string {
 	return resolved.String()
 }
 
-func (a *App) saveBrowserLoginSession(ctx context.Context, id string) browserLoginSaveResult {
+func (a *App) saveBrowserLoginSession(ctx context.Context, id string, auth *accountAuthContext) browserLoginSaveResult {
+	if auth == nil {
+		loaded, err := a.loadAccountAuth(ctx, id)
+		if err != nil {
+			return browserLoginSaveResult{Status: "failed", Message: err.Error()}
+		}
+		auth = &loaded
+	}
 	var accountName, siteName string
 	_ = a.db.QueryRowContext(ctx, `
 		SELECT a.display_name, s.name
@@ -1217,7 +1249,7 @@ func (a *App) testAccountAPIKey(w http.ResponseWriter, r *http.Request, id strin
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	result := a.testAPIKeyForAccount(r.Context(), id)
+	result := a.testAPIKeyForAccount(r.Context(), id, nil)
 	if result.Status == "missing" {
 		writeError(w, http.StatusBadRequest, result.Message)
 		return
@@ -1256,8 +1288,13 @@ func (a *App) handleBulkTestAPIKeys(w http.ResponseWriter, r *http.Request) {
 	results := []apiKeyTestResult{}
 	valid := 0
 	usable := 0
+	auths, _ := a.loadAccountAuths(r.Context(), ids)
 	for _, id := range ids {
-		result := a.testAPIKeyForAccount(r.Context(), id)
+		var auth *accountAuthContext
+		if loaded, ok := auths[id]; ok {
+			auth = &loaded
+		}
+		result := a.testAPIKeyForAccount(r.Context(), id, auth)
 		if result.Status == "valid" {
 			valid++
 		}
@@ -1275,10 +1312,13 @@ func (a *App) handleBulkTestAPIKeys(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *App) testAPIKeyForAccount(ctx context.Context, id string) apiKeyTestResult {
-	auth, err := a.loadAccountAuth(ctx, id)
-	if err != nil {
-		return apiKeyTestResult{AccountID: id, Status: "failed", Message: err.Error()}
+func (a *App) testAPIKeyForAccount(ctx context.Context, id string, auth *accountAuthContext) apiKeyTestResult {
+	if auth == nil {
+		loaded, err := a.loadAccountAuth(ctx, id)
+		if err != nil {
+			return apiKeyTestResult{AccountID: id, Status: "failed", Message: err.Error()}
+		}
+		auth = &loaded
 	}
 	result := apiKeyTestResult{
 		AccountID:   auth.AccountID,
@@ -1295,7 +1335,7 @@ func (a *App) testAPIKeyForAccount(ctx context.Context, id string) apiKeyTestRes
 	auth.AccessToken = ""
 	auth.AuthUserID = ""
 
-	modelsStatus, modelsBody, modelsErr := a.callAccountAPI(ctx, auth, http.MethodGet, "/v1/models", nil)
+	modelsStatus, modelsBody, modelsErr := a.callAccountAPI(ctx, *auth, http.MethodGet, "/v1/models", nil)
 	result.HTTPStatus = modelsStatus
 	result.Path = "/v1/models"
 	if modelsErr != nil {
@@ -1312,7 +1352,7 @@ func (a *App) testAPIKeyForAccount(ctx context.Context, id string) apiKeyTestRes
 		result.Message = fmt.Sprintf("/v1/models 返回 HTTP %d，识别到 %d 个模型。", modelsStatus, len(models))
 		if len(models) > 0 {
 			result.TestedModel = chooseModelForSpeedTest(models)
-			a.speedTestAPIKeyModel(ctx, &auth, &result)
+			a.speedTestAPIKeyModel(ctx, auth, &result)
 		} else {
 			result.ModelTestMessage = "模型列表为空，未执行可用性测速。"
 		}
@@ -1327,7 +1367,7 @@ func (a *App) testAPIKeyForAccount(ctx context.Context, id string) apiKeyTestRes
 	if result.Status == "unknown" {
 		probes := []string{"/api/user/self", "/api/token/"}
 		for _, path := range probes {
-			status, body, err := a.callAccountAPI(ctx, auth, http.MethodGet, path, nil)
+			status, body, err := a.callAccountAPI(ctx, *auth, http.MethodGet, path, nil)
 			if err != nil {
 				result.Path = path
 				result.Message = err.Error()

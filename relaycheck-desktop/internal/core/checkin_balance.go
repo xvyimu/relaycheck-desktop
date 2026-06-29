@@ -221,8 +221,13 @@ func (a *App) handleBulkRefreshBalances(w http.ResponseWriter, r *http.Request) 
 
 	results := []bulkBalanceRefreshItem{}
 	success := 0
+	auths, _ := a.loadAccountAuths(r.Context(), accountIDs)
 	for _, id := range accountIDs {
-		item := a.refreshBalanceForBulk(r.Context(), id)
+		var auth *accountAuthContext
+		if loaded, ok := auths[id]; ok {
+			auth = &loaded
+		}
+		item := a.refreshBalanceForBulk(r.Context(), id, auth)
 		if item.Status == "success" {
 			success++
 		}
@@ -266,7 +271,7 @@ func (a *App) loadBalanceRefreshAccountIDs(ctx context.Context, limit int, missi
 	return ids, nil
 }
 
-func (a *App) refreshBalanceForBulk(ctx context.Context, id string) bulkBalanceRefreshItem {
+func (a *App) refreshBalanceForBulk(ctx context.Context, id string, auth *accountAuthContext) bulkBalanceRefreshItem {
 	item := bulkBalanceRefreshItem{AccountID: id, Status: "failed"}
 	_ = a.db.QueryRowContext(ctx, `
 		SELECT a.display_name, s.name
@@ -274,7 +279,7 @@ func (a *App) refreshBalanceForBulk(ctx context.Context, id string) bulkBalanceR
 		JOIN upstream_sites s ON s.id = a.upstream_site_id
 		WHERE a.id = ?
 	`, id).Scan(&item.AccountName, &item.SiteName)
-	result, err := a.refreshAccountBalance(ctx, id)
+	result, err := a.refreshAccountBalance(ctx, id, auth)
 	if err != nil {
 		item.Message = err.Error()
 		return item
@@ -374,6 +379,11 @@ func (a *App) runDueCheckinsWithFilter(ctx context.Context, mode string, siteID 
 		a.updateCheckinRunMessage(emptyMessage)
 	}
 	siteLimiter := newCheckinSiteLimiter(a.loadCheckinScheduleConfig(ctx))
+	accountIDs := make([]string, 0, len(accounts))
+	for _, account := range accounts {
+		accountIDs = append(accountIDs, account.ID)
+	}
+	auths, _ := a.loadAccountAuths(ctx, accountIDs)
 	for _, account := range accounts {
 		if ctx.Err() != nil {
 			break
@@ -382,7 +392,11 @@ func (a *App) runDueCheckinsWithFilter(ctx context.Context, mode string, siteID 
 			return results, err
 		}
 		a.updateCheckinRunCurrent(account.ID, account.AccountName, account.SiteName, currentMessage)
-		result, err := a.runAccountCheckin(ctx, account.ID)
+		var auth *accountAuthContext
+		if loaded, ok := auths[account.ID]; ok {
+			auth = &loaded
+		}
+		result, err := a.runAccountCheckin(ctx, account.ID, auth)
 		entry := map[string]interface{}{
 			"accountId":   account.ID,
 			"accountName": account.AccountName,
@@ -688,19 +702,22 @@ func computeCheckinScheduleStatus(enabled bool, scheduleTime string, randomDelay
 	return status
 }
 
-func (a *App) runAccountCheckin(ctx context.Context, id string) (checkinResult, error) {
-	auth, err := a.loadAccountAuth(ctx, id)
-	if err != nil {
-		return checkinResult{}, err
+func (a *App) runAccountCheckin(ctx context.Context, id string, auth *accountAuthContext) (checkinResult, error) {
+	if auth == nil {
+		loaded, err := a.loadAccountAuth(ctx, id)
+		if err != nil {
+			return checkinResult{}, err
+		}
+		auth = &loaded
 	}
 	if !auth.SupportsCheckin {
 		result := checkinResult{Status: "unsupported", Message: "该站点未探测到签到接口。"}
-		_ = a.saveCheckinResult(ctx, auth, result, now(), now())
+		_ = a.saveCheckinResult(ctx, *auth, result, now(), now())
 		return result, nil
 	}
-	if err := a.ensureAccountSession(ctx, &auth); err != nil && auth.Cookie == "" && auth.AccessToken == "" && auth.APIKey == "" {
+	if err := a.ensureAccountSession(ctx, auth); err != nil && auth.Cookie == "" && auth.AccessToken == "" && auth.APIKey == "" {
 		result := checkinResult{Status: "auth_expired", Message: "账号密码登录失败：" + err.Error()}
-		_ = a.saveCheckinResult(ctx, auth, result, now(), now())
+		_ = a.saveCheckinResult(ctx, *auth, result, now(), now())
 		return result, nil
 	}
 
@@ -708,7 +725,7 @@ func (a *App) runAccountCheckin(ctx context.Context, id string) (checkinResult, 
 	lastUnsupported := checkinResult{Status: "unsupported", Message: "未找到可用签到接口。"}
 	candidates := checkinCandidatesForSite(auth.SiteKind, auth.CheckinRules)
 	for _, candidate := range candidates {
-		status, body, retries, err := a.callCheckinAPIWithRetry(ctx, auth, candidate)
+		status, body, retries, err := a.callCheckinAPIWithRetry(ctx, *auth, candidate)
 		if err != nil {
 			lastUnsupported = annotateCheckinRetry(checkinResult{Status: "failed", Message: err.Error(), Path: candidate.Path, RetryCount: retries})
 			continue
@@ -721,18 +738,18 @@ func (a *App) runAccountCheckin(ctx context.Context, id string) (checkinResult, 
 			auth.Cookie = ""
 			auth.AccessToken = ""
 			auth.AuthUserID = ""
-			if loginErr := a.loginWithPassword(ctx, &auth); loginErr != nil {
+			if loginErr := a.loginWithPassword(ctx, auth); loginErr != nil {
 				result.Message = "账号密码登录失败：" + loginErr.Error()
 				result.HTTPStatus = 0
 				result.Path = ""
 				result.RawResponseMasked = ""
 				result.RetryCount = retries
 				result = annotateCheckinRetry(result)
-				_ = a.saveCheckinResult(ctx, auth, result, startedAt, now())
+				_ = a.saveCheckinResult(ctx, *auth, result, startedAt, now())
 				return result, nil
 			}
 			var retryAfterLogin int
-			status, body, retryAfterLogin, err = a.callCheckinAPIWithRetry(ctx, auth, candidate)
+			status, body, retryAfterLogin, err = a.callCheckinAPIWithRetry(ctx, *auth, candidate)
 			retries += retryAfterLogin
 			if err != nil {
 				lastUnsupported = annotateCheckinRetry(checkinResult{Status: "failed", Message: err.Error(), Path: candidate.Path, RetryCount: retries})
@@ -748,10 +765,10 @@ func (a *App) runAccountCheckin(ctx context.Context, id string) (checkinResult, 
 			result.Message = fmt.Sprintf("%s %s 返回 HTTP %d", candidate.Method, candidate.Path, status)
 		}
 		result = annotateCheckinRetry(result)
-		_ = a.saveCheckinResult(ctx, auth, result, startedAt, now())
+		_ = a.saveCheckinResult(ctx, *auth, result, startedAt, now())
 		return result, nil
 	}
-	_ = a.saveCheckinResult(ctx, auth, lastUnsupported, startedAt, now())
+	_ = a.saveCheckinResult(ctx, *auth, lastUnsupported, startedAt, now())
 	return lastUnsupported, nil
 }
 
@@ -977,21 +994,24 @@ func (a *App) handleBalanceSnapshots(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
-func (a *App) refreshAccountBalance(ctx context.Context, id string) (balanceResult, error) {
-	auth, err := a.loadAccountAuth(ctx, id)
-	if err != nil {
-		return balanceResult{}, err
+func (a *App) refreshAccountBalance(ctx context.Context, id string, auth *accountAuthContext) (balanceResult, error) {
+	if auth == nil {
+		loaded, err := a.loadAccountAuth(ctx, id)
+		if err != nil {
+			return balanceResult{}, err
+		}
+		auth = &loaded
 	}
 	if !auth.SupportsBalance {
 		return balanceResult{Unit: "unknown", HTTPStatus: 0, Path: "", RawResponseMasked: "", Balance: nil}, errorsText("该站点未探测到余额接口。")
 	}
-	if err := a.ensureAccountSession(ctx, &auth); err != nil && auth.Cookie == "" && auth.AccessToken == "" && auth.APIKey == "" {
+	if err := a.ensureAccountSession(ctx, auth); err != nil && auth.Cookie == "" && auth.AccessToken == "" && auth.APIKey == "" {
 		return balanceResult{Unit: "unknown"}, fmt.Errorf("账号密码登录失败：%w", err)
 	}
 
 	var lastErr error
 	for _, path := range balanceCandidates {
-		status, body, err := a.callAccountAPI(ctx, auth, http.MethodGet, path, nil)
+		status, body, err := a.callAccountAPI(ctx, *auth, http.MethodGet, path, nil)
 		if err != nil {
 			lastErr = err
 			continue
@@ -1000,11 +1020,11 @@ func (a *App) refreshAccountBalance(ctx context.Context, id string) (balanceResu
 			continue
 		}
 		if status == http.StatusUnauthorized || status == http.StatusForbidden {
-			lastErr = fmt.Errorf("%s 登录态不可用：HTTP %d", path, status)
+			lastErr = fmt.Errorf("%s 登录态不可用：HTTP 状态码 %d", path, status)
 			continue
 		}
 		if status < 200 || status >= 300 {
-			lastErr = fmt.Errorf("%s 返回 HTTP %d", path, status)
+			lastErr = fmt.Errorf("%s 返回 HTTP 状态码 %d", path, status)
 			continue
 		}
 		result := parseBalance(body)
@@ -1015,7 +1035,7 @@ func (a *App) refreshAccountBalance(ctx context.Context, id string) (balanceResu
 			lastErr = fmt.Errorf("%s 未解析到余额字段", path)
 			continue
 		}
-		if err := a.saveBalanceResult(ctx, auth, result); err != nil {
+		if err := a.saveBalanceResult(ctx, *auth, result); err != nil {
 			return result, err
 		}
 		return result, nil
@@ -1094,6 +1114,65 @@ func (a *App) loadAccountAuth(ctx context.Context, id string) (accountAuthContex
 		auth.SupportsCheckin = true
 	}
 	return auth, nil
+}
+
+// loadAccountAuths batch-loads accountAuthContext for multiple account IDs in
+// a single query, eliminating N+1 lookups in bulk operations. Returns a map
+// keyed by account ID. If a particular ID is not found, it is simply absent
+// from the map; callers should fall back to loadAccountAuth for missing entries.
+func (a *App) loadAccountAuths(ctx context.Context, ids []string) (map[string]accountAuthContext, error) {
+	if len(ids) == 0 {
+		return map[string]accountAuthContext{}, nil
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]interface{}, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT a.id, a.display_name, s.id, s.name, COALESCE(s.kind,''), COALESCE(s.channel_id,''), s.base_url,
+		       COALESCE(s.login_url,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
+		       COALESCE(a.password_encrypted,''), COALESCE(a.cookie_encrypted,''),
+		       COALESCE(a.access_token_encrypted,''), COALESCE(a.api_key_encrypted,''),
+		       COALESCE(a.auth_user_id,''), s.supports_checkin, s.supports_balance,
+		       COALESCE(s.checkin_config_json,'')
+		FROM channel_accounts a
+		JOIN upstream_sites s ON s.id = a.upstream_site_id
+		WHERE a.id IN (`+placeholders+`)
+	`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	auths := make(map[string]accountAuthContext, len(ids))
+	for rows.Next() {
+		var auth accountAuthContext
+		var email, username, cookieEncrypted, accessEncrypted, apiKeyEncrypted, passwordEncrypted, loginURL, checkinConfigJSON string
+		var supportsCheckin, supportsBalance int
+		var siteKind sql.NullString
+		if err := rows.Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON); err != nil {
+			return nil, err
+		}
+		auth.LoginName = firstNonEmpty(email, username)
+		auth.SiteKind = siteKind.String
+		auth.LoginPath = pathFromMaybeURL(loginURL)
+		auth.Password, _ = a.decryptText(passwordEncrypted)
+		auth.Cookie, _ = a.decryptText(cookieEncrypted)
+		auth.AccessToken, _ = a.decryptText(accessEncrypted)
+		auth.APIKey, _ = a.decryptText(apiKeyEncrypted)
+		auth.SupportsCheckin = supportsCheckin == 1
+		auth.SupportsBalance = supportsBalance == 1
+		auth.CheckinRules = parseCheckinRules(checkinConfigJSON)
+		if len(auth.CheckinRules) > 0 {
+			auth.SupportsCheckin = true
+		}
+		auths[auth.AccountID] = auth
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return auths, nil
 }
 
 func parseCheckinRules(raw string) []apiCandidate {
@@ -1191,7 +1270,7 @@ func (a *App) loginWithPassword(ctx context.Context, auth *accountAuthContext) e
 			_ = resp.Body.Close()
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 				lastErr = fmt.Errorf("%s HTTP %d: %s", loginPath, resp.StatusCode, firstNonEmpty(extractMessage(string(content)), maskResponse(string(content))))
-				pathErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, firstNonEmpty(extractMessage(string(content)), maskResponse(string(content))))
+				pathErr = fmt.Errorf("HTTP 状态码 %d：%s", resp.StatusCode, firstNonEmpty(extractMessage(string(content)), maskResponse(string(content))))
 				continue
 			}
 			if responseExplicitlyFailed(string(content)) {

@@ -862,9 +862,9 @@ func (c *webhookChannel) Send(ctx context.Context, kind, level, title, content s
 		}
 		// 4xx 客户端错误不重试（除了 429）
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != 429 {
-			return fmt.Errorf("HTTP %d (不重试)", resp.StatusCode)
+			return fmt.Errorf("HTTP 状态码 %d（不重试）", resp.StatusCode)
 		}
-		lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
+		lastErr = fmt.Errorf("HTTP 状态码 %d", resp.StatusCode)
 		log.Printf("[notification] webhook 返回非 2xx (attempt %d/%d): %d", attempt+1, maxRetries+1, resp.StatusCode)
 	}
 	return lastErr
@@ -990,7 +990,7 @@ func (c *webhookChannel) sendDigest(ctx context.Context, entries []digestEntry) 
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
+		return fmt.Errorf("HTTP 状态码 %d", resp.StatusCode)
 	}
 	return nil
 }
@@ -1040,7 +1040,7 @@ func (c *telegramChannel) Send(ctx context.Context, kind, level, title, content 
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("Telegram API HTTP %d", resp.StatusCode)
+		return fmt.Errorf("Telegram API 返回 HTTP 状态码 %d", resp.StatusCode)
 	}
 	return nil
 }
@@ -1093,7 +1093,7 @@ func (c *barkChannel) Send(ctx context.Context, kind, level, title, content stri
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("Bark HTTP %d", resp.StatusCode)
+		return fmt.Errorf("Bark 返回 HTTP 状态码 %d", resp.StatusCode)
 	}
 	return nil
 }
@@ -1140,7 +1140,7 @@ func (c *serverchanChannel) Send(ctx context.Context, kind, level, title, conten
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("ServerChan API HTTP %d", resp.StatusCode)
+		return fmt.Errorf("ServerChan API 返回 HTTP 状态码 %d", resp.StatusCode)
 	}
 	return nil
 }

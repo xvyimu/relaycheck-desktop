@@ -53,8 +53,6 @@ func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/system/exports", a.requireSession(a.handleListExports))
 	mux.HandleFunc("/api/system/backups/delete", a.requireSession(a.handleSystemDeleteBackups))
 	mux.HandleFunc("/api/system/restore", a.requireSession(a.handleSystemRestore))
-	mux.HandleFunc("/api/system/migrate-from-python-db", a.requireSession(a.handleMigrateFromPythonDB))
-	mux.HandleFunc("/api/system/migrate-python-db", a.requireSession(a.handleMigratePythonDB))
 	mux.HandleFunc("/api/local-newapi", a.requireSession(a.handleLocalNewAPIInstances))
 	mux.HandleFunc("/api/local-newapi/scan", a.requireSession(a.handleScanLocalNewAPI))
 	mux.HandleFunc("/api/local-newapi/import-from-sqlite", a.requireSession(a.handleImportFromSQLite))

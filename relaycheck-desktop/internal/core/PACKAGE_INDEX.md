@@ -88,8 +88,6 @@ The `internal/core` package contains all backend application logic for RelayChec
 
 | File | Purpose |
 |------|---------|
-| `python_migration.go` | Python `zidqiandao.db` to Go `relaycheck.db` migration (idempotent, encrypted). |
-| `python_migration_test.go` | Migration tests: live, dry-run, missing path, idempotency. |
 | `import_sqlite.go` | Import from local NewAPI SQLite. |
 | `import_admin_api.go` | Import from local NewAPI admin API. |
 | `local_newapi.go` | Local NewAPI instance management. |

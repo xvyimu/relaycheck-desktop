@@ -348,13 +348,22 @@ func (a *App) startCheckinTask(taskID string, _ map[string]interface{}) {
 		}
 
 		siteLimiter := newCheckinSiteLimiter(a.loadCheckinScheduleConfig(ctx))
+		accountIDs := make([]string, 0, len(accounts))
+		for _, account := range accounts {
+			accountIDs = append(accountIDs, account.ID)
+		}
+		auths, _ := a.loadAccountAuths(ctx, accountIDs)
 		for _, account := range accounts {
 			if taskCtx.Err() != nil {
 				task.finish(taskCtx.Err())
 				return
 			}
 			_ = siteLimiter.wait(taskCtx, account.UpstreamSiteID)
-			result, err := a.runAccountCheckin(taskCtx, account.ID)
+			var auth *accountAuthContext
+			if loaded, ok := auths[account.ID]; ok {
+				auth = &loaded
+			}
+			result, err := a.runAccountCheckin(taskCtx, account.ID, auth)
 			item := ItemResult{ID: account.ID, Name: account.AccountName}
 			if err != nil {
 				item.Status = "failed"
@@ -399,12 +408,21 @@ func (a *App) startTestKeysTask(taskID string, params map[string]interface{}) {
 		_ = rows.Close()
 
 		task, taskCtx := a.taskRunner.start(taskID, TaskTestKeys, len(jobs))
+		jobIDs := make([]string, 0, len(jobs))
+		for _, j := range jobs {
+			jobIDs = append(jobIDs, j.ID)
+		}
+		auths, _ := a.loadAccountAuths(ctx, jobIDs)
 		for _, j := range jobs {
 			if taskCtx.Err() != nil {
 				task.finish(taskCtx.Err())
 				return
 			}
-			result := a.testAPIKeyForAccount(taskCtx, j.ID)
+			var auth *accountAuthContext
+			if loaded, ok := auths[j.ID]; ok {
+				auth = &loaded
+			}
+			result := a.testAPIKeyForAccount(taskCtx, j.ID, auth)
 			item := ItemResult{ID: j.ID, Name: j.Name, Status: result.Status}
 			if result.Status != "valid" {
 				item.Message = result.Message
@@ -454,12 +472,21 @@ func (a *App) startRefreshBalancesTask(taskID string, params map[string]interfac
 		_ = rows.Close()
 
 		task, taskCtx := a.taskRunner.start(taskID, TaskRefreshBalances, len(jobs))
+		jobIDs := make([]string, 0, len(jobs))
+		for _, j := range jobs {
+			jobIDs = append(jobIDs, j.ID)
+		}
+		auths, _ := a.loadAccountAuths(ctx, jobIDs)
 		for _, j := range jobs {
 			if taskCtx.Err() != nil {
 				task.finish(taskCtx.Err())
 				return
 			}
-			item := a.refreshBalanceForBulk(taskCtx, j.ID)
+			var auth *accountAuthContext
+			if loaded, ok := auths[j.ID]; ok {
+				auth = &loaded
+			}
+			item := a.refreshBalanceForBulk(taskCtx, j.ID, auth)
 			result := ItemResult{ID: j.ID, Name: j.Name, Status: item.Status}
 			if item.Status != "success" {
 				result.Message = item.Message

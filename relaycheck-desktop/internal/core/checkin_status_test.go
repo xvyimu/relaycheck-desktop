@@ -119,7 +119,7 @@ func TestRunAccountCheckinRetriesTemporaryFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := app.runAccountCheckin(context.Background(), accountID)
+	result, err := app.runAccountCheckin(context.Background(), accountID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

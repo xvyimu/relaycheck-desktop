@@ -213,8 +213,13 @@ func (a *App) handleModelSync(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_ = rows.Close()
+	auths, _ := a.loadAccountAuths(r.Context(), ids)
 	for _, id := range ids {
-		_ = a.testAPIKeyForAccount(r.Context(), id)
+		var auth *accountAuthContext
+		if loaded, ok := auths[id]; ok {
+			auth = &loaded
+		}
+		_ = a.testAPIKeyForAccount(r.Context(), id, auth)
 	}
 	records, err := a.loadAccountModelRecords(r)
 	if err != nil {

@@ -50,7 +50,7 @@ func TestAPIKeyCheckFetchesModelsAndSpeedTestsModel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := app.testAPIKeyForAccount(context.Background(), accountID)
+	result := app.testAPIKeyForAccount(context.Background(), accountID, nil)
 	if result.Status != "valid" {
 		t.Fatalf("expected valid, got %+v", result)
 	}
