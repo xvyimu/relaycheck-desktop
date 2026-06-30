@@ -50,6 +50,7 @@ cd frontend && npx tsc --noEmit
 |----------|---------|
 | `docs/PROJECT_STRUCTURE.md` | Current source tree, generated paths, archive boundary, and verification order. |
 | `DESIGN_SYSTEM.md` | Control Room visual direction and UI rules. |
+| `CLAUDE.md` | Architecture guide, verification commands, and conventions for Claude Code / AI agents. |
 
 ## Runtime
 
@@ -93,11 +94,15 @@ flowchart TD
     Router --> Upstream
 ```
 
+### Architecture Evolution (June 2026)
+
+The `*App` god object in `internal/core/app.go` has been progressively decomposed: 11 service/store types (CryptoService, AccountAuthRepository, CheckinRunStore, NotificationHub, SyncJobRunStore, SchedulerRepo, ReadCacheStore, BrowserSessionStore, NetworkProxyStore, plus the SharedInfra interface) now own state that was previously on `*App`, each with its own mutex. `*App` retains thin forwarding methods so existing call sites are unchanged. See `CLAUDE.md` and `internal/core/PACKAGE_INDEX.md` for the full map.
+
 ## Route Overview
 
 | Group | Endpoints |
 |-------|-----------|
-| System | `/api/system/status`, `/api/system/version-check`, `/api/system/autostart`, `/api/system/legacy-check`, `/api/system/port-check`, `/api/system/settings`, `/api/system/scheduler-status`, `/api/system/proxy-test`, `/api/system/diagnostics`, `/api/system/action-center`, `/api/system/audit-log`, `/api/system/backups`, `/api/system/backup`, `/api/system/export`, `/api/system/import`, `/api/system/exports`, `/api/system/backups/delete`, `/api/system/restore`, `/api/system/migrate-from-python-db`, `/api/system/migrate-python-db` |
+| System | `/api/system/status`, `/api/system/version-check`, `/api/system/autostart`, `/api/system/legacy-check`, `/api/system/port-check`, `/api/system/settings`, `/api/system/scheduler-status`, `/api/system/proxy-test`, `/api/system/diagnostics`, `/api/system/action-center`, `/api/system/audit-log`, `/api/system/backups`, `/api/system/backup`, `/api/system/export`, `/api/system/import`, `/api/system/exports`, `/api/system/backups/delete`, `/api/system/restore` |
 | Scheduler | `/api/scheduler/channel-schedules`, `/api/scheduler/calendar`, `/api/scheduler/next-runs` |
 | Tasks | `/api/tasks/start`, `/api/tasks/{id}`, `/api/tasks/dry-run` |
 | Analytics | `/api/analytics` (balance trend, checkin distribution, response times, site reliability, balance deltas) |

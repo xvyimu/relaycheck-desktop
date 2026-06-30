@@ -1,6 +1,6 @@
 # RelayCheck Desktop Project Structure
 
-Last updated: 2026-06-25
+Last updated: 2026-06-30
 
 ## Active Source
 
@@ -29,6 +29,7 @@ Last updated: 2026-06-25
 - **Dry-run preview:** `internal/core/dry_run.go` previews batch operations without executing them, with a 200-account limit and single batch query.
 - **Auto-start:** `internal/core/autostart.go` + `platform_windows.go` create Windows shell:startup shortcuts via PowerShell COM.
 - **Cookie expiry tracking:** ChannelAccount model tracks `cookie_expiry_at` and `storage_state_expiry_at`; diagnostics and Action Center surface upcoming expirations.
+- **Architecture evolution (June 2026):** The `*App` god object in `internal/core/app.go` was decomposed into 11 service/store types (CryptoService, AccountAuthRepository, CheckinRunStore, NotificationHub, SyncJobRunStore, SchedulerRepo, ReadCacheStore, BrowserSessionStore, NetworkProxyStore + SharedInfra interface). Each owns its state with an independent mutex; `*App` retains thin forwarding methods. See `CLAUDE.md` and `internal/core/PACKAGE_INDEX.md` for details. Design spec: `docs/superpowers/specs/2026-06-29-architecture-evolution-design.md`.
 
 ## Active Documents
 
@@ -36,6 +37,7 @@ Last updated: 2026-06-25
 |------|---------|
 | `README.md` | Main product, runtime, command, and safety overview. |
 | `DESIGN_SYSTEM.md` | Control Room UI direction and visual rules. |
+| `CLAUDE.md` | AI agent / Claude Code onboarding: architecture, verification, conventions. |
 | `docs/manual-test-record.md` | Manual test record with before/after comparisons. |
 | `docs/reports/` | Dated progress reports and recovery records. |
 

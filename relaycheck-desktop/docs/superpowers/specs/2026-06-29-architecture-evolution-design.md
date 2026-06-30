@@ -1,10 +1,45 @@
 # 架构演进设计：从单包 god object 到领域化分层
 
 **日期：** 2026-06-29
-**状态：** 待批准
+**状态：** 已实施（方案调整）— 见下方"实施状态"
 **作者：** 架构演进 brainstorming session
 
 ---
+
+## 实施状态（2026-06-30 追加）
+
+本 spec 原设计为**方案 B（领域拆包）**，计划将 `internal/core` 拆成 8 个独立子包。实施前对实际代码耦合度做系统扫描后发现：
+
+- `audit.go` 的 `a.audit(...)` 被 **22 处**调用，跨几乎所有领域 → 横切关注点，非独立领域
+- `crypto.go` 的 `encryptText/decryptText` 被 **76 处**调用 → 横切原语
+- `notification.go` 持有后台 goroutine 生命周期（digestCancel/digestWG）+ 6 种 channel 反向引用 `*App`
+- `system.go` 混合设置/备份/恢复/db 生命周期，非单一领域
+
+强行拆包会引入 98+ 处 import 改动，违背"低风险"目标。因此**实际采用方案 A（接口缝 + 文件重组，不拆包）**：保持 `package core` 单包，通过提取状态/服务到独立类型 + 接口注入降低耦合。
+
+### 实际完成（12 commit, 8fc1975..1444e43）
+
+| 类型 | 文件 | 杠杆 |
+|------|------|------|
+| SharedInfra 接口 | `infra.go` | 基础设施 |
+| CryptoService | `crypto_service.go` | 76 处调用方零改动 |
+| AccountAuthRepository | `account_auth_repo.go` | 16 处调用方零改动 |
+| CheckinRunStore | `checkin_run_state.go` | 独立锁 |
+| NotificationHub + NotificationHTTPPort | `notification_hub.go` | 9 处调用方零改动，6 channel 解耦 |
+| SyncJobRunStore | `sync_job_run_store.go` | 独立锁 |
+| SchedulerRepo | `scheduler_repo.go` | 10 处调用方零改动 |
+| ReadCacheStore | `read_cache_store.go` | 11 处调用方零改动 |
+| BrowserSessionStore | `browser_session_store.go` | 12 处访问改写 |
+| NetworkProxyStore | `network_proxy_store.go` | a.mu 进一步瘦身 |
+
+额外修复：`NotificationHub.Reload` 重入死锁 bug（预存 bug，非回归）。
+
+**134 处调用方通过转发方法零改动**。`*App` 从 god object 瘦身为组装根。详见 `CLAUDE.md` 和 `internal/core/PACKAGE_INDEX.md`。
+
+下文为原始设计文档（方案 B），保留作历史参考。
+
+---
+
 
 ## 1. 背景与动机
 
