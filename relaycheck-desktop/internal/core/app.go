@@ -17,38 +17,44 @@ import (
 	"sync/atomic"
 	"time"
 
+	"relaycheck-desktop/internal/autostart"
 	"relaycheck-desktop/internal/backup"
+	"relaycheck-desktop/internal/legacycheck"
 	"relaycheck-desktop/internal/notifications"
+	"relaycheck-desktop/internal/versioncheck"
 
 	_ "modernc.org/sqlite"
 )
 
 type App struct {
-	db                 *sql.DB
-	dataDir            string
-	key                []byte
-	crypto             *CryptoService
-	accountAuth        *AccountAuthRepository
-	schedulerRepo      *SchedulerRepo
-	browserSessions    *BrowserSessionStore
-	mu                 sync.RWMutex
-	readCache          *ReadCacheStore
-	client             *http.Client
-	networkProxy       *NetworkProxyStore
-	notificationHub    *notifications.NotificationHub
-	backupService      *backup.Service
-	checkinRun         *CheckinRunStore
-	localSyncRun       *SyncJobRunStore
-	channelHealthRun   *SyncJobRunStore
-	schedulerCancel    context.CancelFunc
-	schedulerStartedAt time.Time
-	schedulerWG        sync.WaitGroup
-	taskRunner         *TaskRunner
-	bind               string
-	port               int
-	preferredPort      int
-	portConflict       bool
-	allowLocalOutbound bool
+	db                  *sql.DB
+	dataDir             string
+	key                 []byte
+	crypto              *CryptoService
+	accountAuth         *AccountAuthRepository
+	schedulerRepo       *SchedulerRepo
+	browserSessions     *BrowserSessionStore
+	mu                  sync.RWMutex
+	readCache           *ReadCacheStore
+	client              *http.Client
+	networkProxy        *NetworkProxyStore
+	notificationHub     *notifications.NotificationHub
+	backupService       *backup.Service
+	versionCheckService *versioncheck.Service
+	legacyCheckService  *legacycheck.Service
+	autostartService    *autostart.Service
+	checkinRun          *CheckinRunStore
+	localSyncRun        *SyncJobRunStore
+	channelHealthRun    *SyncJobRunStore
+	schedulerCancel     context.CancelFunc
+	schedulerStartedAt  time.Time
+	schedulerWG         sync.WaitGroup
+	taskRunner          *TaskRunner
+	bind                string
+	port                int
+	preferredPort       int
+	portConflict        bool
+	allowLocalOutbound  bool
 }
 
 var fallbackIDCounter atomic.Uint64
@@ -138,6 +144,17 @@ func NewApp(root string) (*App, error) {
 	// which are satisfied by *App itself, so it is wired up after the app
 	// struct exists.
 	app.backupService = backup.NewService(app)
+	// versioncheck.Service depends on versioncheck.Infra (DB + HTTPClient +
+	// ProductVersion + ValidateOutboundURLStrict), all of which are satisfied
+	// by *App itself, so it is wired up after the app struct exists.
+	app.versionCheckService = versioncheck.NewService(app)
+	// legacycheck.Service depends on legacycheck.Infra (DataDir), which is
+	// satisfied by *App itself, so it is wired up after the app struct
+	// exists.
+	app.legacyCheckService = legacycheck.NewService(app)
+	// autostart.Service is purely platform-based (os.Executable + env), so
+	// it has no Infra dependency and is wired up statelessly.
+	app.autostartService = autostart.NewService()
 
 	if err := app.migrate(context.Background()); err != nil {
 		_ = db.Close()

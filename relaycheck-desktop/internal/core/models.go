@@ -199,22 +199,6 @@ type CheckinScheduleStatus struct {
 	Message             string `json:"message,omitempty"`
 }
 
-// AutoStartStatus reports the current state of the OS-level auto-start
-// configuration (Windows shell:startup .lnk shortcut).
-type AutoStartStatus struct {
-	// Enabled is true when the startup shortcut currently exists on disk.
-	Enabled bool `json:"enabled"`
-	// Supported is true on platforms where auto-start can be configured
-	// (currently Windows only).
-	Supported bool `json:"supported"`
-	// ShortcutPath is the resolved .lnk path inside the shell:startup folder.
-	ShortcutPath string `json:"shortcutPath,omitempty"`
-	// TargetPath is the executable the shortcut will launch.
-	TargetPath string `json:"targetPath,omitempty"`
-	// Error carries the last error message, if any.
-	Error string `json:"error,omitempty"`
-}
-
 // SystemSetting is a key-value pair stored in the system_settings table.
 type SystemSetting struct {
 	Key       string `json:"key"`

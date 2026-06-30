@@ -2,7 +2,6 @@ package core
 
 import (
 	"net/http"
-	"os"
 	"runtime"
 )
 
@@ -12,7 +11,7 @@ import (
 func (a *App) handleSystemAutoStart(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, buildAutoStartStatus())
+		writeJSON(w, http.StatusOK, a.autostartService.Status())
 	case http.MethodPut:
 		a.handleUpdateAutoStart(w, r)
 	default:
@@ -20,6 +19,10 @@ func (a *App) handleSystemAutoStart(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleUpdateAutoStart forwards the PUT /api/system/autostart request to the
+// autostart service. The platform check (501 on non-Windows) and audit
+// logging stay in this forwarding layer because they are HTTP/host concerns;
+// the shortcut lifecycle lives in the autostart package.
 func (a *App) handleUpdateAutoStart(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Enabled bool `json:"enabled"`
@@ -35,14 +38,14 @@ func (a *App) handleUpdateAutoStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if input.Enabled {
-		if err := CreateStartupShortcut(); err != nil {
+		if err := a.autostartService.Enable(); err != nil {
 			a.audit("autostart.enable_failed", "warning", "", "system", "autostart", "开启开机自启失败："+err.Error(), map[string]interface{}{"enabled": true, "error": err.Error()})
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		a.audit("autostart.enabled", "info", "", "system", "autostart", "已开启开机自启。", map[string]interface{}{"enabled": true})
 	} else {
-		if err := RemoveStartupShortcut(); err != nil {
+		if err := a.autostartService.Disable(); err != nil {
 			a.audit("autostart.disable_failed", "warning", "", "system", "autostart", "关闭开机自启失败："+err.Error(), map[string]interface{}{"enabled": false, "error": err.Error()})
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -50,23 +53,5 @@ func (a *App) handleUpdateAutoStart(w http.ResponseWriter, r *http.Request) {
 		a.audit("autostart.disabled", "info", "", "system", "autostart", "已关闭开机自启。", map[string]interface{}{"enabled": false})
 	}
 
-	writeJSON(w, http.StatusOK, buildAutoStartStatus())
-}
-
-// buildAutoStartStatus assembles the current auto-start state from the
-// platform helpers.
-func buildAutoStartStatus() AutoStartStatus {
-	status := AutoStartStatus{
-		Supported: runtime.GOOS == "windows",
-	}
-	if shortcutPath, err := StartupShortcutPath(); err == nil {
-		status.ShortcutPath = shortcutPath
-	} else if status.Supported {
-		status.Error = err.Error()
-	}
-	if exePath, err := os.Executable(); err == nil {
-		status.TargetPath = exePath
-	}
-	status.Enabled = IsStartupShortcutPresent()
-	return status
+	writeJSON(w, http.StatusOK, a.autostartService.Status())
 }

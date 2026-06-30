@@ -3,35 +3,18 @@
 package core
 
 import (
-	"errors"
 	"net"
 	"syscall"
 )
 
+// hiddenProcessAttr returns nil on non-Windows platforms. Used by core code
+// (e.g. accounts.go) that spawns child processes.
 func hiddenProcessAttr() *syscall.SysProcAttr {
 	return nil
 }
 
+// netListen creates a TCP listener on the given address. Used by core code
+// (e.g. accounts.go) for local browser-login servers.
 func netListen(address string) (net.Listener, error) {
 	return net.Listen("tcp", address)
-}
-
-// StartupShortcutPath is unsupported on non-Windows platforms.
-func StartupShortcutPath() (string, error) {
-	return "", errors.New("开机自启仅支持 Windows 平台")
-}
-
-// CreateStartupShortcut is unsupported on non-Windows platforms.
-func CreateStartupShortcut() error {
-	return errors.New("开机自启仅支持 Windows 平台")
-}
-
-// RemoveStartupShortcut is unsupported on non-Windows platforms.
-func RemoveStartupShortcut() error {
-	return errors.New("开机自启仅支持 Windows 平台")
-}
-
-// IsStartupShortcutPresent always returns false on non-Windows platforms.
-func IsStartupShortcutPresent() bool {
-	return false
 }

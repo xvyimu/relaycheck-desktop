@@ -80,6 +80,15 @@ func (a *App) ValidateOutboundURL(ctx context.Context, raw string) (*url.URL, er
 	return validateOutboundHTTPURL(ctx, raw, a.externalURLPolicy())
 }
 
+// ValidateOutboundURLStrict is the exported adapter for the versioncheck
+// package's Infra interface. It applies a strict outbound URL policy that
+// always rejects local/loopback/internal addresses, regardless of the app's
+// allowLocalOutbound setting, since version manifests must come from a remote
+// host.
+func (a *App) ValidateOutboundURLStrict(ctx context.Context, raw string) (*url.URL, error) {
+	return validateOutboundHTTPURL(ctx, raw, outboundURLPolicy{AllowLocal: false})
+}
+
 func isBlockedHostname(host string) bool {
 	normalized := strings.Trim(strings.ToLower(host), "[]")
 	return normalized == "localhost" ||

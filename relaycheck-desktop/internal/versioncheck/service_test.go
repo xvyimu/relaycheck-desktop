@@ -1,4 +1,4 @@
-package core
+package versioncheck
 
 import "testing"
 
@@ -22,9 +22,9 @@ func TestCompareVersions(t *testing.T) {
 		{"v1.0.0.1", "v1.0.0", 1},
 	}
 	for _, tt := range tests {
-		got := compareVersions(tt.a, tt.b)
+		got := CompareVersions(tt.a, tt.b)
 		if got != tt.want {
-			t.Errorf("compareVersions(%q, %q) = %d, want %d", tt.a, tt.b, got, tt.want)
+			t.Errorf("CompareVersions(%q, %q) = %d, want %d", tt.a, tt.b, got, tt.want)
 		}
 	}
 }
