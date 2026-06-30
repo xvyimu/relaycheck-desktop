@@ -23,6 +23,14 @@ func (a *App) reloadNotificationConfig(ctx context.Context) error {
 	return a.notificationHub.Reload(ctx)
 }
 
+// ReloadNotificationConfig is the exported adapter used by the backup domain
+// (backup.Infra) to re-read notification channel configuration after an
+// encrypted import. It delegates to the unexported reloadNotificationConfig
+// used by the rest of core.
+func (a *App) ReloadNotificationConfig(ctx context.Context) error {
+	return a.reloadNotificationConfig(ctx)
+}
+
 func (a *App) loadNotificationChannelsConfig(ctx context.Context) (notifications.ChannelsConfig, error) {
 	return a.notificationHub.LoadConfig(ctx)
 }

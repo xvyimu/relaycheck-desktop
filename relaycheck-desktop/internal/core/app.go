@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"relaycheck-desktop/internal/backup"
 	"relaycheck-desktop/internal/notifications"
 
 	_ "modernc.org/sqlite"
@@ -35,6 +36,7 @@ type App struct {
 	client             *http.Client
 	networkProxy       *NetworkProxyStore
 	notificationHub    *notifications.NotificationHub
+	backupService      *backup.Service
 	checkinRun         *CheckinRunStore
 	localSyncRun       *SyncJobRunStore
 	channelHealthRun   *SyncJobRunStore
@@ -131,6 +133,11 @@ func NewApp(root string) (*App, error) {
 	// up after the app struct exists. Other repositories (accountAuth) are
 	// constructed before app; the hub is the one repo that needs app.
 	app.notificationHub = notifications.NewNotificationHub(db, cryptoSvc, app)
+	// backup.Service depends on backup.Infra (DB + DatabasePath + BackupsDir
+	// + ReopenDatabase + ReloadNotificationConfig + ProductVersion), all of
+	// which are satisfied by *App itself, so it is wired up after the app
+	// struct exists.
+	app.backupService = backup.NewService(app)
 
 	if err := app.migrate(context.Background()); err != nil {
 		_ = db.Close()

@@ -370,6 +370,15 @@ func (a *App) backupsDir() string {
 	return filepath.Join(a.dataDir, "backups")
 }
 
+// The following exported adapters expose the host infrastructure that the
+// internal/backup package depends on. They are thin wrappers around the
+// unexported methods so that the rest of core can keep using the lowercase
+// call sites while *App still satisfies backup.Infra.
+func (a *App) DatabasePath() string         { return a.databasePath() }
+func (a *App) BackupsDir() string           { return a.backupsDir() }
+func (a *App) ReopenDatabase() error        { return a.reopenDatabase() }
+func (a *App) ProductVersion() string       { return productVersion }
+
 func copyFile(sourcePath, targetPath string) error {
 	source, err := os.Open(sourcePath)
 	if err != nil {
