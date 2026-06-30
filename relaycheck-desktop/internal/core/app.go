@@ -21,6 +21,7 @@ import (
 	"relaycheck-desktop/internal/backup"
 	"relaycheck-desktop/internal/legacycheck"
 	"relaycheck-desktop/internal/notifications"
+	"relaycheck-desktop/internal/sites"
 	"relaycheck-desktop/internal/versioncheck"
 
 	_ "modernc.org/sqlite"
@@ -40,6 +41,7 @@ type App struct {
 	networkProxy        *NetworkProxyStore
 	notificationHub     *notifications.NotificationHub
 	backupService       *backup.Service
+	sitesService        *sites.Service
 	versionCheckService *versioncheck.Service
 	legacyCheckService  *legacycheck.Service
 	autostartService    *autostart.Service
@@ -144,6 +146,11 @@ func NewApp(root string) (*App, error) {
 	// which are satisfied by *App itself, so it is wired up after the app
 	// struct exists.
 	app.backupService = backup.NewService(app)
+	// sites.Service depends on sites.Infra (DB + DoHTTP + ValidateOutboundURL
+	// + ValidateLocalURL + AllowLocalOutbound + Notify + Audit + Now + NewID),
+	// all of which are satisfied by *App itself, so it is wired up after the
+	// app struct exists.
+	app.sitesService = sites.NewService(app)
 	// versioncheck.Service depends on versioncheck.Infra (DB + HTTPClient +
 	// ProductVersion + ValidateOutboundURLStrict), all of which are satisfied
 	// by *App itself, so it is wired up after the app struct exists.
@@ -338,3 +345,43 @@ func (a *App) validateOrigin(r *http.Request) error {
 	}
 	return nil
 }
+
+// DB is already provided by infra.go (SharedInfra interface).
+
+// DoHTTP is the exported adapter for the sites package's Infra interface.
+// It delegates to doHTTP so the sites service honours the host's HTTP client
+// and proxy configuration.
+func (a *App) DoHTTP(req *http.Request) (*http.Response, error) { return a.doHTTP(req) }
+
+// ValidateLocalURL is the exported adapter for the sites package's Infra
+// interface. It applies a permissive outbound URL policy that allows
+// loopback addresses, used by the sites service when probing local NewAPI
+// instances.
+func (a *App) ValidateLocalURL(ctx context.Context, raw string) (*url.URL, error) {
+	return validateOutboundHTTPURL(ctx, raw, outboundURLPolicy{AllowLocal: true})
+}
+
+// AllowLocalOutbound is the exported adapter for the sites package's Infra
+// interface. It reports whether the host permits loopback outbound
+// connections, controlling the sites service's DetectUpstream URL policy.
+func (a *App) AllowLocalOutbound() bool { return a.allowLocalOutbound }
+
+// Notify is the exported adapter for the sites package's Infra interface.
+// It delegates to the host's notification hub dispatcher.
+func (a *App) Notify(kind, level, title, content, relatedType, relatedID string) {
+	a.notify(kind, level, title, content, relatedType, relatedID)
+}
+
+// Audit is the exported adapter for the sites package's Infra interface.
+// It delegates to the host's audit log recorder.
+func (a *App) Audit(action, level, userID, entityType, entityID, detail string, metadata map[string]interface{}) {
+	a.audit(action, level, userID, entityType, entityID, detail, metadata)
+}
+
+// Now is the exported adapter for the sites package's Infra interface.
+// It returns the host's current timestamp string (ISO 8601 UTC).
+func (a *App) Now() string { return now() }
+
+// NewID is the exported adapter for the sites package's Infra interface.
+// It returns a fresh host-generated identifier.
+func (a *App) NewID() string { return newID() }

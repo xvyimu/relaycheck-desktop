@@ -1,9 +1,9 @@
-package core
+package sites
 
 import "strings"
 
-// detectSiteKindFromHeaders detects the site kind from HTTP response headers.
-func detectSiteKindFromHeaders(headers map[string]string) string {
+// DetectSiteKindFromHeaders detects the site kind from HTTP response headers.
+func DetectSiteKindFromHeaders(headers map[string]string) string {
 	powered := headers["X-Powered-By"]
 	switch powered {
 	case "NewAPI":
@@ -16,8 +16,8 @@ func detectSiteKindFromHeaders(headers map[string]string) string {
 	return "unknown"
 }
 
-// detectSiteKindFromHTML detects the site kind from HTML content.
-func detectSiteKindFromHTML(html string) string {
+// DetectSiteKindFromHTML detects the site kind from HTML content.
+func DetectSiteKindFromHTML(html string) string {
 	if strings.Contains(html, "NewAPI") {
 		return "newapi"
 	}
@@ -30,8 +30,8 @@ func detectSiteKindFromHTML(html string) string {
 	return "unknown"
 }
 
-// detectSiteKindFromAPIResponse detects the site kind from an API response body.
-func detectSiteKindFromAPIResponse(path, response string) string {
+// DetectSiteKindFromAPIResponse detects the site kind from an API response body.
+func DetectSiteKindFromAPIResponse(path, response string) string {
 	if strings.Contains(response, "newapi") {
 		return "newapi"
 	}
@@ -44,9 +44,9 @@ func detectSiteKindFromAPIResponse(path, response string) string {
 	return "unknown"
 }
 
-// siteKindConfidence returns a confidence score for a detected site kind
+// SiteKindConfidence returns a confidence score for a detected site kind
 // based on how many independent detection sources agreed.
-func siteKindConfidence(kind string, sources int) float64 {
+func SiteKindConfidence(kind string, sources int) float64 {
 	if kind == "unknown" || sources == 0 {
 		return 0.0
 	}

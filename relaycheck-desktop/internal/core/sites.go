@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	"relaycheck-desktop/internal/sites"
 )
 
 func (a *App) handleUpstreamSites(w http.ResponseWriter, r *http.Request) {
@@ -21,36 +23,34 @@ func (a *App) handleUpstreamSites(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) listUpstreamSites(w http.ResponseWriter, r *http.Request) {
 	items, err := cachedRead(a, "upstream-sites-list", shortReadCacheTTL, func() ([]UpstreamSite, error) {
-		rows, err := a.db.QueryContext(r.Context(), `
-		SELECT s.id, COALESCE(s.channel_id,''), s.name, COALESCE(s.homepage_url,''), s.base_url,
-		       COALESCE(s.login_url,''), s.kind, s.detection_confidence, s.health_status,
-		       s.supports_checkin, s.supports_balance, s.supports_models, s.supports_pricing,
-		       COALESCE(s.detection_json,''), COALESCE(s.last_health_check_at,''), s.created_at, s.updated_at,
-		       (SELECT COUNT(*) FROM channel_accounts a WHERE a.upstream_site_id = s.id)
-		FROM upstream_sites s
-		WHERE s.id <> ?
-		ORDER BY s.updated_at DESC
-	`, globalScheduleSiteID)
+		siteItems, err := a.sitesService.ListUpstreamSites(r.Context())
 		if err != nil {
 			return nil, err
 		}
-		defer rows.Close()
-
-		items := []UpstreamSite{}
-		for rows.Next() {
-			var item UpstreamSite
-			var checkin, balance, models, pricing int
-			if err := rows.Scan(&item.ID, &item.ChannelID, &item.Name, &item.HomepageURL, &item.BaseURL, &item.LoginURL, &item.Kind, &item.DetectionConfidence, &item.HealthStatus, &checkin, &balance, &models, &pricing, &item.DetectionJSON, &item.LastHealthCheckAt, &item.CreatedAt, &item.UpdatedAt, &item.AccountCount); err != nil {
-				return nil, err
+		items := make([]UpstreamSite, len(siteItems))
+		for i, s := range siteItems {
+			items[i] = UpstreamSite{
+				ID:                  s.ID,
+				ChannelID:           s.ChannelID,
+				Name:                s.Name,
+				HomepageURL:         s.HomepageURL,
+				BaseURL:             s.BaseURL,
+				LoginURL:            s.LoginURL,
+				Kind:                s.Kind,
+				DetectionConfidence: s.DetectionConfidence,
+				HealthStatus:        s.HealthStatus,
+				SupportsCheckin:     s.SupportsCheckin,
+				SupportsBalance:     s.SupportsBalance,
+				SupportsModels:      s.SupportsModels,
+				SupportsPricing:     s.SupportsPricing,
+				AccountCount:        s.AccountCount,
+				DetectionJSON:       s.DetectionJSON,
+				LastHealthCheckAt:   s.LastHealthCheckAt,
+				CreatedAt:           s.CreatedAt,
+				UpdatedAt:           s.UpdatedAt,
 			}
-			item.SupportsCheckin = checkin == 1
-			item.SupportsBalance = balance == 1
-			item.SupportsModels = models == 1
-			item.SupportsPricing = pricing == 1
-			normalizeOfficialProviderSite(&item)
-			items = append(items, item)
 		}
-		return items, rows.Err()
+		return items, nil
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -59,6 +59,10 @@ func (a *App) listUpstreamSites(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+// normalizeOfficialProviderSite forces official-provider sites to a canonical
+// kind/health. Kept in core because detection_detail.go's loadSiteDetail uses
+// it on core.UpstreamSite values. The sites package has its own copy for
+// sites.Site values.
 func normalizeOfficialProviderSite(item *UpstreamSite) {
 	if !isOfficialProviderBaseURL(item.BaseURL) {
 		return
@@ -97,27 +101,28 @@ func (a *App) createUpstreamSite(w http.ResponseWriter, r *http.Request) {
 		detection.LoginURL = strings.TrimSpace(input.LoginURL)
 	}
 
-	channelID := newID()
-	siteID := newID()
-	detectionJSON := marshalDetection(&detection)
-	_, err := a.db.ExecContext(r.Context(), `
-		INSERT INTO imported_channels (id, source_channel_id, name, base_url, status, upstream_kind, supports_checkin, supports_balance, supports_models, supports_pricing, raw_json, detection_json, last_detected_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, channelID, "manual-"+channelID, input.Name, detection.BaseURL, detection.Kind, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), `{"source":"manual"}`, detectionJSON, now(), now(), now())
+	siteID, err := a.sitesService.CreateUpstreamSite(r.Context(), sites.CreateSiteInput{
+		Name:     input.Name,
+		BaseURL:  input.BaseURL,
+		LoginURL: input.LoginURL,
+		Kind:     input.Kind,
+	}, sites.Detection{
+		BaseURL:             detection.BaseURL,
+		HomepageURL:         detection.HomepageURL,
+		LoginURL:            detection.LoginURL,
+		Kind:                detection.Kind,
+		HealthStatus:        detection.HealthStatus,
+		DetectionConfidence: detection.DetectionConfidence,
+		SupportsCheckin:     detection.SupportsCheckin,
+		SupportsBalance:     detection.SupportsBalance,
+		SupportsModels:      detection.SupportsModels,
+		SupportsPricing:     detection.SupportsPricing,
+		MatchedSignals:      detection.MatchedSignals,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	_, err = a.db.ExecContext(r.Context(), `
-		INSERT INTO upstream_sites (id, channel_id, name, homepage_url, base_url, login_url, kind, detection_confidence, health_status, supports_checkin, supports_balance, supports_models, supports_pricing, detection_json, last_health_check_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, siteID, channelID, input.Name, detection.HomepageURL, detection.BaseURL, detection.LoginURL, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), detectionJSON, now(), now(), now())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	a.notify("upstream_site_created", "success", "上游站点已添加", input.Name+" 已加入站点列表。", "upstream_site", siteID)
 	writeJSON(w, http.StatusOK, map[string]string{"id": siteID})
 }
 
@@ -157,8 +162,7 @@ func (a *App) detectUpstreamSite(w http.ResponseWriter, r *http.Request, id stri
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	var baseURL string
-	err := a.db.QueryRowContext(r.Context(), `SELECT base_url FROM upstream_sites WHERE id = ?`, id).Scan(&baseURL)
+	detection, err := a.sitesService.DetectUpstreamSite(r.Context(), id)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusNotFound, "上游站点不存在。")
 		return
@@ -167,17 +171,19 @@ func (a *App) detectUpstreamSite(w http.ResponseWriter, r *http.Request, id stri
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	detection := a.detectUpstream(r.Context(), baseURL)
-	_, err = a.db.ExecContext(r.Context(), `
-		UPDATE upstream_sites
-		SET homepage_url=?, base_url=?, kind=?, detection_confidence=?, health_status=?, supports_checkin=?, supports_balance=?, supports_models=?, supports_pricing=?, detection_json=?, last_health_check_at=?, updated_at=?
-		WHERE id=?
-	`, detection.HomepageURL, detection.BaseURL, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), marshalDetection(&detection), now(), now(), id)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, detection)
+	writeJSON(w, http.StatusOK, UpstreamDetection{
+		BaseURL:             detection.BaseURL,
+		HomepageURL:         detection.HomepageURL,
+		LoginURL:            detection.LoginURL,
+		Kind:                detection.Kind,
+		HealthStatus:        detection.HealthStatus,
+		DetectionConfidence: detection.DetectionConfidence,
+		SupportsCheckin:     detection.SupportsCheckin,
+		SupportsBalance:     detection.SupportsBalance,
+		SupportsModels:      detection.SupportsModels,
+		SupportsPricing:     detection.SupportsPricing,
+		MatchedSignals:      detection.MatchedSignals,
+	})
 }
 
 type bulkDetectSiteResult struct {
@@ -261,32 +267,28 @@ func (a *App) handleBulkDetectUpstreamSites(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+// detectAndSaveSite is the *App forwarder for sites.Service.DetectAndSaveSite.
+// It re-probes a site, persists the detection, and returns the per-site
+// result used by the bulk-detect endpoint. Callers (handleBulkDetectUpstreamSites)
+// are unaware of the sites service.
 func (a *App) detectAndSaveSite(ctx context.Context, id string, name string, baseURL string) bulkDetectSiteResult {
-	result := bulkDetectSiteResult{ID: id, Name: name, BaseURL: baseURL}
-	detection := a.detectUpstream(ctx, baseURL)
-	_, err := a.db.ExecContext(ctx, `
-		UPDATE upstream_sites
-		SET homepage_url=?, base_url=?, kind=?, detection_confidence=?, health_status=?, supports_checkin=?, supports_balance=?, supports_models=?, supports_pricing=?, detection_json=?, last_health_check_at=?, updated_at=?
-		WHERE id=?
-	`, detection.HomepageURL, detection.BaseURL, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), marshalDetection(&detection), now(), now(), id)
-	if err != nil {
-		result.Error = err.Error()
-		return result
+	r := a.sitesService.DetectAndSaveSite(ctx, id, name, baseURL)
+	return bulkDetectSiteResult{
+		ID:              r.ID,
+		Name:            r.Name,
+		BaseURL:         r.BaseURL,
+		Kind:            r.Kind,
+		HealthStatus:    r.HealthStatus,
+		SupportsCheckin: r.SupportsCheckin,
+		Error:           r.Error,
 	}
-	result.BaseURL = detection.BaseURL
-	result.Kind = detection.Kind
-	result.HealthStatus = detection.HealthStatus
-	result.SupportsCheckin = detection.SupportsCheckin
-	return result
 }
 
 func (a *App) deleteUpstreamSite(w http.ResponseWriter, r *http.Request, id string) {
-	_, err := a.db.ExecContext(r.Context(), `DELETE FROM upstream_sites WHERE id = ?`, id)
-	if err != nil {
+	if err := a.sitesService.DeleteUpstreamSite(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.audit("upstream_site.deleted", "warning", "", "upstream_site", id, "上游站点已删除", nil)
 	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
 }
 
