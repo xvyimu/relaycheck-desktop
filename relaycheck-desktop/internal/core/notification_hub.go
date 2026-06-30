@@ -117,9 +117,7 @@ func (h *NotificationHub) Reload(ctx context.Context) error {
 		}
 		h.digestChannels[entry.Name] = ch
 		digestCtx, digestCancel := context.WithCancel(context.Background())
-		h.mu.Lock()
 		h.digestCancel = digestCancel
-		h.mu.Unlock()
 		h.digestWG.Add(1)
 		go func(c *webhookChannel) {
 			defer h.digestWG.Done()
