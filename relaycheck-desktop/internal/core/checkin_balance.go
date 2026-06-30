@@ -493,89 +493,27 @@ func (l *checkinSiteLimiter) delayFor(siteID string, nowTime time.Time) time.Dur
 }
 
 func (a *App) beginCheckinRun(mode string, total int) bool {
-	timestamp := now()
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.checkinRun.Running {
-		return false
-	}
-	a.checkinRun = checkinRunState{
-		Running:       true,
-		Mode:          mode,
-		TotalAccounts: total,
-		StartedAt:     timestamp,
-		UpdatedAt:     timestamp,
-	}
-	if total == 0 {
-		a.checkinRun.CurrentMessage = "今天没有待签到账号。"
-	}
-	return true
+	return a.checkinRun.begin(mode, total)
 }
 
 func (a *App) updateCheckinRunCurrent(accountID string, accountName string, siteName string, message string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if !a.checkinRun.Running {
-		return
-	}
-	a.checkinRun.CurrentAccountID = accountID
-	a.checkinRun.CurrentAccount = accountName
-	a.checkinRun.CurrentSite = siteName
-	a.checkinRun.CurrentMessage = message
-	a.checkinRun.UpdatedAt = now()
+	a.checkinRun.updateCurrent(accountID, accountName, siteName, message)
 }
 
 func (a *App) updateCheckinRunMessage(message string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.checkinRun.CurrentMessage = message
-	a.checkinRun.LastRunMessage = message
-	a.checkinRun.UpdatedAt = now()
+	a.checkinRun.updateMessage(message)
 }
 
 func (a *App) recordCheckinRunResult(status string, message string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if !a.checkinRun.Running {
-		return
-	}
-	a.checkinRun.ProcessedAccounts++
-	a.checkinRun.CurrentMessage = firstNonEmpty(message, status)
-	a.checkinRun.LastRunMessage = a.checkinRun.CurrentMessage
-	switch status {
-	case "success":
-		a.checkinRun.SuccessCount++
-	case "already_checked":
-		a.checkinRun.AlreadyCount++
-	case "unsupported":
-		a.checkinRun.UnsupportedCount++
-	case "auth_expired", "manual_required":
-		a.checkinRun.AuthExpiredCount++
-	default:
-		a.checkinRun.FailedCount++
-	}
-	a.checkinRun.UpdatedAt = now()
+	a.checkinRun.recordResult(status, message)
 }
 
 func (a *App) finishCheckinRun() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	timestamp := now()
-	a.checkinRun.Running = false
-	a.checkinRun.FinishedAt = timestamp
-	a.checkinRun.UpdatedAt = timestamp
-	a.checkinRun.CurrentAccountID = ""
-	a.checkinRun.CurrentAccount = ""
-	a.checkinRun.CurrentSite = ""
-	if a.checkinRun.LastRunMessage == "" {
-		a.checkinRun.LastRunMessage = fmt.Sprintf("本轮处理 %d 个账号。", a.checkinRun.ProcessedAccounts)
-	}
+	a.checkinRun.finish()
 }
 
 func (a *App) buildCheckinStatus(ctx context.Context, currentTime time.Time) (CheckinStatus, error) {
-	a.mu.RLock()
-	run := a.checkinRun
-	a.mu.RUnlock()
+	run := a.checkinRun.Snapshot()
 	status := CheckinStatus{
 		GeneratedAt:       now(),
 		Running:           run.Running,

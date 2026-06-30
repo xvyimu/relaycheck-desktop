@@ -34,7 +34,7 @@ type App struct {
 	client             *http.Client
 	networkProxy       NetworkProxyConfig
 	notificationConfig notificationChannelsConfig
-	checkinRun         checkinRunState
+	checkinRun         *CheckinRunStore
 	localSyncRun       syncJobRunState
 	channelHealthRun   syncJobRunState
 	schedulerCancel    context.CancelFunc
@@ -125,6 +125,7 @@ func NewApp(root string) (*App, error) {
 		taskRunner:        newTaskRunner(),
 		bind:              "127.0.0.1",
 		port:              3001,
+		checkinRun:        NewCheckinRunStore(),
 	}
 
 	if err := app.migrate(context.Background()); err != nil {
