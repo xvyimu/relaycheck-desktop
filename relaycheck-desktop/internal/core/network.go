@@ -137,6 +137,13 @@ func (a *App) doHTTPWithTimeout(req *http.Request, timeout time.Duration) (*http
 	return client.Do(req)
 }
 
+// DoHTTPWithTimeout is the exported adapter for the notifications package's
+// NotificationHTTPPort interface. It delegates to doHTTPWithTimeout so the
+// internal call sites are unchanged.
+func (a *App) DoHTTPWithTimeout(req *http.Request, timeout time.Duration) (*http.Response, error) {
+	return a.doHTTPWithTimeout(req, timeout)
+}
+
 func newNetworkHTTPClient(timeout time.Duration, config NetworkProxyConfig) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = proxyURLForRequest(config)

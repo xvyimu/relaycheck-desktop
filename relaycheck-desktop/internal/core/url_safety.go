@@ -73,6 +73,13 @@ func (a *App) externalURLPolicy() outboundURLPolicy {
 	return outboundURLPolicy{AllowLocal: a.allowLocalOutbound}
 }
 
+// ValidateOutboundURL is the exported adapter for the notifications package's
+// NotificationHTTPPort interface. It applies the app's outbound URL policy
+// (SSRF defences, controlled by allowLocalOutbound) via validateOutboundHTTPURL.
+func (a *App) ValidateOutboundURL(ctx context.Context, raw string) (*url.URL, error) {
+	return validateOutboundHTTPURL(ctx, raw, a.externalURLPolicy())
+}
+
 func isBlockedHostname(host string) bool {
 	normalized := strings.Trim(strings.ToLower(host), "[]")
 	return normalized == "localhost" ||

@@ -1,4 +1,4 @@
-package core
+package notifications
 
 import (
 	"context"
@@ -6,60 +6,73 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
 )
 
-// NotificationHTTPPort is the subset of *App that notification channels
-// depend on. Extracting it breaks the reverse reference from channels back
-// to the god object. *App already satisfies this interface via
-// url_safety.go and network.go.
+// NotificationHTTPPort is the subset of the host application that notification
+// channels depend on. Extracting it breaks the reverse reference from channels
+// back to the god object. The host (e.g. *core.App) satisfies this interface by
+// providing outbound-URL validation (SSRF guard) and an HTTP client with
+// timeout.
+//
+// All methods are exported so that types defined in other packages (the host
+// application) can satisfy the interface cross-package.
 type NotificationHTTPPort interface {
-	externalURLPolicy() outboundURLPolicy
-	doHTTPWithTimeout(req *http.Request, timeout time.Duration) (*http.Response, error)
+	// ValidateOutboundURL validates that raw is an http/https URL permitted by
+	// the host's outbound policy (e.g. SSRF defences). It returns the parsed
+	// URL on success.
+	ValidateOutboundURL(ctx context.Context, raw string) (*url.URL, error)
+	// DoHTTPWithTimeout executes req with the given timeout.
+	DoHTTPWithTimeout(req *http.Request, timeout time.Duration) (*http.Response, error)
 }
 
-// Compile-time assertion that *App satisfies NotificationHTTPPort.
-var _ NotificationHTTPPort = (*App)(nil)
+// CryptoPort is the subset of the host's crypto service that notification
+// channels need to encrypt/decrypt sensitive channel secrets. The host's
+// CryptoService satisfies this interface.
+type CryptoPort interface {
+	Encrypt(value string) (string, error)
+	Decrypt(value string) (string, error)
+}
 
 // NotificationHub owns the notification configuration, digest goroutines,
-// and per-channel rate limiters. It is extracted from *App (see plan A) so
+// and per-channel rate limiters. It is extracted from the host god object so
 // that notification channels depend on the narrow NotificationHTTPPort
-// interface instead of the App god object.
+// interface instead of the full application.
 //
 // All fields are protected by mu unless noted. The digest goroutines read
 // digestChannels / channelRateLimits without holding mu; this mirrors the
-// original *App behaviour and is safe because Reload fully replaces those
-// maps atomically under the write lock.
+// original behaviour and is safe because Reload fully replaces those maps
+// atomically under the write lock.
 type NotificationHub struct {
 	mu                sync.RWMutex
 	db                *sql.DB
-	crypto            *CryptoService
+	crypto            CryptoPort
 	httpPort          NotificationHTTPPort
-	config            notificationChannelsConfig
-	digestChannels    map[string]*webhookChannel
+	config            ChannelsConfig
+	digestChannels    map[string]*WebhookChannel
 	digestCancel      context.CancelFunc
 	digestWG          sync.WaitGroup
-	channelRateLimits map[string]*channelRateLimiter
+	channelRateLimits map[string]*ChannelRateLimiter
 }
 
 // NewNotificationHub constructs a NotificationHub backed by the given
-// database handle, crypto service, and HTTP port (typically the *App
+// database handle, crypto port, and HTTP port (typically the host application
 // itself, which satisfies NotificationHTTPPort).
-func NewNotificationHub(db *sql.DB, crypto *CryptoService, httpPort NotificationHTTPPort) *NotificationHub {
+func NewNotificationHub(db *sql.DB, crypto CryptoPort, httpPort NotificationHTTPPort) *NotificationHub {
 	return &NotificationHub{
 		db:                db,
 		crypto:            crypto,
 		httpPort:          httpPort,
-		digestChannels:    map[string]*webhookChannel{},
-		channelRateLimits: map[string]*channelRateLimiter{},
+		digestChannels:    map[string]*WebhookChannel{},
+		channelRateLimits: map[string]*ChannelRateLimiter{},
 	}
 }
 
 // Reload re-reads the notification config from the database, stops any
 // running digest goroutine, and starts a new one for digest-mode webhooks.
-// Behaviour is preserved verbatim from the original *App.reloadNotificationConfig.
 func (h *NotificationHub) Reload(ctx context.Context) error {
 	if h.db == nil {
 		return nil
@@ -71,8 +84,8 @@ func (h *NotificationHub) Reload(ctx context.Context) error {
 		c := h.digestCancel
 		h.digestCancel = nil
 		h.digestWG = sync.WaitGroup{}
-		h.digestChannels = map[string]*webhookChannel{}
-		h.channelRateLimits = map[string]*channelRateLimiter{}
+		h.digestChannels = map[string]*WebhookChannel{}
+		h.channelRateLimits = map[string]*ChannelRateLimiter{}
 		return c
 	}(); cancel != nil {
 		cancel()
@@ -80,7 +93,7 @@ func (h *NotificationHub) Reload(ctx context.Context) error {
 	}
 	config, err := h.LoadConfig(ctx)
 	if err != nil {
-		config = defaultNotificationChannelsConfig()
+		config = DefaultChannelsConfig()
 	} else {
 		for i := range config.Channels {
 			if decErr := h.DecryptEntrySecrets(&config.Channels[i]); decErr != nil {
@@ -95,21 +108,21 @@ func (h *NotificationHub) Reload(ctx context.Context) error {
 		if !entry.Enabled || entry.Type != "webhook" {
 			continue
 		}
-		var cfg webhookConfig
+		var cfg WebhookConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			continue
 		}
 		if cfg.Mode != "digest" {
 			continue
 		}
-		ch := &webhookChannel{
+		ch := &WebhookChannel{
 			httpPort: h.httpPort,
 			config:   cfg,
 			name:     entry.Name,
 			levels:   entry.Levels,
 			types:    entry.Types,
-			entries:  []digestEntry{},
-			digestCh: make(chan digestEntry, 100),
+			entries:  []DigestEntry{},
+			digestCh: make(chan DigestEntry, 100),
 		}
 		if err := ch.Validate(); err != nil {
 			log.Printf("[notification] digest webhook %q 验证失败: %v", entry.Name, err)
@@ -119,7 +132,7 @@ func (h *NotificationHub) Reload(ctx context.Context) error {
 		digestCtx, digestCancel := context.WithCancel(context.Background())
 		h.digestCancel = digestCancel
 		h.digestWG.Add(1)
-		go func(c *webhookChannel) {
+		go func(c *WebhookChannel) {
 			defer h.digestWG.Done()
 			c.StartDigestLoop(digestCtx, c.digestCh)
 		}(ch)
@@ -129,7 +142,7 @@ func (h *NotificationHub) Reload(ctx context.Context) error {
 		if !entry.Enabled || entry.RateLimit == nil || entry.RateLimit.MaxPerInterval <= 0 {
 			continue
 		}
-		h.channelRateLimits[entry.Name] = &channelRateLimiter{
+		h.channelRateLimits[entry.Name] = &ChannelRateLimiter{
 			config: *entry.RateLimit,
 		}
 	}
@@ -138,46 +151,46 @@ func (h *NotificationHub) Reload(ctx context.Context) error {
 }
 
 // LoadConfig reads the notification channels config from the database.
-func (h *NotificationHub) LoadConfig(ctx context.Context) (notificationChannelsConfig, error) {
+func (h *NotificationHub) LoadConfig(ctx context.Context) (ChannelsConfig, error) {
 	if h.db == nil {
-		return defaultNotificationChannelsConfig(), nil
+		return DefaultChannelsConfig(), nil
 	}
 	var valueJSON string
 	err := h.db.QueryRowContext(ctx, `SELECT value_json FROM system_settings WHERE key='notification.channels'`).Scan(&valueJSON)
 	if err == sql.ErrNoRows {
-		return defaultNotificationChannelsConfig(), nil
+		return DefaultChannelsConfig(), nil
 	}
 	if err != nil {
-		return defaultNotificationChannelsConfig(), err
+		return DefaultChannelsConfig(), err
 	}
-	config, _ := parseNotificationChannelsConfig(valueJSON)
+	config, _ := ParseChannelsConfig(valueJSON)
 	return config, nil
 }
 
 // CurrentConfig returns a snapshot of the currently loaded notification
 // config.
-func (h *NotificationHub) CurrentConfig() notificationChannelsConfig {
+func (h *NotificationHub) CurrentConfig() ChannelsConfig {
 	if h == nil {
-		return defaultNotificationChannelsConfig()
+		return DefaultChannelsConfig()
 	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.config
 }
 
-// BuildChannel constructs a notificationChannel from a channelEntry,
-// injecting the hub's httpPort instead of a back-reference to *App.
-func (h *NotificationHub) BuildChannel(entry channelEntry) notificationChannel {
+// BuildChannel constructs a Channel from a ChannelEntry, injecting the hub's
+// httpPort instead of a back-reference to the host application.
+func (h *NotificationHub) BuildChannel(entry ChannelEntry) Channel {
 	if entry.Config == nil {
 		return nil
 	}
 	switch entry.Type {
 	case "webhook":
-		var cfg webhookConfig
+		var cfg WebhookConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
-		ch := &webhookChannel{
+		ch := &WebhookChannel{
 			httpPort: h.httpPort,
 			config:   cfg,
 			name:     entry.Name,
@@ -188,15 +201,15 @@ func (h *NotificationHub) BuildChannel(entry channelEntry) notificationChannel {
 			return nil
 		}
 		if cfg.Mode == "digest" {
-			ch.digestCh = make(chan digestEntry, 100)
+			ch.digestCh = make(chan DigestEntry, 100)
 		}
 		return ch
 	case "telegram":
-		var cfg telegramConfig
+		var cfg TelegramConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
-		ch := &telegramChannel{
+		ch := &TelegramChannel{
 			httpPort: h.httpPort,
 			config:   cfg,
 			name:     entry.Name,
@@ -208,11 +221,11 @@ func (h *NotificationHub) BuildChannel(entry channelEntry) notificationChannel {
 		}
 		return ch
 	case "bark":
-		var cfg barkConfig
+		var cfg BarkConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
-		ch := &barkChannel{
+		ch := &BarkChannel{
 			httpPort: h.httpPort,
 			config:   cfg,
 			name:     entry.Name,
@@ -224,11 +237,11 @@ func (h *NotificationHub) BuildChannel(entry channelEntry) notificationChannel {
 		}
 		return ch
 	case "serverchan":
-		var cfg serverchanConfig
+		var cfg ServerChanConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
-		ch := &serverchanChannel{
+		ch := &ServerChanChannel{
 			httpPort: h.httpPort,
 			config:   cfg,
 			name:     entry.Name,
@@ -240,11 +253,11 @@ func (h *NotificationHub) BuildChannel(entry channelEntry) notificationChannel {
 		}
 		return ch
 	case "email":
-		var cfg emailConfig
+		var cfg EmailConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
-		ch := &emailChannel{
+		ch := &EmailChannel{
 			httpPort: h.httpPort,
 			config:   cfg,
 			name:     entry.Name,
@@ -256,11 +269,11 @@ func (h *NotificationHub) BuildChannel(entry channelEntry) notificationChannel {
 		}
 		return ch
 	case "desktop":
-		var cfg desktopConfig
+		var cfg DesktopConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
-		ch := &desktopChannel{
+		ch := &DesktopChannel{
 			httpPort: h.httpPort,
 			config:   cfg,
 			name:     entry.Name,
@@ -273,15 +286,15 @@ func (h *NotificationHub) BuildChannel(entry channelEntry) notificationChannel {
 	}
 }
 
-// EncryptEntrySecrets encrypts sensitive fields on the channelEntry in
-// place using the hub's crypto service.
-func (h *NotificationHub) EncryptEntrySecrets(entry *channelEntry) error {
+// EncryptEntrySecrets encrypts sensitive fields on the ChannelEntry in place
+// using the hub's crypto port.
+func (h *NotificationHub) EncryptEntrySecrets(entry *ChannelEntry) error {
 	if entry.Config == nil {
 		return nil
 	}
 	switch entry.Type {
 	case "webhook":
-		var cfg webhookConfig
+		var cfg WebhookConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
@@ -294,7 +307,7 @@ func (h *NotificationHub) EncryptEntrySecrets(entry *channelEntry) error {
 		}
 		entry.Config, _ = json.Marshal(cfg)
 	case "telegram":
-		var cfg telegramConfig
+		var cfg TelegramConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
@@ -307,7 +320,7 @@ func (h *NotificationHub) EncryptEntrySecrets(entry *channelEntry) error {
 		}
 		entry.Config, _ = json.Marshal(cfg)
 	case "serverchan":
-		var cfg serverchanConfig
+		var cfg ServerChanConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
@@ -320,7 +333,7 @@ func (h *NotificationHub) EncryptEntrySecrets(entry *channelEntry) error {
 		}
 		entry.Config, _ = json.Marshal(cfg)
 	case "email":
-		var cfg emailConfig
+		var cfg EmailConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
@@ -336,16 +349,16 @@ func (h *NotificationHub) EncryptEntrySecrets(entry *channelEntry) error {
 	return nil
 }
 
-// DecryptEntrySecrets decrypts sensitive fields on the channelEntry in
-// place. Fields that fail to decrypt are reset to empty string (matching
-// the original *App.decryptChannelEntrySecrets fallback behaviour).
-func (h *NotificationHub) DecryptEntrySecrets(entry *channelEntry) error {
+// DecryptEntrySecrets decrypts sensitive fields on the ChannelEntry in place.
+// Fields that fail to decrypt are reset to empty string (matching the original
+// fallback behaviour).
+func (h *NotificationHub) DecryptEntrySecrets(entry *ChannelEntry) error {
 	if entry.Config == nil {
 		return nil
 	}
 	switch entry.Type {
 	case "webhook":
-		var cfg webhookConfig
+		var cfg WebhookConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
@@ -360,7 +373,7 @@ func (h *NotificationHub) DecryptEntrySecrets(entry *channelEntry) error {
 		}
 		entry.Config, _ = json.Marshal(cfg)
 	case "telegram":
-		var cfg telegramConfig
+		var cfg TelegramConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
@@ -374,7 +387,7 @@ func (h *NotificationHub) DecryptEntrySecrets(entry *channelEntry) error {
 		}
 		entry.Config, _ = json.Marshal(cfg)
 	case "serverchan":
-		var cfg serverchanConfig
+		var cfg ServerChanConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
@@ -388,7 +401,7 @@ func (h *NotificationHub) DecryptEntrySecrets(entry *channelEntry) error {
 		}
 		entry.Config, _ = json.Marshal(cfg)
 	case "email":
-		var cfg emailConfig
+		var cfg EmailConfig
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
@@ -417,7 +430,7 @@ func (h *NotificationHub) Dispatch(kind, level, title, content string) {
 		if !entry.Enabled {
 			continue
 		}
-		if !shouldSendToChannel(entry, kind, level) {
+		if !ShouldSendToChannel(entry, kind, level) {
 			continue
 		}
 		// 频率限制检查
@@ -431,11 +444,11 @@ func (h *NotificationHub) Dispatch(kind, level, title, content string) {
 		}
 		// digest 模式的 webhook 走 hub 级别管理的 channel
 		if entry.Type == "webhook" {
-			var cfg webhookConfig
+			var cfg WebhookConfig
 			if err := json.Unmarshal(entry.Config, &cfg); err == nil && cfg.Mode == "digest" {
 				if dc, ok := h.digestChannels[entry.Name]; ok && dc.digestCh != nil {
 					select {
-					case dc.digestCh <- digestEntry{Kind: kind, Level: level, Title: title, Content: content, Time: time.Now()}:
+					case dc.digestCh <- DigestEntry{Kind: kind, Level: level, Title: title, Content: content, Time: time.Now()}:
 					default:
 						log.Printf("[notification] webhook digest 通道已满，丢弃通知: %s/%s", kind, level)
 					}
@@ -448,7 +461,7 @@ func (h *NotificationHub) Dispatch(kind, level, title, content string) {
 		if channel == nil {
 			continue
 		}
-		go func(ch notificationChannel) {
+		go func(ch Channel) {
 			if err := ch.Send(context.Background(), kind, level, title, content); err != nil {
 				log.Printf("[notification] %s 发送失败: %v", ch.Type(), err)
 			}
@@ -471,7 +484,7 @@ func (h *NotificationHub) Close() {
 // SetConfig replaces the currently loaded notification config. It is
 // intended for tests that need to inject a config without going through
 // the DB-backed Reload path.
-func (h *NotificationHub) SetConfig(cfg notificationChannelsConfig) {
+func (h *NotificationHub) SetConfig(cfg ChannelsConfig) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.config = cfg

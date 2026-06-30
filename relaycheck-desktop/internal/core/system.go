@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"relaycheck-desktop/internal/notifications"
 )
 
 func (a *App) handleSystemSettings(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +98,7 @@ func (a *App) handleUpdateSystemSettings(w http.ResponseWriter, r *http.Request)
 			normalized, _ := json.Marshal(normalizeChannelHealthScheduleConfig(config))
 			valueJSON = string(normalized)
 		} else if key == "notification.channels" {
-			config, warnings := parseNotificationChannelsConfig(valueJSON)
+			config, warnings := notifications.ParseChannelsConfig(valueJSON)
 			for i := range config.Channels {
 				if err := a.encryptChannelEntrySecrets(&config.Channels[i]); err != nil {
 					writeError(w, http.StatusInternalServerError, "加密通知渠道密钥失败："+err.Error())
