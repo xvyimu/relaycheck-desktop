@@ -14,8 +14,8 @@ Guidance for Claude Code working in this repository.
 
 ```powershell
 go build -mod=vendor ./...
-go test -mod=vendor ./internal/core/ -count=1 -timeout 120s
-go vet -mod=vendor ./internal/core/...
+go test -mod=vendor ./... -count=1 -timeout 120s
+go vet -mod=vendor ./...
 cd frontend; npm run build; cd ..
 cd frontend; npx tsc --noEmit; cd ..
 ```
@@ -24,9 +24,36 @@ All five must pass before commit. Race detector (`-race`) is not used: requires 
 
 ## Architecture (post-refactor)
 
-`internal/core` is a single `package core` with 75+ files. The `App` struct in `app.go` is the god object / assembly root. A completed architecture evolution (commits `8fc1975`..`1444e43`, June 2026) extracted state and services into dedicated types to reduce coupling and improve testability.
+`internal/core` is a single `package core` (60+ files) that serves as the assembly root. Surrounding it are 8 extracted domain packages under `internal/<domain>/` that own pure business logic. Dependency direction is **one-way**: `core` imports domain packages; domain packages never import `core`. The `App` struct in `app.go` is the god object / assembly root.
 
-### Extracted types (each owns its own mutex, independently testable)
+Two phases of architecture evolution (June 2026):
+1. **Phase 1** (commits `8fc1975`..`1444e43`) — extracted state and services into dedicated types within `core` to reduce coupling and improve testability.
+2. **Phase 2** (commits `2a32506`..`e80578c`) — split domain logic into independent `internal/<domain>/` packages using the Infra-interface + mirror-type + `*App` forwarder pattern.
+
+### Domain packages (Phase 2 — extracted from `core`)
+
+Each domain package defines a local `Infra` interface that `*App` satisfies via exported adapter methods. Domain packages own pure business logic and SQL; `core` retains HTTP handlers and forwarding methods so call sites need no changes.
+
+| Package | Files | Domain | Infra interface |
+|---------|-------|--------|-----------------|
+| `internal/notifications` | 3 | Notification hub + 6 channel implementations (webhook/telegram/bark/serverchan/email/desktop) | `NotificationHTTPPort` (ValidateOutboundURL, DoHTTPWithTimeout) |
+| `internal/backup` | 2 | Encrypted zip export/import (PBKDF2-SHA256 + RCZIP2/RCZIP1) | `Infra` (DB, DatabasePath, BackupsDir, ReopenDatabase, ReloadNotificationConfig, ProductVersion) |
+| `internal/versioncheck` | 2 | Remote version manifest check + semver compare | `Infra` (DB, HTTPClient, ProductVersion, ValidateOutboundURLStrict) |
+| `internal/legacycheck` | 1 | Legacy Python code detection | `Infra` (DataDir) |
+| `internal/autostart` | 3 | OS auto-start shortcut management (Windows + non-Windows stub) | (none — pure) |
+| `internal/sites` | 6 | Upstream site CRUD, detection (headers/HTML/API), local network scanner | `Infra` (DB, DoHTTP, ValidateOutboundURL, ValidateLocalURL, AllowLocalOutbound, Notify, Audit, Now, NewID) |
+| `internal/channels` | 9 | Channel CRUD, model sync, health overview, schedules, pricing, model overview | `Infra` (14 methods) |
+| `internal/accounts` | 10 | Account CRUD, Chrome password import, admin API import, SQLite import, legacy config import, local NewAPI management, sync preview, auto-detect | `Infra` (DB, EncryptText, DetectUpstreamForImport, EnsureChannelSiteForImport, Notify, Audit, Now, NewID) |
+
+### Domain extraction pattern (Phase 2)
+
+Three cooperating patterns make the split safe and reversible:
+
+1. **Infra interface**: domain package declares `type Infra interface { ... }` listing only what it needs from the host. `*App` satisfies it via exported adapter methods (`DatabasePath()`, `ValidateOutboundURL()`, `DoHTTPWithTimeout()`, etc.). Compile-time assertion: `var _ domain.Infra = (*App)(nil)`.
+2. **Mirror types**: domain package defines local mirror types with JSON tags identical to the corresponding `core` types. `core` keeps the original types (for API compatibility) and converts at the boundary in `<domain>_convert.go`.
+3. **`*App` forwarder methods**: HTTP handlers and forwarders stay in `core` so call sites (29 `a.notify()` calls, scheduler hooks, etc.) need zero changes. `core` holds a `xxxService *xxx.Service` field, initialized in two phases: `app := NewApp(...)` then `app.xxxService = xxx.NewService(app)`.
+
+### Extracted types within `core` (Phase 1 — each owns its own mutex, independently testable)
 
 | Type | File | Replaces | Notes |
 |------|------|----------|-------|
@@ -34,8 +61,7 @@ All five must pass before commit. Race detector (`-race`) is not used: requires 
 | `CryptoService` | `crypto_service.go` | `a.encryptText/decryptText` bodies | AES-256-GCM, `v1.<nonce>.<ciphertext>` format; `*App` methods are thin forwarders |
 | `AccountAuthRepository` | `account_auth_repo.go` | `a.loadAccountAuth(s)` bodies | `Load(ctx,id)` + `LoadBatch(ctx,ids)`; injects `db`+`crypto` |
 | `CheckinRunStore` | `checkin_run_state.go` | `a.checkinRun` + 5 mutators | Independent `sync.RWMutex`; `Snapshot()` for reads |
-| `NotificationHub` | `notification_hub.go` | 5 App fields + 7 methods | Holds `config`/`digestChannels`/`digestCancel`/`digestWG`/`channelRateLimits`; `Close()` stops digest goroutines |
-| `NotificationHTTPPort` (interface) | `notification_hub.go` | `webhookChannel.app *App` | 2 methods (`externalURLPolicy`, `doHTTPWithTimeout`); all 6 channel types depend on this, not `*App` |
+| `NotificationHub` (type alias for `*notifications.NotificationHub`) | `internal/notifications/hub.go` | 5 App fields + 7 methods | Holds `config`/`digestChannels`/`digestCancel`/`digestWG`/`channelRateLimits`; `Close()` stops digest goroutines |
 | `SyncJobRunStore` | `sync_job_run_store.go` | `a.localSyncRun`/`channelHealthRun` | `TryStart()`/`Finish()` for re-entrancy guard |
 | `SchedulerRepo` | `scheduler_repo.go` | `a.loadSettingJSON`/`loadSchedulerRun`/`upsertSchedulerPlan` bodies | Pure db repository |
 | `ReadCacheStore` | `read_cache_store.go` | `a.readCache`+`a.readCacheMu` | Generic `Get[T]` + `Invalidate()`; `cachedRead[T]` and `a.invalidateReadCache` are forwarders |
@@ -58,14 +84,21 @@ When adding new code, prefer calling the extracted type directly (`a.crypto.Encr
 - `mu` — now only protects `bind`/`port`/`preferredPort`/`portConflict`/`schedulerCancel`/`schedulerStartedAt` (runtime address + scheduler lifecycle)
 - `schedulerCancel`/`schedulerStartedAt`/`schedulerWG`/`taskRunner` — App is the assembly root for lifecycle
 - `bind`/`port`/`preferredPort`/`portConflict`/`allowLocalOutbound` — runtime address state
+- Domain service fields (`notificationHub`, `backupService`, `versionCheckService`, `legacyCheckService`, `autostartService`, `sitesService`, `channelsService`, `accountsService`) — wired in `NewApp` via two-phase init
 
 ### Cross-cutting concerns that stay in `package core` (do NOT attempt to split into sub-packages)
 
-- `audit.go` — `a.audit(...)` called from 22 sites across all domains
-- `crypto.go` — `encryptText`/`decryptText` (forwarders) + `loadOrCreateKey` + `maskSecret` + `secretFingerprint`
-- `notification.go` — channel type definitions + forwarding methods; hub logic is in `notification_hub.go`
+These files were evaluated for extraction and intentionally kept in `core` because the call-site churn and Infra interface surface area outweighed the benefit.
 
-These were evaluated for extraction during the architecture review and intentionally kept in `core` because the call-site churn (98+ import changes) outweighed the benefit. See `docs/superpowers/specs/2026-06-29-architecture-evolution-design.md` for the full rationale.
+- `audit.go` — `a.audit(...)` called from 22+ sites across all domains
+- `crypto.go` — `encryptText`/`decryptText` (forwarders) + `loadOrCreateKey` + `maskSecret` + `secretFingerprint`
+- `notification.go` — forwarding methods to `notifications.NotificationHub`; hub logic is in `internal/notifications/hub.go`
+- `url_safety.go` — `ValidateOutboundURL`/`ValidateOutboundURLStrict` (SSRF blocklist + loopback/private checks) called from multiple domain packages
+- `network.go` — `doHTTP`/`DoHTTPWithTimeout`/`doLoginHTTP` shared by `accounts`, `channels`, `sites`, `checkin_balance`
+- `checkin_balance.go` — checkin/balance execution is highly coupled to `*App` (db, notify, checkinRun, accountAuth, callAccountAPI, loginWithPassword, saveAccountSession, encryptText, currentNetworkProxyConfig). Splitting would require an Infra interface exposing 10+ methods, with type-conversion overhead exceeding the benefit. Pure helpers (`classifyCheckinResponse`, `parseBalance`, etc.) are also referenced by `accounts.go`/`account_auth_repo.go`, so they cannot move either.
+- `system.go` — system settings CRUD is tightly coupled to `notification`/`network`/`channel_health` config reload paths.
+
+See `docs/superpowers/specs/2026-06-29-architecture-evolution-design.md` for the full rationale.
 
 ## Hard constraints (from project memory — do not violate)
 
