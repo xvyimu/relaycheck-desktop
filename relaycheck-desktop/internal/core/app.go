@@ -25,6 +25,7 @@ type App struct {
 	db                 *sql.DB
 	dataDir            string
 	key                []byte
+	crypto             *CryptoService
 	browserSessions    map[string]BrowserLoginSession
 	mu                 sync.RWMutex
 	readCache          map[string]readCacheEntry
@@ -94,6 +95,8 @@ func NewApp(root string) (*App, error) {
 		return nil, err
 	}
 
+	cryptoSvc := NewCryptoService(key)
+
 	dbPath := filepath.Join(dataDir, "relaycheck.db")
 	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_pragma=temp_store(MEMORY)&_pragma=cache_size(-20000)")
 	if err != nil {
@@ -106,6 +109,7 @@ func NewApp(root string) (*App, error) {
 		db:              db,
 		dataDir:         dataDir,
 		key:             key,
+		crypto:          cryptoSvc,
 		browserSessions: map[string]BrowserLoginSession{},
 		readCache:       map[string]readCacheEntry{},
 		client: &http.Client{
