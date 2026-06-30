@@ -30,8 +30,7 @@ type App struct {
 	schedulerRepo      *SchedulerRepo
 	browserSessions    map[string]BrowserLoginSession
 	mu                 sync.RWMutex
-	readCache          map[string]readCacheEntry
-	readCacheMu        sync.RWMutex
+	readCache          *ReadCacheStore
 	client             *http.Client
 	networkProxy       NetworkProxyConfig
 	notificationHub    *NotificationHub
@@ -113,7 +112,7 @@ func NewApp(root string) (*App, error) {
 		accountAuth:     accountAuthRepo,
 		schedulerRepo:   NewSchedulerRepo(db),
 		browserSessions: map[string]BrowserLoginSession{},
-		readCache:       map[string]readCacheEntry{},
+		readCache:       NewReadCacheStore(),
 		client: &http.Client{
 			Timeout: defaultHTTPTimeout,
 		},

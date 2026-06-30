@@ -6,7 +6,7 @@ import (
 )
 
 func TestCachedReadReusesValueUntilInvalidated(t *testing.T) {
-	app := &App{readCache: map[string]readCacheEntry{}}
+	app := &App{readCache: NewReadCacheStore()}
 	builds := 0
 
 	first, err := cachedRead(app, "sample", time.Minute, func() (int, error) {
