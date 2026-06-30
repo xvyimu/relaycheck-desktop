@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"relaycheck-desktop/internal/accounts"
 	"relaycheck-desktop/internal/autostart"
 	"relaycheck-desktop/internal/backup"
 	"relaycheck-desktop/internal/channels"
@@ -44,6 +45,7 @@ type App struct {
 	backupService       *backup.Service
 	sitesService        *sites.Service
 	channelsService     *channels.Service
+	accountsService     *accounts.Service
 	versionCheckService *versioncheck.Service
 	legacyCheckService  *legacycheck.Service
 	autostartService    *autostart.Service
@@ -160,6 +162,14 @@ func NewApp(root string) (*App, error) {
 	// SafeNormalizeBaseURL), all of which are satisfied by *App itself, so
 	// it is wired up after the app struct exists.
 	app.channelsService = channels.NewService(app)
+	// accounts.Service depends on accounts.Infra (DB + DoHTTP + EncryptText +
+	// DecryptText + DetectUpstreamForImport + EnsureChannelSiteForImport +
+	// Notify + Audit + Now + NewID), all of which are satisfied by *App
+	// itself, so it is wired up after the app struct exists. The
+	// "ForImport"-suffixed adapters in accounts_infra.go are distinct from
+	// the channels.Infra adapters (DetectUpstream / EnsureUpstreamSiteForChannel)
+	// so a single *App satisfies both interfaces.
+	app.accountsService = accounts.NewService(app)
 	// versioncheck.Service depends on versioncheck.Infra (DB + HTTPClient +
 	// ProductVersion + ValidateOutboundURLStrict), all of which are satisfied
 	// by *App itself, so it is wired up after the app struct exists.
