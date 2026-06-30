@@ -35,8 +35,8 @@ type App struct {
 	networkProxy       NetworkProxyConfig
 	notificationHub    *NotificationHub
 	checkinRun         *CheckinRunStore
-	localSyncRun       syncJobRunState
-	channelHealthRun   syncJobRunState
+	localSyncRun       *SyncJobRunStore
+	channelHealthRun   *SyncJobRunStore
 	schedulerCancel    context.CancelFunc
 	schedulerStartedAt time.Time
 	schedulerWG        sync.WaitGroup
@@ -115,11 +115,13 @@ func NewApp(root string) (*App, error) {
 		client: &http.Client{
 			Timeout: defaultHTTPTimeout,
 		},
-		networkProxy: defaultNetworkProxyConfig(),
-		taskRunner:   newTaskRunner(),
-		bind:         "127.0.0.1",
-		port:         3001,
-		checkinRun:   NewCheckinRunStore(),
+		networkProxy:     defaultNetworkProxyConfig(),
+		taskRunner:       newTaskRunner(),
+		bind:             "127.0.0.1",
+		port:             3001,
+		checkinRun:       NewCheckinRunStore(),
+		localSyncRun:     NewSyncJobRunStore(),
+		channelHealthRun: NewSyncJobRunStore(),
 	}
 
 	// Two-phase init: NotificationHTTPPort is satisfied by *App itself

@@ -25,10 +25,6 @@ const (
 	defaultScheduleInterval = 30 * time.Minute
 )
 
-type syncJobRunState struct {
-	Running bool
-}
-
 type schedulerRunRecord struct {
 	JobKey         string
 	Status         string
@@ -490,22 +486,14 @@ func (a *App) resetInterruptedSchedulerRuns(ctx context.Context) error {
 
 func (a *App) beginSchedulerJob(ctx context.Context, jobKey string, runKey string) bool {
 	if jobKey == schedulerJobSync {
-		a.mu.Lock()
-		if a.localSyncRun.Running {
-			a.mu.Unlock()
+		if !a.localSyncRun.TryStart() {
 			return false
 		}
-		a.localSyncRun.Running = true
-		a.mu.Unlock()
 	}
 	if jobKey == schedulerJobChannelHealth {
-		a.mu.Lock()
-		if a.channelHealthRun.Running {
-			a.mu.Unlock()
+		if !a.channelHealthRun.TryStart() {
 			return false
 		}
-		a.channelHealthRun.Running = true
-		a.mu.Unlock()
 	}
 	_, err := a.db.ExecContext(ctx, `
 		INSERT INTO scheduler_runs (job_key, status, planned_run_key, last_run_key, last_started_at, last_error, summary, updated_at)
@@ -521,14 +509,10 @@ func (a *App) beginSchedulerJob(ctx context.Context, jobKey string, runKey strin
 	`, jobKey, runKey, runKey, now(), now())
 	if err != nil {
 		if jobKey == schedulerJobSync {
-			a.mu.Lock()
-			a.localSyncRun.Running = false
-			a.mu.Unlock()
+			a.localSyncRun.Finish()
 		}
 		if jobKey == schedulerJobChannelHealth {
-			a.mu.Lock()
-			a.channelHealthRun.Running = false
-			a.mu.Unlock()
+			a.channelHealthRun.Finish()
 		}
 		return false
 	}
@@ -537,14 +521,10 @@ func (a *App) beginSchedulerJob(ctx context.Context, jobKey string, runKey strin
 
 func (a *App) finishSchedulerJob(ctx context.Context, jobKey string, runKey string, status string, summary string, errMessage string) error {
 	if jobKey == schedulerJobSync {
-		a.mu.Lock()
-		a.localSyncRun.Running = false
-		a.mu.Unlock()
+		a.localSyncRun.Finish()
 	}
 	if jobKey == schedulerJobChannelHealth {
-		a.mu.Lock()
-		a.channelHealthRun.Running = false
-		a.mu.Unlock()
+		a.channelHealthRun.Finish()
 	}
 	finishedAt := now()
 	lastSuccessAt := ""
