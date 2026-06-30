@@ -33,17 +33,13 @@ type App struct {
 	readCacheMu        sync.RWMutex
 	client             *http.Client
 	networkProxy       NetworkProxyConfig
-	notificationConfig notificationChannelsConfig
+	notificationHub    *NotificationHub
 	checkinRun         *CheckinRunStore
 	localSyncRun       syncJobRunState
 	channelHealthRun   syncJobRunState
 	schedulerCancel    context.CancelFunc
 	schedulerStartedAt time.Time
 	schedulerWG        sync.WaitGroup
-	digestCancel       context.CancelFunc
-	digestWG           sync.WaitGroup
-	digestChannels     map[string]*webhookChannel
-	channelRateLimits  map[string]*channelRateLimiter
 	taskRunner         *TaskRunner
 	bind               string
 	port               int
@@ -119,14 +115,18 @@ func NewApp(root string) (*App, error) {
 		client: &http.Client{
 			Timeout: defaultHTTPTimeout,
 		},
-		networkProxy:      defaultNetworkProxyConfig(),
-		digestChannels:    map[string]*webhookChannel{},
-		channelRateLimits: map[string]*channelRateLimiter{},
-		taskRunner:        newTaskRunner(),
-		bind:              "127.0.0.1",
-		port:              3001,
-		checkinRun:        NewCheckinRunStore(),
+		networkProxy: defaultNetworkProxyConfig(),
+		taskRunner:   newTaskRunner(),
+		bind:         "127.0.0.1",
+		port:         3001,
+		checkinRun:   NewCheckinRunStore(),
 	}
+
+	// Two-phase init: NotificationHTTPPort is satisfied by *App itself
+	// (externalURLPolicy + doHTTPWithTimeout), so the hub can only be wired
+	// up after the app struct exists. Other repositories (accountAuth) are
+	// constructed before app; the hub is the one repo that needs app.
+	app.notificationHub = NewNotificationHub(db, cryptoSvc, app)
 
 	if err := app.migrate(context.Background()); err != nil {
 		_ = db.Close()
@@ -157,16 +157,13 @@ func (a *App) Close() error {
 	a.mu.Lock()
 	cancel := a.schedulerCancel
 	a.schedulerCancel = nil
-	digestCancel := a.digestCancel
-	a.digestCancel = nil
 	a.mu.Unlock()
 	if cancel != nil {
 		cancel()
 		a.schedulerWG.Wait()
 	}
-	if digestCancel != nil {
-		digestCancel()
-		a.digestWG.Wait()
+	if a.notificationHub != nil {
+		a.notificationHub.Close()
 	}
 	if _, execErr := a.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); execErr != nil {
 		log.Printf("[app] wal checkpoint failed: %v", execErr)

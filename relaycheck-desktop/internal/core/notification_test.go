@@ -356,8 +356,8 @@ func TestWebhookSend_Success(t *testing.T) {
 	defer server.Close()
 
 	ch := &webhookChannel{
-		app:    app,
-		config: webhookConfig{URL: server.URL, Mode: "all", TimeoutSeconds: 5},
+		httpPort: app,
+		config:   webhookConfig{URL: server.URL, Mode: "all", TimeoutSeconds: 5},
 	}
 	err = ch.Send(context.Background(), "test_kind", "warning", "测试标题", "测试内容")
 	if err != nil {
@@ -395,7 +395,7 @@ func TestWebhookSend_WithHMAC(t *testing.T) {
 	defer server.Close()
 
 	ch := &webhookChannel{
-		app: app,
+		httpPort: app,
 		config: webhookConfig{
 			URL:            server.URL,
 			HMACSecret:     secret,
@@ -436,8 +436,8 @@ func TestWebhookSend_DigestMode(t *testing.T) {
 	defer server.Close()
 
 	ch := &webhookChannel{
-		app:    app,
-		config: webhookConfig{URL: server.URL, Mode: "digest", TimeoutSeconds: 5},
+		httpPort: app,
+		config:   webhookConfig{URL: server.URL, Mode: "digest", TimeoutSeconds: 5},
 	}
 	// Directly populate entries (bypassing StartDigestLoop)
 	ch.entries = []digestEntry{
@@ -490,9 +490,7 @@ func TestDispatchNotification_Disabled(t *testing.T) {
 			},
 		},
 	}
-	app.mu.Lock()
-	app.notificationConfig = cfg
-	app.mu.Unlock()
+	app.notificationHub.SetConfig(cfg)
 
 	app.dispatchNotification("test_kind", "warning", "标题", "内容")
 	time.Sleep(100 * time.Millisecond)
@@ -524,9 +522,7 @@ func TestDispatchNotification_LevelFilter(t *testing.T) {
 			},
 		},
 	}
-	app.mu.Lock()
-	app.notificationConfig = cfg
-	app.mu.Unlock()
+	app.notificationHub.SetConfig(cfg)
 
 	app.dispatchNotification("test_kind", "info", "标题", "内容")
 	time.Sleep(100 * time.Millisecond)
@@ -565,9 +561,7 @@ func TestDispatchNotification_ModeFilter(t *testing.T) {
 			},
 		},
 	}
-	app.mu.Lock()
-	app.notificationConfig = cfg
-	app.mu.Unlock()
+	app.notificationHub.SetConfig(cfg)
 
 	app.dispatchNotification("test_kind", "warning", "标题", "内容")
 	time.Sleep(100 * time.Millisecond)
@@ -918,8 +912,8 @@ func TestWebhookSend_ModeFilter(t *testing.T) {
 	defer server.Close()
 
 	ch := &webhookChannel{
-		app:    app,
-		config: webhookConfig{URL: server.URL, Mode: "success", TimeoutSeconds: 5},
+		httpPort: app,
+		config:   webhookConfig{URL: server.URL, Mode: "success", TimeoutSeconds: 5},
 	}
 
 	if err := ch.Send(context.Background(), "test", "warning", "标题", "内容"); err != nil {
@@ -957,8 +951,8 @@ func TestBarkURLBuilding(t *testing.T) {
 	defer server.Close()
 
 	ch := &barkChannel{
-		app:    app,
-		config: barkConfig{URL: server.URL, Mode: "all", Group: "RelayCheck"},
+		httpPort: app,
+		config:   barkConfig{URL: server.URL, Mode: "all", Group: "RelayCheck"},
 	}
 
 	err = ch.Send(context.Background(), "test", "warning", "测试标题", "测试内容")
@@ -1070,8 +1064,8 @@ func TestTelegramSend_ModeFilter(t *testing.T) {
 	defer app.Close()
 
 	ch := &telegramChannel{
-		app:    app,
-		config: telegramConfig{BotToken: "test:token", ChatID: "-100123", Mode: "failure"},
+		httpPort: app,
+		config:   telegramConfig{BotToken: "test:token", ChatID: "-100123", Mode: "failure"},
 	}
 	// failure mode should skip info level
 	err = ch.Send(context.Background(), "test", "info", "标题", "内容")
@@ -1091,9 +1085,7 @@ func TestHealthCheckNotificationChannels(t *testing.T) {
 	defer app.Close()
 
 	// Disabled config
-	app.mu.Lock()
-	app.notificationConfig = notificationChannelsConfig{Enabled: false}
-	app.mu.Unlock()
+	app.notificationHub.SetConfig(notificationChannelsConfig{Enabled: false})
 
 	check := app.healthCheckNotificationChannels()
 	if check.Status != "ok" {
@@ -1101,38 +1093,32 @@ func TestHealthCheckNotificationChannels(t *testing.T) {
 	}
 
 	// Enabled with no channels
-	app.mu.Lock()
-	app.notificationConfig = notificationChannelsConfig{Enabled: true}
-	app.mu.Unlock()
+	app.notificationHub.SetConfig(notificationChannelsConfig{Enabled: true})
 	check = app.healthCheckNotificationChannels()
 	if check.Status != "warning" {
 		t.Fatalf("expected warning for enabled but no channels, got %s", check.Status)
 	}
 
 	// Enabled with channel but all disabled
-	app.mu.Lock()
-	app.notificationConfig = notificationChannelsConfig{
+	app.notificationHub.SetConfig(notificationChannelsConfig{
 		Enabled: true,
 		Channels: []channelEntry{
 			{Type: "webhook", Name: "w1", Enabled: false},
 		},
-	}
-	app.mu.Unlock()
+	})
 	check = app.healthCheckNotificationChannels()
 	if check.Status != "warning" {
 		t.Fatalf("expected warning for all channels disabled, got %s", check.Status)
 	}
 
 	// Enabled with some enabled channels
-	app.mu.Lock()
-	app.notificationConfig = notificationChannelsConfig{
+	app.notificationHub.SetConfig(notificationChannelsConfig{
 		Enabled: true,
 		Channels: []channelEntry{
 			{Type: "webhook", Name: "w1", Enabled: true},
 			{Type: "bark", Name: "b1", Enabled: false},
 		},
-	}
-	app.mu.Unlock()
+	})
 	check = app.healthCheckNotificationChannels()
 	if check.Status != "ok" {
 		t.Fatalf("expected ok for enabled channels, got %s", check.Status)
@@ -1163,9 +1149,7 @@ func TestNotifyTriggersDispatch(t *testing.T) {
 			},
 		},
 	}
-	app.mu.Lock()
-	app.notificationConfig = cfg
-	app.mu.Unlock()
+	app.notificationHub.SetConfig(cfg)
 
 	// notify uses go routine for dispatch, so wait a bit
 	app.notify("checkin_failed", "warning", "签到失败", "详情内容", "account", "id123")

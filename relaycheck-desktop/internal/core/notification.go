@@ -6,7 +6,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/tls"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -30,24 +29,24 @@ type notificationChannelsConfig struct {
 }
 
 type channelEntry struct {
-	Type    string          `json:"type"`    // "webhook" | "telegram" | "bark" | "serverchan" | "email"
-	Name    string          `json:"name"`
-	Enabled bool            `json:"enabled"`
-	Config  json.RawMessage `json:"config"`
-	Levels  []string        `json:"levels"`
-	Types   []string        `json:"types"`
+	Type      string           `json:"type"` // "webhook" | "telegram" | "bark" | "serverchan" | "email"
+	Name      string           `json:"name"`
+	Enabled   bool             `json:"enabled"`
+	Config    json.RawMessage  `json:"config"`
+	Levels    []string         `json:"levels"`
+	Types     []string         `json:"types"`
 	RateLimit *rateLimitConfig `json:"rateLimit,omitempty"`
 }
 
 // ==================== 各渠道专属配置 ====================
 
 type webhookConfig struct {
-	URL                string `json:"url"`
-	HMACSecret         string `json:"hmacSecret"`
-	Mode               string `json:"mode"`
-	TimeoutSeconds     int    `json:"timeoutSeconds"`
-	DigestIntervalMin  int    `json:"digestIntervalMin"`
-	MaxRetries         int    `json:"maxRetries"` // 0=不重试, 默认3
+	URL               string `json:"url"`
+	HMACSecret        string `json:"hmacSecret"`
+	Mode              string `json:"mode"`
+	TimeoutSeconds    int    `json:"timeoutSeconds"`
+	DigestIntervalMin int    `json:"digestIntervalMin"`
+	MaxRetries        int    `json:"maxRetries"` // 0=不重试, 默认3
 }
 
 type telegramConfig struct {
@@ -90,18 +89,18 @@ type desktopConfig struct {
 // id). The frontend does not consume related_type, so the duplicate INSERT was
 // pure redundancy. Send() is now a no-op.
 type desktopChannel struct {
-	app    *App
-	config desktopConfig
-	name   string
-	levels []string
-	types  []string
+	httpPort NotificationHTTPPort
+	config   desktopConfig
+	name     string
+	levels   []string
+	types    []string
 }
 
-func (c *desktopChannel) Name() string { return c.name }
-func (c *desktopChannel) Type() string { return "desktop" }
+func (c *desktopChannel) Name() string     { return c.name }
+func (c *desktopChannel) Type() string     { return "desktop" }
 func (c *desktopChannel) Levels() []string { return c.levels }
-func (c *desktopChannel) Types() []string { return c.types }
-func (c *desktopChannel) Validate() error { return nil }
+func (c *desktopChannel) Types() []string  { return c.types }
+func (c *desktopChannel) Validate() error  { return nil }
 
 func (c *desktopChannel) Send(ctx context.Context, kind, level, title, content string) error {
 	if !levelMatchesMode(c.config.Mode, level) {
@@ -129,9 +128,9 @@ type rateLimitConfig struct {
 
 // channelRateLimiter 运行时频率限制状态
 type channelRateLimiter struct {
-	mu         sync.Mutex
-	sendTimes  []time.Time // 最近的发送时间戳
-	config     rateLimitConfig
+	mu        sync.Mutex
+	sendTimes []time.Time // 最近的发送时间戳
+	config    rateLimitConfig
 }
 
 // allow 检查是否允许发送，并记录本次发送
@@ -181,11 +180,11 @@ type digestChannel interface {
 // ==================== 各渠道结构体 ====================
 
 type webhookChannel struct {
-	app    *App
-	config webhookConfig
-	name   string
-	levels []string
-	types  []string
+	httpPort NotificationHTTPPort
+	config   webhookConfig
+	name     string
+	levels   []string
+	types    []string
 	// digest 模式
 	digestCh chan digestEntry
 	entries  []digestEntry
@@ -193,35 +192,35 @@ type webhookChannel struct {
 }
 
 type telegramChannel struct {
-	app    *App
-	config telegramConfig
-	name   string
-	levels []string
-	types  []string
+	httpPort NotificationHTTPPort
+	config   telegramConfig
+	name     string
+	levels   []string
+	types    []string
 }
 
 type barkChannel struct {
-	app    *App
-	config barkConfig
-	name   string
-	levels []string
-	types  []string
+	httpPort NotificationHTTPPort
+	config   barkConfig
+	name     string
+	levels   []string
+	types    []string
 }
 
 type serverchanChannel struct {
-	app    *App
-	config serverchanConfig
-	name   string
-	levels []string
-	types  []string
+	httpPort NotificationHTTPPort
+	config   serverchanConfig
+	name     string
+	levels   []string
+	types    []string
 }
 
 type emailChannel struct {
-	app    *App
-	config emailConfig
-	name   string
-	levels []string
-	types  []string
+	httpPort NotificationHTTPPort
+	config   emailConfig
+	name     string
+	levels   []string
+	types    []string
 }
 
 // ==================== 配置加载函数 ====================
@@ -289,15 +288,15 @@ func validateNotificationChannelsConfig(config *notificationChannelsConfig) []st
 				err = (&serverchanChannel{config: cfg}).Validate()
 			}
 		case "email":
-		var cfg emailConfig
-		if json.Unmarshal(ch.Config, &cfg) == nil {
-			err = (&emailChannel{config: cfg}).Validate()
-		}
-	case "desktop":
-		var cfg desktopConfig
-		if json.Unmarshal(ch.Config, &cfg) == nil {
-			err = (&desktopChannel{config: cfg}).Validate()
-		}
+			var cfg emailConfig
+			if json.Unmarshal(ch.Config, &cfg) == nil {
+				err = (&emailChannel{config: cfg}).Validate()
+			}
+		case "desktop":
+			var cfg desktopConfig
+			if json.Unmarshal(ch.Config, &cfg) == nil {
+				err = (&desktopChannel{config: cfg}).Validate()
+			}
 		}
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("[%s] %s: %v", ch.Type, ch.Name, err))
@@ -306,406 +305,43 @@ func validateNotificationChannelsConfig(config *notificationChannelsConfig) []st
 	return warnings
 }
 
-// ==================== App 方法 ====================
+// ==================== App 方法（转发至 NotificationHub）====================
 
 func (a *App) reloadNotificationConfig(ctx context.Context) error {
-	if a.db == nil {
-		return nil
-	}
-	// 停止旧的 digest 循环（如有）
-	if cancel := func() context.CancelFunc {
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		c := a.digestCancel
-		a.digestCancel = nil
-		a.digestWG = sync.WaitGroup{}
-		a.digestChannels = map[string]*webhookChannel{}
-		a.channelRateLimits = map[string]*channelRateLimiter{}
-		return c
-	}(); cancel != nil {
-		cancel()
-		a.digestWG.Wait()
-	}
-	config, err := a.loadNotificationChannelsConfig(ctx)
-	if err != nil {
-		config = defaultNotificationChannelsConfig()
-	} else {
-		for i := range config.Channels {
-			if decErr := a.decryptChannelEntrySecrets(&config.Channels[i]); decErr != nil {
-				log.Printf("[notification] 解密渠道 %s 密钥失败: %v", config.Channels[i].Name, decErr)
-			}
-		}
-	}
-	a.mu.Lock()
-	a.notificationConfig = config
-	// 为 digest 模式的 webhook 启动专属 goroutine
-	for _, entry := range config.Channels {
-		if !entry.Enabled || entry.Type != "webhook" {
-			continue
-		}
-		var cfg webhookConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			continue
-		}
-		if cfg.Mode != "digest" {
-			continue
-		}
-		ch := &webhookChannel{
-			app:    a,
-			config: cfg,
-			name:   entry.Name,
-			levels: entry.Levels,
-			types:  entry.Types,
-			entries: []digestEntry{},
-			digestCh: make(chan digestEntry, 100),
-		}
-		if err := ch.Validate(); err != nil {
-			log.Printf("[notification] digest webhook %q 验证失败: %v", entry.Name, err)
-			continue
-		}
-		a.digestChannels[entry.Name] = ch
-		digestCtx, digestCancel := context.WithCancel(context.Background())
-		a.mu.Lock()
-		a.digestCancel = digestCancel
-		a.mu.Unlock()
-		a.digestWG.Add(1)
-		go func(c *webhookChannel) {
-			defer a.digestWG.Done()
-			c.StartDigestLoop(digestCtx, c.digestCh)
-		}(ch)
-	}
-	// 初始化频率限制器
-	for _, entry := range config.Channels {
-		if !entry.Enabled || entry.RateLimit == nil || entry.RateLimit.MaxPerInterval <= 0 {
-			continue
-		}
-		a.channelRateLimits[entry.Name] = &channelRateLimiter{
-			config: *entry.RateLimit,
-		}
-	}
-	a.mu.Unlock()
-	return nil
+	return a.notificationHub.Reload(ctx)
 }
 
 func (a *App) loadNotificationChannelsConfig(ctx context.Context) (notificationChannelsConfig, error) {
-	if a.db == nil {
-		return defaultNotificationChannelsConfig(), nil
-	}
-	var valueJSON string
-	err := a.db.QueryRowContext(ctx, `SELECT value_json FROM system_settings WHERE key='notification.channels'`).Scan(&valueJSON)
-	if err == sql.ErrNoRows {
-		return defaultNotificationChannelsConfig(), nil
-	}
-	if err != nil {
-		return defaultNotificationChannelsConfig(), err
-	}
-	config, _ := parseNotificationChannelsConfig(valueJSON)
-	return config, nil
+	return a.notificationHub.LoadConfig(ctx)
 }
 
 func (a *App) currentNotificationChannelsConfig() notificationChannelsConfig {
-	if a == nil {
-		return defaultNotificationChannelsConfig()
-	}
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.notificationConfig
+	return a.notificationHub.CurrentConfig()
 }
-
-// ==================== 渠道工厂 ====================
 
 // digestEntry 用于 digest 模式的消息条目。
 type digestEntry struct {
-	Kind      string
-	Level     string
-	Title     string
-	Content   string
-	Time      time.Time
+	Kind    string
+	Level   string
+	Title   string
+	Content string
+	Time    time.Time
 }
 
 func (a *App) buildChannelFromConfig(entry channelEntry) notificationChannel {
-	if entry.Config == nil {
-		return nil
-	}
-	switch entry.Type {
-	case "webhook":
-		var cfg webhookConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		ch := &webhookChannel{
-			app:    a,
-			config: cfg,
-			name:   entry.Name,
-			levels: entry.Levels,
-			types:  entry.Types,
-		}
-		if err := ch.Validate(); err != nil {
-			return nil
-		}
-		if cfg.Mode == "digest" {
-			ch.digestCh = make(chan digestEntry, 100)
-		}
-		return ch
-	case "telegram":
-		var cfg telegramConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		ch := &telegramChannel{
-			app:    a,
-			config: cfg,
-			name:   entry.Name,
-			levels: entry.Levels,
-			types:  entry.Types,
-		}
-		if err := ch.Validate(); err != nil {
-			return nil
-		}
-		return ch
-	case "bark":
-		var cfg barkConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		ch := &barkChannel{
-			app:    a,
-			config: cfg,
-			name:   entry.Name,
-			levels: entry.Levels,
-			types:  entry.Types,
-		}
-		if err := ch.Validate(); err != nil {
-			return nil
-		}
-		return ch
-	case "serverchan":
-		var cfg serverchanConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		ch := &serverchanChannel{
-			app:    a,
-			config: cfg,
-			name:   entry.Name,
-			levels: entry.Levels,
-			types:  entry.Types,
-		}
-		if err := ch.Validate(); err != nil {
-			return nil
-		}
-		return ch
-	case "email":
-		var cfg emailConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		ch := &emailChannel{
-			app:    a,
-			config: cfg,
-			name:   entry.Name,
-			levels: entry.Levels,
-			types:  entry.Types,
-		}
-		if err := ch.Validate(); err != nil {
-			return nil
-		}
-		return ch
-	case "desktop":
-		var cfg desktopConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		ch := &desktopChannel{
-			app:    a,
-			config: cfg,
-			name:   entry.Name,
-			levels: entry.Levels,
-			types:  entry.Types,
-		}
-		return ch
-	default:
-		return nil
-	}
+	return a.notificationHub.BuildChannel(entry)
 }
 
-// ==================== 加密处理 ====================
-
 func (a *App) encryptChannelEntrySecrets(entry *channelEntry) error {
-	if entry.Config == nil {
-		return nil
-	}
-	switch entry.Type {
-	case "webhook":
-		var cfg webhookConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		if cfg.HMACSecret != "" {
-			enc, err := a.encryptText(cfg.HMACSecret)
-			if err != nil {
-				return err
-			}
-			cfg.HMACSecret = enc
-		}
-		entry.Config, _ = json.Marshal(cfg)
-	case "telegram":
-		var cfg telegramConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		if cfg.BotToken != "" {
-			enc, err := a.encryptText(cfg.BotToken)
-			if err != nil {
-				return err
-			}
-			cfg.BotToken = enc
-		}
-		entry.Config, _ = json.Marshal(cfg)
-	case "serverchan":
-		var cfg serverchanConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		if cfg.SendKey != "" {
-			enc, err := a.encryptText(cfg.SendKey)
-			if err != nil {
-				return err
-			}
-			cfg.SendKey = enc
-		}
-		entry.Config, _ = json.Marshal(cfg)
-	case "email":
-		var cfg emailConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		if cfg.Password != "" {
-			enc, err := a.encryptText(cfg.Password)
-			if err != nil {
-				return err
-			}
-			cfg.Password = enc
-		}
-		entry.Config, _ = json.Marshal(cfg)
-	}
-	return nil
+	return a.notificationHub.EncryptEntrySecrets(entry)
 }
 
 func (a *App) decryptChannelEntrySecrets(entry *channelEntry) error {
-	if entry.Config == nil {
-		return nil
-	}
-	switch entry.Type {
-	case "webhook":
-		var cfg webhookConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		if cfg.HMACSecret != "" && strings.HasPrefix(cfg.HMACSecret, "v1.") {
-			dec, err := a.decryptText(cfg.HMACSecret)
-			if err == nil {
-				cfg.HMACSecret = dec
-			} else {
-				// B3: 解密失败回退为空字符串
-				cfg.HMACSecret = ""
-			}
-		}
-		entry.Config, _ = json.Marshal(cfg)
-	case "telegram":
-		var cfg telegramConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		if cfg.BotToken != "" && strings.HasPrefix(cfg.BotToken, "v1.") {
-			dec, err := a.decryptText(cfg.BotToken)
-			if err == nil {
-				cfg.BotToken = dec
-			} else {
-				cfg.BotToken = ""
-			}
-		}
-		entry.Config, _ = json.Marshal(cfg)
-	case "serverchan":
-		var cfg serverchanConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		if cfg.SendKey != "" && strings.HasPrefix(cfg.SendKey, "v1.") {
-			dec, err := a.decryptText(cfg.SendKey)
-			if err == nil {
-				cfg.SendKey = dec
-			} else {
-				cfg.SendKey = ""
-			}
-		}
-		entry.Config, _ = json.Marshal(cfg)
-	case "email":
-		var cfg emailConfig
-		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
-			return nil
-		}
-		if cfg.Password != "" && strings.HasPrefix(cfg.Password, "v1.") {
-			dec, err := a.decryptText(cfg.Password)
-			if err == nil {
-				cfg.Password = dec
-			} else {
-				cfg.Password = ""
-			}
-		}
-		entry.Config, _ = json.Marshal(cfg)
-	}
-	return nil
+	return a.notificationHub.DecryptEntrySecrets(entry)
 }
 
-// ==================== 分发引擎 ====================
-
 func (a *App) dispatchNotification(kind, level, title, content string) {
-	config := a.currentNotificationChannelsConfig()
-	if !config.Enabled {
-		return
-	}
-	for _, entry := range config.Channels {
-		if !entry.Enabled {
-			continue
-		}
-		if !shouldSendToChannel(entry, kind, level) {
-			continue
-		}
-		// 频率限制检查
-		if entry.RateLimit != nil && entry.RateLimit.MaxPerInterval > 0 {
-			if rl, ok := a.channelRateLimits[entry.Name]; !ok || !rl.allow() {
-				if ok {
-					log.Printf("[notification] 渠道 %q 触发频率限制，跳过: %s/%s", entry.Name, kind, level)
-				}
-				continue
-			}
-		}
-		// digest 模式的 webhook 走 App 级别管理的 channel
-		if entry.Type == "webhook" {
-			var cfg webhookConfig
-			if err := json.Unmarshal(entry.Config, &cfg); err == nil && cfg.Mode == "digest" {
-				if dc, ok := a.digestChannels[entry.Name]; ok && dc.digestCh != nil {
-					select {
-					case dc.digestCh <- digestEntry{Kind: kind, Level: level, Title: title, Content: content, Time: time.Now()}:
-					default:
-						log.Printf("[notification] webhook digest 通道已满，丢弃通知: %s/%s", kind, level)
-					}
-					continue
-				}
-			}
-		}
-		// 普通渠道（非阻塞 goroutine）
-		channel := a.buildChannelFromConfig(entry)
-		if channel == nil {
-			continue
-		}
-		go func(ch notificationChannel) {
-			if err := ch.Send(context.Background(), kind, level, title, content); err != nil {
-				log.Printf("[notification] %s 发送失败: %v", ch.Type(), err)
-			}
-		}(channel)
-	}
+	a.notificationHub.Dispatch(kind, level, title, content)
 }
 
 func shouldSendToChannel(entry channelEntry, kind, level string) bool {
@@ -785,7 +421,7 @@ func (c *webhookChannel) Send(ctx context.Context, kind, level, title, content s
 	if !levelMatchesMode(c.config.Mode, level) {
 		return nil
 	}
-	policy := c.app.externalURLPolicy()
+	policy := c.httpPort.externalURLPolicy()
 	if _, err := validateOutboundHTTPURL(ctx, c.config.URL, policy); err != nil {
 		return fmt.Errorf("SSRF 验证失败: %w", err)
 	}
@@ -849,7 +485,7 @@ func (c *webhookChannel) Send(ctx context.Context, kind, level, title, content s
 			req.Header.Set("X-Signature-256", sig)
 		}
 
-		resp, err := c.app.doHTTPWithTimeout(req, time.Duration(timeout)*time.Second)
+		resp, err := c.httpPort.doHTTPWithTimeout(req, time.Duration(timeout)*time.Second)
 		if err != nil {
 			lastErr = err
 			log.Printf("[notification] webhook 发送失败 (attempt %d/%d): %v", attempt+1, maxRetries+1, err)
@@ -983,7 +619,7 @@ func (c *webhookChannel) sendDigest(ctx context.Context, entries []digestEntry) 
 		req.Header.Set("X-Signature-256", sig)
 	}
 
-	resp, err := c.app.doHTTPWithTimeout(req, time.Duration(timeout)*time.Second)
+	resp, err := c.httpPort.doHTTPWithTimeout(req, time.Duration(timeout)*time.Second)
 	if err != nil {
 		return err
 	}
@@ -1033,7 +669,7 @@ func (c *telegramChannel) Send(ctx context.Context, kind, level, title, content 
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.app.doHTTPWithTimeout(req, 10*time.Second)
+	resp, err := c.httpPort.doHTTPWithTimeout(req, 10*time.Second)
 	if err != nil {
 		return err
 	}
@@ -1066,7 +702,7 @@ func (c *barkChannel) Send(ctx context.Context, kind, level, title, content stri
 	if !levelMatchesMode(c.config.Mode, level) {
 		return nil
 	}
-	policy := c.app.externalURLPolicy()
+	policy := c.httpPort.externalURLPolicy()
 	if _, err := validateOutboundHTTPURL(ctx, c.config.URL, policy); err != nil {
 		return fmt.Errorf("SSRF 验证失败: %w", err)
 	}
@@ -1086,7 +722,7 @@ func (c *barkChannel) Send(ctx context.Context, kind, level, title, content stri
 		return err
 	}
 
-	resp, err := c.app.doHTTPWithTimeout(req, 10*time.Second)
+	resp, err := c.httpPort.doHTTPWithTimeout(req, 10*time.Second)
 	if err != nil {
 		return err
 	}
@@ -1133,7 +769,7 @@ func (c *serverchanChannel) Send(ctx context.Context, kind, level, title, conten
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.app.doHTTPWithTimeout(req, 10*time.Second)
+	resp, err := c.httpPort.doHTTPWithTimeout(req, 10*time.Second)
 	if err != nil {
 		return err
 	}
