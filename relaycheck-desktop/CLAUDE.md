@@ -98,6 +98,16 @@ These were evaluated for extraction during the architecture review and intention
 - JSON: `writeJSON(w, status, data)` / `writeError(w, status, msg)`
 - Encryption: `a.crypto.Encrypt/Decrypt` for new code; `a.encryptText/decryptText` forwarders exist for legacy call sites
 - Auth loading: `a.accountAuth.Load(ctx, id)` / `LoadBatch(ctx, ids)` for new code; `a.loadAccountAuth(s)` forwarders exist
+
+### Known inherited behaviors (not bugs — preserved from pre-refactor code)
+
+These behaviors were uncovered by unit tests for the extracted types. They are inherited from the original `*App` methods and intentionally preserved to avoid behavior changes during the refactor. Do not "fix" them without a product decision.
+
+- `AccountAuthRepository.Load` converts `sql.ErrNoRows` to a Chinese error message (`"账号不存在。"`) rather than propagating `sql.ErrNoRows`. This differs from `SchedulerRepo.LoadSettingJSON/LoadSchedulerRun` which propagate `sql.ErrNoRows` directly. Callers cannot use `errors.Is(err, sql.ErrNoRows)` on `Load`.
+- `AccountAuthRepository.Load`/`LoadBatch` silently discard decryption errors (`auth.Password, _ = r.crypto.Decrypt(...)`). Corrupt ciphertext in the DB yields an empty string for that field, not an error. This is the original behavior.
+
+## Conventions (continued)
+
 - Comments/commit messages: English. User-facing error messages: Chinese (unified during remaining-items deepening)
 
 ## Working directory
