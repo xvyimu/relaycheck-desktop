@@ -684,11 +684,7 @@ func normalizeChannelHealthScheduleConfig(config channelHealthScheduleConfig) ch
 }
 
 func (a *App) loadSettingJSON(ctx context.Context, key string, target interface{}) error {
-	var valueJSON string
-	if err := a.db.QueryRowContext(ctx, `SELECT value_json FROM system_settings WHERE key=?`, key).Scan(&valueJSON); err != nil {
-		return err
-	}
-	return json.Unmarshal([]byte(valueJSON), target)
+	return a.schedulerRepo.LoadSettingJSON(ctx, key, target)
 }
 
 func makeCheckinPlan(config checkinScheduleConfig, currentTime time.Time) checkinPlan {

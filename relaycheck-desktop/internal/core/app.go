@@ -27,6 +27,7 @@ type App struct {
 	key                []byte
 	crypto             *CryptoService
 	accountAuth        *AccountAuthRepository
+	schedulerRepo      *SchedulerRepo
 	browserSessions    map[string]BrowserLoginSession
 	mu                 sync.RWMutex
 	readCache          map[string]readCacheEntry
@@ -110,6 +111,7 @@ func NewApp(root string) (*App, error) {
 		key:             key,
 		crypto:          cryptoSvc,
 		accountAuth:     accountAuthRepo,
+		schedulerRepo:   NewSchedulerRepo(db),
 		browserSessions: map[string]BrowserLoginSession{},
 		readCache:       map[string]readCacheEntry{},
 		client: &http.Client{
