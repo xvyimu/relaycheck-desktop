@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 
-	"github.com/robfig/cron/v3"
+	"relaycheck-desktop/internal/channels"
 )
 
 // ChannelSchedule represents per-site checkin scheduling configuration.
@@ -58,10 +56,8 @@ type NextRunItem struct {
 
 const (
 	// Virtual site ID for the global checkin schedule stored in channel_schedules.
-	globalScheduleSiteID = "__global__"
+	globalScheduleSiteID = channels.GlobalScheduleSiteID
 )
-
-var standardCronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 
 func (a *App) handleChannelSchedules(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPut {
@@ -114,7 +110,7 @@ func (a *App) handleChannelSchedules(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Validate cron expression
-		if _, err := standardCronParser.Parse(body.CronExpr); err != nil {
+		if err := channels.ValidateCronExpr(body.CronExpr); err != nil {
 			writeError(w, http.StatusBadRequest, fmt.Sprintf("Cron 表达式无效: %s", err.Error()))
 			return
 		}
@@ -150,7 +146,7 @@ func (a *App) handleChannelSchedules(w http.ResponseWriter, r *http.Request) {
 		rdMax = *body.RandomDelayMax
 	}
 
-	nextRun := computeNextRun(body.CheckinTime, body.CronExpr, body.SkipDates, rdMin, rdMax)
+	nextRun := channels.ComputeNextRun(body.CheckinTime, body.CronExpr, body.SkipDates, rdMin, rdMax)
 
 	_, err := a.db.ExecContext(ctx, `
 		INSERT INTO channel_schedules (id, upstream_site_id, enabled, checkin_time, cron_expr, skip_dates_json, random_delay_min, random_delay_max, next_run_at, created_at, updated_at)
@@ -172,38 +168,16 @@ func (a *App) handleChannelSchedules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "nextRunAt": nextRun})
 }
 
+// listChannelSchedules is the *App forwarder for
+// channels.Service.ListChannelSchedules. Converts the channels mirror type
+// back to core.ChannelSchedule so existing callers (handleChannelSchedules,
+// handleScheduleCalendar, handleNextRuns) are unchanged.
 func (a *App) listChannelSchedules(ctx context.Context) ([]ChannelSchedule, error) {
-	rows, err := a.db.QueryContext(ctx, `
-		SELECT cs.id, cs.upstream_site_id, COALESCE(s.name,''), cs.enabled, cs.checkin_time,
-		       COALESCE(cs.cron_expr,''), COALESCE(cs.skip_dates_json,'[]'),
-		       cs.random_delay_min, cs.random_delay_max, COALESCE(cs.last_run_at,''),
-		       COALESCE(cs.next_run_at,''), cs.created_at, cs.updated_at
-		FROM channel_schedules cs
-		LEFT JOIN upstream_sites s ON s.id = cs.upstream_site_id
-		ORDER BY cs.checkin_time
-	`)
+	items, err := a.channelsService.ListChannelSchedules(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var items []ChannelSchedule
-	for rows.Next() {
-		var item ChannelSchedule
-		var enabled int
-		var skipDatesJSON string
-		if err := rows.Scan(&item.ID, &item.UpstreamSiteID, &item.SiteName, &enabled, &item.CheckinTime,
-			&item.CronExpr, &skipDatesJSON,
-			&item.RandomDelayMin, &item.RandomDelayMax, &item.LastRunAt, &item.NextRunAt,
-			&item.CreatedAt, &item.UpdatedAt); err != nil {
-			return nil, err
-		}
-		item.Enabled = enabled != 0
-		if skipDatesJSON != "" && skipDatesJSON != "[]" {
-			json.Unmarshal([]byte(skipDatesJSON), &item.SkipDates)
-		}
-		items = append(items, item)
-	}
-	return items, nil
+	return schedulesToCore(items), nil
 }
 
 func (a *App) handleScheduleCalendar(w http.ResponseWriter, r *http.Request) {
@@ -220,12 +194,13 @@ func (a *App) handleScheduleCalendar(w http.ResponseWriter, r *http.Request) {
 
 	cst := time.FixedZone("CST", 8*3600)
 	now := time.Now().In(cst)
-	days := parseCalendarDays(r, 7)
+	days := channels.ParseCalendarDays(r, 7)
 	windowEnd := now.AddDate(0, 0, days)
 	items := make([]ScheduleCalendarItem, 0, len(schedules)*days)
 
 	for _, sched := range schedules {
-		items = append(items, calendarItemsForSchedule(sched, now, windowEnd, days)...)
+		mirrorItems := channels.CalendarItemsForSchedule(scheduleToMirror(sched), now, windowEnd, days)
+		items = append(items, calendarItemsToCore(mirrorItems)...)
 	}
 	if item, ok := a.nextSyncCalendarItem(ctx, now, windowEnd); ok {
 		items = append(items, item)
@@ -242,98 +217,15 @@ func (a *App) handleScheduleCalendar(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func parseCalendarDays(r *http.Request, fallback int) int {
-	if fallback <= 0 {
-		fallback = 7
-	}
-	if r == nil {
-		return fallback
-	}
-	raw := r.URL.Query().Get("days")
-	if raw == "" {
-		return fallback
-	}
-	days, err := strconv.Atoi(raw)
-	if err != nil || days <= 0 {
-		return fallback
-	}
-	if days > 31 {
-		return 31
-	}
-	return days
-}
-
-func calendarItemsForSchedule(sched ChannelSchedule, now time.Time, windowEnd time.Time, days int) []ScheduleCalendarItem {
-	if !sched.Enabled {
-		return nil
-	}
-	if sched.CronExpr != "" {
-		return cronCalendarItemsForSchedule(sched, now, windowEnd)
-	}
-	items := make([]ScheduleCalendarItem, 0, days)
-	for day := 0; day < days; day++ {
-		date := now.AddDate(0, 0, day)
-		dateStr := date.Format("2006-01-02")
-		if isDateSkipped(dateStr, sched.SkipDates) {
-			continue
-		}
-		items = append(items, ScheduleCalendarItem{
-			Date:     dateStr,
-			Time:     sched.CheckinTime,
-			SiteName: sched.SiteName,
-			SiteID:   sched.UpstreamSiteID,
-			JobType:  "checkin",
-			Enabled:  true,
-		})
-	}
-	return items
-}
-
-func cronCalendarItemsForSchedule(sched ChannelSchedule, now time.Time, windowEnd time.Time) []ScheduleCalendarItem {
-	parsed, err := standardCronParser.Parse(sched.CronExpr)
-	if err != nil {
-		return nil
-	}
-	var items []ScheduleCalendarItem
-	next := parsed.Next(now.Add(-1 * time.Second))
-	for len(items) < 366 && next.Before(windowEnd) {
-		dateStr := next.Format("2006-01-02")
-		if !isDateSkipped(dateStr, sched.SkipDates) {
-			items = append(items, ScheduleCalendarItem{
-				Date:     dateStr,
-				Time:     next.Format("15:04"),
-				SiteName: sched.SiteName,
-				SiteID:   sched.UpstreamSiteID,
-				JobType:  "checkin",
-				Enabled:  true,
-			})
-		}
-		next = parsed.Next(next)
-	}
-	return items
-}
-
+// nextSyncCalendarItem is the *App forwarder for
+// channels.Service.NextSyncCalendarItem. Converts the channels mirror type
+// back to core.ScheduleCalendarItem so handleScheduleCalendar is unchanged.
 func (a *App) nextSyncCalendarItem(ctx context.Context, now time.Time, windowEnd time.Time) (ScheduleCalendarItem, bool) {
-	record, err := a.loadSchedulerRun(ctx, schedulerJobSync)
-	if err != nil || strings.TrimSpace(record.NextRunAt) == "" {
+	item, ok := a.channelsService.NextSyncCalendarItem(ctx, now, windowEnd)
+	if !ok {
 		return ScheduleCalendarItem{}, false
 	}
-	nextRun, err := time.Parse(time.RFC3339Nano, record.NextRunAt)
-	if err != nil {
-		return ScheduleCalendarItem{}, false
-	}
-	nextRun = nextRun.In(now.Location())
-	if nextRun.Before(now) || !nextRun.Before(windowEnd) {
-		return ScheduleCalendarItem{}, false
-	}
-	return ScheduleCalendarItem{
-		Date:     nextRun.Format("2006-01-02"),
-		Time:     nextRun.Format("15:04"),
-		SiteName: "本地 NewAPI 同步",
-		SiteID:   "",
-		JobType:  "sync",
-		Enabled:  true,
-	}, true
+	return calendarItemFromMirror(item), true
 }
 
 func (a *App) handleNextRuns(w http.ResponseWriter, r *http.Request) {
@@ -402,112 +294,16 @@ func (a *App) handleNextRuns(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// isDateSkipped checks if a date string is in the skip list.
-func isDateSkipped(date string, skipDates []string) bool {
-	for _, d := range skipDates {
-		if d == date {
-			return true
-		}
-	}
-	return false
-}
-
-// computeNextRun returns the next run time as RFC3339 string.
-// Uses Asia/Shanghai (UTC+8) timezone for consistent scheduling regardless
-// of the server's local timezone.
-//
-// Priority:
-//  1. cron_expr (when set) — compute from cron expression
-//  2. checkin_time (fallback) — "HH:MM" daily at that time
-//
-// Both skip dates in the skip list.
-func computeNextRun(checkinTime string, cronExpr string, skipDates []string, delayMin, delayMax int) string {
-	cst := time.FixedZone("CST", 8*3600)
-	now := time.Now().In(cst)
-
-	var next time.Time
-	var cronSchedule cron.Schedule
-
-	if cronExpr != "" {
-		sched, err := standardCronParser.Parse(cronExpr)
-		if err == nil {
-			cronSchedule = sched
-			next = sched.Next(now)
-		} else {
-			// Fallback to checkinTime on parse error
-		}
-	}
-
-	if next.IsZero() {
-		hour, minute := 8, 0
-		fmt.Sscanf(checkinTime, "%d:%d", &hour, &minute)
-		next = time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, cst)
-		if !next.After(now) {
-			next = next.AddDate(0, 0, 1)
-		}
-	}
-
-	// Skip dates in the skip list — advance by 1 day and retry (cron) or advance by 1 day (daily)
-	dateStr := next.Format("2006-01-02")
-	maxIter := 366 // safety limit
-	for i := 0; i < maxIter && isDateSkipped(dateStr, skipDates); i++ {
-		if cronSchedule != nil {
-			next = cronSchedule.Next(next.Add(time.Minute)) // advance past current match
-		} else {
-			next = next.AddDate(0, 0, 1)
-		}
-		dateStr = next.Format("2006-01-02")
-	}
-
-	if delayMax > delayMin {
-		// Use midpoint for deterministic preview
-		delay := (delayMin + delayMax) / 2
-		next = next.Add(time.Duration(delay) * time.Minute)
-	}
-	return next.Format(time.RFC3339)
-}
-
-// ensureGlobalScheduleRecord creates or updates the __global__ channel_schedule record
-// so that listChannelSchedules returns it as a regular schedule entry. This allows
-// the global checkin schedule to appear in calendar views and next-run lists without
-// a separate code path. The record is a projection of system_settings checkin.schedule.
+// ensureGlobalScheduleRecord is the *App forwarder for
+// channels.Service.EnsureGlobalScheduleRecord. Delegates to the channels
+// service so the SQL round-tripping lives in one place.
 func (a *App) ensureGlobalScheduleRecord(ctx context.Context) error {
-	// Ensure __global__ upstream_site exists (FK constraint)
-	_, err := a.db.ExecContext(ctx, `
-		INSERT OR IGNORE INTO upstream_sites (id, name, base_url, kind, created_at, updated_at)
-		VALUES (?, ?, '', 'unknown', ?, ?)
-	`, globalScheduleSiteID, "全局签到", now(), now())
-	if err != nil {
-		return err
-	}
-	config := a.loadCheckinScheduleConfig(ctx)
-	delayMin, delayMax := normalizedRandomDelay(config.RandomDelayMinutes)
-	nextRun := computeNextRun(config.Time, "", nil, delayMin, delayMax)
-	_, err = a.db.ExecContext(ctx, `
-		INSERT INTO channel_schedules (id, upstream_site_id, enabled, checkin_time, cron_expr, skip_dates_json, random_delay_min, random_delay_max, next_run_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, '', '[]', ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET
-			enabled=excluded.enabled,
-			checkin_time=excluded.checkin_time,
-			cron_expr=excluded.cron_expr,
-			skip_dates_json=excluded.skip_dates_json,
-			random_delay_min=excluded.random_delay_min,
-			random_delay_max=excluded.random_delay_max,
-			next_run_at=excluded.next_run_at,
-			updated_at=excluded.updated_at
-	`, globalScheduleSiteID, globalScheduleSiteID, config.Enabled, config.Time, delayMin, delayMax, nextRun, now(), now())
-	return err
+	return a.channelsService.EnsureGlobalScheduleRecord(ctx)
 }
 
-// syncGlobalScheduleRecord updates the __global__ channel_schedule record to reflect
-// the current checkin.schedule config. Called at the end of each tickCheckinScheduler.
+// syncGlobalScheduleRecord is the *App forwarder for
+// channels.Service.SyncGlobalScheduleRecord. Delegates to the channels
+// service so the SQL round-tripping lives in one place.
 func (a *App) syncGlobalScheduleRecord(ctx context.Context) {
-	config := a.loadCheckinScheduleConfig(ctx)
-	delayMin, delayMax := normalizedRandomDelay(config.RandomDelayMinutes)
-	nextRun := computeNextRun(config.Time, "", nil, delayMin, delayMax)
-	a.db.ExecContext(ctx, `
-		UPDATE channel_schedules
-		SET enabled=?, checkin_time=?, random_delay_min=?, random_delay_max=?, next_run_at=?, updated_at=?
-		WHERE id=?
-	`, config.Enabled, config.Time, delayMin, delayMax, nextRun, now(), globalScheduleSiteID)
+	a.channelsService.SyncGlobalScheduleRecord(ctx)
 }

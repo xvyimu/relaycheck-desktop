@@ -10,6 +10,8 @@ import (
 	"math/big"
 	"strings"
 	"time"
+
+	"relaycheck-desktop/internal/channels"
 )
 
 const (
@@ -180,7 +182,7 @@ func (a *App) tickChannelScheduler(ctx context.Context, currentTime time.Time) {
 		}
 
 		// Recalculate next run after execution
-		newNextRun := computeNextRun(sched.CheckinTime, sched.CronExpr, sched.SkipDates, sched.RandomDelayMin, sched.RandomDelayMax)
+		newNextRun := channels.ComputeNextRun(sched.CheckinTime, sched.CronExpr, sched.SkipDates, sched.RandomDelayMin, sched.RandomDelayMax)
 		if _, execErr := a.db.ExecContext(ctx, `
 			UPDATE channel_schedules
 			SET last_run_at=?, next_run_at=?, updated_at=?

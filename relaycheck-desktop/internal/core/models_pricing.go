@@ -2,16 +2,12 @@ package core
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type modelOverview struct {
@@ -357,40 +353,15 @@ func (a *App) handleModelPricingSync(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, overview)
 }
 
+// loadRawChannelPricingSources forwards to the channels service. The host
+// keeps this method so handlers in core can call it with core types; the
+// channels service owns the SQL and the extraction engine.
 func (a *App) loadRawChannelPricingSources(ctx context.Context) ([]modelPricingSource, error) {
-	rows, err := a.db.QueryContext(ctx, `
-		SELECT id, name, COALESCE(base_url,''), upstream_kind, COALESCE(raw_json,'')
-		FROM imported_channels
-		WHERE COALESCE(raw_json,'') <> ''
-		  AND COALESCE(source_sync_status,'active') <> 'archived'
-		ORDER BY updated_at DESC
-		LIMIT 500
-	`)
+	mirror, err := a.channelsService.LoadRawChannelPricingSources(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	sources := []modelPricingSource{}
-	seenSources := map[string]bool{}
-	for rows.Next() {
-		var channelID, channelName, baseURL, kind, rawJSON string
-		if err := rows.Scan(&channelID, &channelName, &baseURL, &kind, &rawJSON); err != nil {
-			return nil, err
-		}
-		for _, source := range extractModelPricingSources(channelID, channelName, baseURL, kind, rawJSON) {
-			key := source.ChannelID + "|" + strings.ToLower(source.Model) + "|" + source.Source + "|" + source.FieldPath + "|" + source.UpstreamModel
-			if seenSources[key] {
-				continue
-			}
-			seenSources[key] = true
-			sources = append(sources, source)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return sources, nil
+	return pricingSourcesToCore(mirror), nil
 }
 
 func buildPricingOverview(sources []modelPricingSource, cacheItems []sitePricingCacheItem, accountRecords []accountModelRecord) modelPricingOverview {
@@ -447,143 +418,45 @@ func buildPricingOverview(sources []modelPricingSource, cacheItems []sitePricing
 	return overview
 }
 
+// loadPricingSiteRecords forwards to the channels service so the host handler
+// gets the same []pricingSiteRecord without owning the SQL.
 func (a *App) loadPricingSiteRecords(ctx context.Context, limit int) ([]pricingSiteRecord, error) {
-	rows, err := a.db.QueryContext(ctx, `
-		SELECT id, name, base_url, kind
-		FROM upstream_sites
-		WHERE kind IN ('newapi','oneapi','sub2api','modified_relay')
-		  AND COALESCE(base_url,'') <> ''
-		ORDER BY COALESCE(last_health_check_at,''), updated_at DESC
-		LIMIT ?
-	`, limit)
+	mirror, err := a.channelsService.LoadPricingSiteRecords(ctx, limit)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	records := []pricingSiteRecord{}
-	for rows.Next() {
-		var record pricingSiteRecord
-		if err := rows.Scan(&record.SiteID, &record.SiteName, &record.BaseURL, &record.Kind); err != nil {
-			return nil, err
-		}
-		records = append(records, record)
+	if len(mirror) == 0 {
+		return nil, nil
 	}
-	return records, rows.Err()
+	out := make([]pricingSiteRecord, 0, len(mirror))
+	for _, m := range mirror {
+		out = append(out, pricingSiteRecord{
+			SiteID:   m.SiteID,
+			SiteName: m.SiteName,
+			BaseURL:  m.BaseURL,
+			Kind:     m.Kind,
+		})
+	}
+	return out, nil
 }
 
+// syncSitePricing forwards to the channels service. The channels service owns
+// the HTTP probe, live-source extraction, and site_pricing_cache upsert; the
+// host handler just needs the resulting cache item in core's type.
 func (a *App) syncSitePricing(ctx context.Context, record pricingSiteRecord) sitePricingCacheItem {
-	item := sitePricingCacheItem{
-		SiteID:       record.SiteID,
-		SiteName:     record.SiteName,
-		BaseURL:      record.BaseURL,
-		Kind:         record.Kind,
-		SourcePath:   "/api/pricing",
-		Status:       "failed",
-		LastSyncedAt: now(),
-	}
-	baseURL, err := safeNormalizeBaseURL(ctx, record.BaseURL, a.externalURLPolicy())
-	if err != nil {
-		item.Message = err.Error()
-		a.saveSitePricingCache(ctx, item, nil, "")
-		return item
-	}
-	baseURL = strings.TrimRight(baseURL, "/")
-
-	requestCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(requestCtx, http.MethodGet, baseURL+"/api/pricing", nil)
-	if err != nil {
-		item.Message = err.Error()
-		a.saveSitePricingCache(ctx, item, nil, "")
-		return item
-	}
-	req.Header.Set("accept", "application/json, text/plain, */*")
-	req.Header.Set("user-agent", "RelayCheck-Desktop/0.1")
-	started := time.Now()
-	resp, err := a.doHTTPWithTimeout(req, 9*time.Second)
-	item.LatencyMs = time.Since(started).Milliseconds()
-	if err != nil {
-		item.Message = err.Error()
-		a.saveSitePricingCache(ctx, item, nil, "")
-		return item
-	}
-	defer resp.Body.Close()
-	item.HTTPStatus = resp.StatusCode
-	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 200*1024))
-	body := string(bodyBytes)
-	item.Message = firstNonEmpty(extractMessage(body), fmt.Sprintf("/api/pricing 返回 HTTP %d。", resp.StatusCode))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		item.Status = "failed"
-		a.saveSitePricingCache(ctx, item, nil, body)
-		return item
-	}
-	sources := extractLivePricingSources(record, body)
-	item.SourceCount = len(sources)
-	item.ModelCount = countPricingModels(sources)
-	if len(sources) == 0 {
-		item.Status = "empty"
-		item.Message = "接口可访问，但未识别到模型价格、倍率或 quota 字段。"
-	} else {
-		item.Status = "success"
-		item.Message = fmt.Sprintf("识别到 %d 条价格来源，覆盖 %d 个模型。", item.SourceCount, item.ModelCount)
-	}
-	a.saveSitePricingCache(ctx, item, sources, body)
-	return item
+	mirror := a.channelsService.SyncSitePricing(ctx, pricingSiteRecordToMirror(record))
+	return sitePricingCacheItemFromMirror(mirror)
 }
 
-func (a *App) saveSitePricingCache(ctx context.Context, item sitePricingCacheItem, sources []modelPricingSource, rawBody string) {
-	sourcesJSON := marshalPricingSourcesLimit(sources, 200)
-	rawMasked := ""
-	if strings.TrimSpace(rawBody) != "" {
-		rawMasked = maskResponse(rawBody)
-	}
-	if _, execErr := a.db.ExecContext(ctx, `
-		INSERT INTO site_pricing_cache (id, site_id, site_name, base_url, kind, status, http_status, latency_ms, source_path, raw_response_masked, sources_json, model_count, source_count, message, last_synced_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(site_id, source_path) DO UPDATE SET
-			site_name=excluded.site_name,
-			base_url=excluded.base_url,
-			kind=excluded.kind,
-			status=excluded.status,
-			http_status=excluded.http_status,
-			latency_ms=excluded.latency_ms,
-			raw_response_masked=excluded.raw_response_masked,
-			sources_json=excluded.sources_json,
-			model_count=excluded.model_count,
-			source_count=excluded.source_count,
-			message=excluded.message,
-			last_synced_at=excluded.last_synced_at,
-			updated_at=excluded.updated_at
-	`, newID(), item.SiteID, item.SiteName, item.BaseURL, item.Kind, item.Status, item.HTTPStatus, item.LatencyMs, item.SourcePath, rawMasked, sourcesJSON, item.ModelCount, item.SourceCount, maskResponse(item.Message), item.LastSyncedAt, now(), now()); execErr != nil {
-		log.Printf("[pricing] site pricing cache save failed for site %s: %v", item.SiteID, execErr)
-	}
-}
-
+// loadSitePricingCache forwards to the channels service. Returns the cached
+// /api/pricing sources and items in core types so the pricing-overview builder
+// can aggregate them without a type change.
 func (a *App) loadSitePricingCache(ctx context.Context) ([]modelPricingSource, []sitePricingCacheItem, error) {
-	rows, err := a.db.QueryContext(ctx, `
-		SELECT site_id, site_name, base_url, kind, status, http_status, latency_ms,
-		       source_path, COALESCE(sources_json,''), model_count, source_count,
-		       COALESCE(message,''), last_synced_at
-		FROM site_pricing_cache
-		ORDER BY last_synced_at DESC
-		LIMIT 200
-	`)
+	mirrorSources, mirrorItems, err := a.channelsService.LoadSitePricingCache(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer rows.Close()
-	sources := []modelPricingSource{}
-	items := []sitePricingCacheItem{}
-	for rows.Next() {
-		var item sitePricingCacheItem
-		var sourcesJSON string
-		if err := rows.Scan(&item.SiteID, &item.SiteName, &item.BaseURL, &item.Kind, &item.Status, &item.HTTPStatus, &item.LatencyMs, &item.SourcePath, &sourcesJSON, &item.ModelCount, &item.SourceCount, &item.Message, &item.LastSyncedAt); err != nil {
-			return nil, nil, err
-		}
-		items = append(items, item)
-		sources = append(sources, parsePricingSourcesJSON(sourcesJSON)...)
-	}
-	return sources, items, rows.Err()
+	return pricingSourcesToCore(mirrorSources), sitePricingCacheItemsFromMirror(mirrorItems), nil
 }
 
 func extractLivePricingSources(record pricingSiteRecord, rawJSON string) []modelPricingSource {
@@ -678,70 +551,17 @@ func buildModelPriceComparisons(sources []modelPricingSource, accountRecords []a
 	return comparisons
 }
 
-func marshalPricingSourcesLimit(values []modelPricingSource, limit int) string {
-	if len(values) > limit {
-		values = values[:limit]
-	}
-	body, err := json.Marshal(values)
-	if err != nil {
-		return ""
-	}
-	return string(body)
-}
-
-func parsePricingSourcesJSON(raw string) []modelPricingSource {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	var sources []modelPricingSource
-	if err := json.Unmarshal([]byte(raw), &sources); err != nil {
-		return nil
-	}
-	return sources
-}
-
-func countPricingModels(sources []modelPricingSource) int {
-	seen := map[string]bool{}
-	for _, source := range sources {
-		if source.Model != "" {
-			seen[strings.ToLower(source.Model)] = true
-		}
-	}
-	return len(seen)
-}
-
+// loadAccountModelRecords forwards to the channels service. The channels
+// service owns the joined channel_accounts + upstream_sites query; the host
+// keeps this method so handlers (model overview, pricing, key export preview)
+// can call it with the original *http.Request signature and get back core
+// accountModelRecord values.
 func (a *App) loadAccountModelRecords(r *http.Request) ([]accountModelRecord, error) {
-	rows, err := a.db.QueryContext(r.Context(), `
-		SELECT a.id, a.display_name, s.id, s.name, s.base_url, s.kind,
-		       COALESCE(a.api_key_fingerprint,''), COALESCE(a.api_key_status,''), COALESCE(a.api_key_model_count,0),
-		       COALESCE(a.api_key_sample_models_json,''), COALESCE(a.api_key_test_model,''),
-		       COALESCE(a.api_key_model_usable,0), COALESCE(a.api_key_latency_ms,0), COALESCE(a.api_key_last_checked_at,'')
-		FROM channel_accounts a
-		JOIN upstream_sites s ON s.id = a.upstream_site_id
-		WHERE COALESCE(a.api_key_fingerprint,'') <> ''
-		ORDER BY s.name ASC, a.display_name ASC
-	`)
+	mirror, err := a.channelsService.LoadAccountModelRecords(r.Context())
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	records := []accountModelRecord{}
-	for rows.Next() {
-		var record accountModelRecord
-		var sampleJSON string
-		var modelUsable int
-		if err := rows.Scan(&record.AccountID, &record.AccountName, &record.SiteID, &record.SiteName, &record.BaseURL, &record.Kind, &record.Fingerprint, &record.Status, &record.ModelCount, &sampleJSON, &record.TestModel, &modelUsable, &record.LatencyMs, &record.LastCheckedAt); err != nil {
-			return nil, err
-		}
-		record.ModelUsable = modelUsable == 1
-		record.SampleModels = parsePersistedStringSlice(sampleJSON)
-		records = append(records, record)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return records, nil
+	return accountModelRecordsToCore(mirror), nil
 }
 
 func extractModelPricingSources(channelID string, channelName string, baseURL string, kind string, rawJSON string) []modelPricingSource {
@@ -1333,11 +1153,4 @@ func cloneModelOverviewForTest(records []accountModelRecord) modelOverview {
 	var cloned modelOverview
 	_ = json.Unmarshal(body, &cloned)
 	return cloned
-}
-
-func scanNullableString(value sql.NullString) string {
-	if value.Valid {
-		return value.String
-	}
-	return ""
 }

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"relaycheck-desktop/internal/channels"
 )
 
 // parseAPIResponse unwraps the {"ok":true,"data":...} layer and unmarshals the data field into target.
@@ -362,7 +364,7 @@ func TestHandleScheduleCalendar_UsesCronOccurrences(t *testing.T) {
 
 func TestComputeNextRun_ReturnsFutureTime(t *testing.T) {
 	nowTime := time.Now()
-	result := computeNextRun("08:00", "", nil, 0, 30)
+	result := channels.ComputeNextRun("08:00", "", nil, 0, 30)
 	if result == "" {
 		t.Fatal("expected non-empty next run")
 	}
@@ -379,8 +381,8 @@ func TestComputeNextRun_ReturnsFutureTime(t *testing.T) {
 
 func TestComputeNextRun_DeterministicWithinDay(t *testing.T) {
 	// Same inputs should give same result within the same second
-	r1 := computeNextRun("14:30", "", nil, 10, 20)
-	r2 := computeNextRun("14:30", "", nil, 10, 20)
+	r1 := channels.ComputeNextRun("14:30", "", nil, 10, 20)
+	r2 := channels.ComputeNextRun("14:30", "", nil, 10, 20)
 	if r1 != r2 {
 		t.Fatalf("expected deterministic result, got %s vs %s", r1, r2)
 	}
@@ -501,7 +503,7 @@ func TestHandleChannelSchedules_PUT_InvalidSkipDateFormat(t *testing.T) {
 func TestComputeNextRun_WithCronExpr(t *testing.T) {
 	// "0 9 * * 1-5" = 09:00 on weekdays
 	// Use a fixed reference time so the test is deterministic
-	result := computeNextRun("08:00", "0 9 * * 1-5", nil, 0, 0)
+	result := channels.ComputeNextRun("08:00", "0 9 * * 1-5", nil, 0, 0)
 	if result == "" {
 		t.Fatal("expected non-empty next run for cron expr")
 	}
@@ -522,7 +524,7 @@ func TestComputeNextRun_WithSkipDates(t *testing.T) {
 	cst := time.FixedZone("CST", 8*3600)
 	tomorrow := time.Now().In(cst).AddDate(0, 0, 1).Format("2006-01-02")
 
-	result := computeNextRun("08:00", "", []string{tomorrow}, 0, 0)
+	result := channels.ComputeNextRun("08:00", "", []string{tomorrow}, 0, 0)
 	if result == "" {
 		t.Fatal("expected non-empty next run")
 	}
@@ -537,7 +539,7 @@ func TestComputeNextRun_WithSkipDates(t *testing.T) {
 }
 
 func TestComputeNextRun_EmptyCronFallsBackToCheckinTime(t *testing.T) {
-	result := computeNextRun("22:30", "", nil, 0, 0)
+	result := channels.ComputeNextRun("22:30", "", nil, 0, 0)
 	if result == "" {
 		t.Fatal("expected non-empty next run")
 	}

@@ -19,6 +19,7 @@ import (
 
 	"relaycheck-desktop/internal/autostart"
 	"relaycheck-desktop/internal/backup"
+	"relaycheck-desktop/internal/channels"
 	"relaycheck-desktop/internal/legacycheck"
 	"relaycheck-desktop/internal/notifications"
 	"relaycheck-desktop/internal/sites"
@@ -42,6 +43,7 @@ type App struct {
 	notificationHub     *notifications.NotificationHub
 	backupService       *backup.Service
 	sitesService        *sites.Service
+	channelsService     *channels.Service
 	versionCheckService *versioncheck.Service
 	legacyCheckService  *legacycheck.Service
 	autostartService    *autostart.Service
@@ -151,6 +153,13 @@ func NewApp(root string) (*App, error) {
 	// all of which are satisfied by *App itself, so it is wired up after the
 	// app struct exists.
 	app.sitesService = sites.NewService(app)
+	// channels.Service depends on channels.Infra (DB + DoHTTP +
+	// DoHTTPWithTimeout + DecryptText + DetectUpstream +
+	// EnsureUpstreamSiteForChannel + Notify + Audit + Now + NewID +
+	// InvalidateReadCache + LoadSchedulerRun + LoadCheckinScheduleConfig +
+	// SafeNormalizeBaseURL), all of which are satisfied by *App itself, so
+	// it is wired up after the app struct exists.
+	app.channelsService = channels.NewService(app)
 	// versioncheck.Service depends on versioncheck.Infra (DB + HTTPClient +
 	// ProductVersion + ValidateOutboundURLStrict), all of which are satisfied
 	// by *App itself, so it is wired up after the app struct exists.
