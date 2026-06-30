@@ -96,7 +96,12 @@ flowchart TD
 
 ### Architecture Evolution (June 2026)
 
-The `*App` god object in `internal/core/app.go` has been progressively decomposed: 11 service/store types (CryptoService, AccountAuthRepository, CheckinRunStore, NotificationHub, SyncJobRunStore, SchedulerRepo, ReadCacheStore, BrowserSessionStore, NetworkProxyStore, plus the SharedInfra interface) now own state that was previously on `*App`, each with its own mutex. `*App` retains thin forwarding methods so existing call sites are unchanged. See `CLAUDE.md` and `internal/core/PACKAGE_INDEX.md` for the full map.
+The `*App` god object in `internal/core/app.go` was progressively decomposed in two phases:
+
+- **Phase 1** — 11 service/store types (CryptoService, AccountAuthRepository, CheckinRunStore, NotificationHub, SyncJobRunStore, SchedulerRepo, ReadCacheStore, BrowserSessionStore, NetworkProxyStore, plus the SharedInfra interface) were extracted within `core`, each owning its state with an independent mutex. `*App` retains thin forwarding methods so existing call sites are unchanged.
+- **Phase 2** — 8 domain packages (notifications, backup, versioncheck, legacycheck, autostart, sites, channels, accounts) were split out of `core` into independent `internal/<domain>/` packages using the Infra-interface + mirror-type + `*App`-forwarder pattern. Dependency direction is one-way: `core` → domain. Cross-cutting concerns (audit, crypto, network, URL safety, checkin/balance execution, system settings) intentionally stay in `core`.
+
+See `CLAUDE.md` and `internal/core/PACKAGE_INDEX.md` for the full map.
 
 ## Route Overview
 

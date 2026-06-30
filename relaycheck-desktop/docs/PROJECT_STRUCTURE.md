@@ -7,7 +7,15 @@ Last updated: 2026-06-30
 | Path | Purpose |
 |------|---------|
 | `main.go` | Desktop entry, embeds `frontend/dist`, starts the local HTTP server. |
-| `internal/core/` | Main Go application logic: routes, SQLite, accounts, channels, sites, scanner, scheduler, audit, diagnostics, security checks, unified task engine (SSE), analytics, encrypted backup/export, per-channel scheduling, dry-run preview, autostart, legacy check, detection engine, and tests. |
+| `internal/core/` | Assembly root: `App` struct, HTTP handlers, routes, SQLite, scheduler, audit, crypto, network, URL safety, checkin/balance execution, system settings, analytics, diagnostics, and forwarding methods to all domain packages. See `internal/core/PACKAGE_INDEX.md` for the file-by-file map. |
+| `internal/notifications/` | Notification hub + 6 channel implementations (webhook/telegram/bark/serverchan/email/desktop). |
+| `internal/backup/` | Encrypted zip export/import (PBKDF2-SHA256 + RCZIP2/RCZIP1). |
+| `internal/versioncheck/` | Remote version manifest check + semver compare. |
+| `internal/legacycheck/` | Legacy Python code detection. |
+| `internal/autostart/` | OS auto-start shortcut management (Windows + non-Windows stub). |
+| `internal/sites/` | Upstream site CRUD, detection (headers/HTML/API), local network scanner. |
+| `internal/channels/` | Channel CRUD, model sync, health overview, schedules, pricing, model overview. |
+| `internal/accounts/` | Account CRUD + 5 import paths (Chrome password, admin API, SQLite, legacy config, local NewAPI) + sync preview + auto-detect. |
 | `internal/lock/` | Single-instance lock implementation for Windows and Unix. |
 | `frontend/src/main.tsx` | React application shell and page orchestration. |
 | `frontend/src/components/` | Domain panels (dashboard, channels, sites, accounts, checkins, notifications, settings, onboarding) and shared UI primitives (ThemeToggle, UpdateBanner, TwoFactorGuide, AnalyticsPanel, Empty). |
@@ -22,14 +30,14 @@ Last updated: 2026-06-30
 - **Theme system:** Three-state toggle (system/light/dark) via `frontend/src/lib/theme.ts`, persisted in localStorage, applied via `html.dark` class.
 - **Onboarding wizard:** 4-step first-run guide in `frontend/src/components/onboarding/`, controlled by localStorage flag.
 - **Analytics engine:** `internal/core/analytics.go` provides balance trend, checkin distribution, response times, site reliability, and balance deltas via `/api/analytics?days=N`. Frontend uses pure SVG charts (no chart library) with drilldown support.
-- **Encrypted export/import:** `internal/core/backup_zip.go` implements AES-256-GCM encrypted zip with PBKDF2-SHA256 key derivation (200,000 iterations + 32-byte salt). RCZIP2 format; RCZIP1 supported for backward-compatible decryption. Zip-bomb protection caps total decompressed at 256 MB.
+- **Encrypted export/import:** `internal/backup/` implements AES-256-GCM encrypted zip with PBKDF2-SHA256 key derivation (200,000 iterations + 32-byte salt). RCZIP2 format; RCZIP1 supported for backward-compatible decryption. Zip-bomb protection caps total decompressed at 256 MB. `internal/core/backup_zip.go` is a thin forwarder.
 - **Per-channel scheduling:** `internal/core/channel_schedules.go` allows per-site checkin time and random delay configuration. Calendar preview and next-runs list available via API. Uses `time.FixedZone("CST", 8*3600)` for timezone consistency.
-- **Notification channels:** Webhook (with HMAC + exponential backoff retry), Telegram, Bark, ServerChan, Email (SMTP), and Desktop (in-app + browser Notification API push). `levelMatchesMode` supports `all`/`failure`/`success`/`warning+` modes.
-- **Detection engine:** `internal/core/detection_engine.go` identifies site kind (newapi/oneapi/sub2api) from HTTP headers, HTML content, and API responses with confidence scoring.
+- **Notification channels:** `internal/notifications/` implements Webhook (with HMAC + exponential backoff retry), Telegram, Bark, ServerChan, Email (SMTP), and Desktop (in-app + browser Notification API push). `levelMatchesMode` supports `all`/`failure`/`success`/`warning+` modes. `internal/core/notification.go` is a thin forwarder.
+- **Detection engine:** `internal/sites/detection.go` identifies site kind (newapi/oneapi/sub2api) from HTTP headers, HTML content, and API responses with confidence scoring. `internal/core/detection_detail.go` does cross-domain aggregation.
 - **Dry-run preview:** `internal/core/dry_run.go` previews batch operations without executing them, with a 200-account limit and single batch query.
-- **Auto-start:** `internal/core/autostart.go` + `platform_windows.go` create Windows shell:startup shortcuts via PowerShell COM.
+- **Auto-start:** `internal/autostart/` creates Windows shell:startup shortcuts via PowerShell COM. `internal/core/autostart.go` is a thin forwarder.
 - **Cookie expiry tracking:** ChannelAccount model tracks `cookie_expiry_at` and `storage_state_expiry_at`; diagnostics and Action Center surface upcoming expirations.
-- **Architecture evolution (June 2026):** The `*App` god object in `internal/core/app.go` was decomposed into 11 service/store types (CryptoService, AccountAuthRepository, CheckinRunStore, NotificationHub, SyncJobRunStore, SchedulerRepo, ReadCacheStore, BrowserSessionStore, NetworkProxyStore + SharedInfra interface). Each owns its state with an independent mutex; `*App` retains thin forwarding methods. See `CLAUDE.md` and `internal/core/PACKAGE_INDEX.md` for details. Design spec: `docs/superpowers/specs/2026-06-29-architecture-evolution-design.md`.
+- **Architecture evolution (June 2026):** Two-phase decomposition of the `*App` god object in `internal/core/app.go`. **Phase 1** (commits `8fc1975`..`1444e43`) extracted 11 service/store types within `core` (CryptoService, AccountAuthRepository, CheckinRunStore, NotificationHub, SyncJobRunStore, SchedulerRepo, ReadCacheStore, BrowserSessionStore, NetworkProxyStore + SharedInfra interface), each with its own mutex. **Phase 2** (commits `2a32506`..`e80578c`) split 8 domain packages out of `core` (notifications, backup, versioncheck, legacycheck, autostart, sites, channels, accounts) using the Infra-interface + mirror-type + `*App`-forwarder pattern. Dependency direction is one-way: `core` → domain. See `CLAUDE.md` and `internal/core/PACKAGE_INDEX.md` for details. Design spec: `docs/superpowers/specs/2026-06-29-architecture-evolution-design.md`.
 
 ## Active Documents
 
@@ -71,8 +79,8 @@ cd frontend
 npm run build
 npx tsc --noEmit
 cd ..
-go vet ./...
-go test ./internal/core/ -count=1 -timeout 120s
+go vet -mod=vendor ./...
+go test -mod=vendor ./... -count=1 -timeout 120s
 go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .
 ```
 
