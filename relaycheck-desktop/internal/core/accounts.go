@@ -457,11 +457,9 @@ func (a *App) handleBulkFinishBrowserLogin(w http.ResponseWriter, r *http.Reques
 	_ = decodeJSON(r, &input)
 	accountIDs := input.IDs
 	if len(accountIDs) == 0 {
-		a.mu.RLock()
-		for id := range a.browserSessions {
+		a.browserSessions.Range(func(id string, _ BrowserLoginSession) {
 			accountIDs = append(accountIDs, id)
-		}
-		a.mu.RUnlock()
+		})
 	}
 	results := []browserLoginSaveResult{}
 	saved := 0
@@ -981,9 +979,7 @@ func (a *App) startBrowserLogin(ctx context.Context, id string, auth *accountAut
 		return result
 	}
 
-	a.mu.RLock()
-	if session, ok := a.browserSessions[id]; ok {
-		a.mu.RUnlock()
+	if session, ok := a.browserSessions.Get(id); ok {
 		result.Status = "already_open"
 		result.Message = "该账号网页登录窗口已经打开。"
 		result.DebugPort = session.Port
@@ -991,10 +987,9 @@ func (a *App) startBrowserLogin(ctx context.Context, id string, auth *accountAut
 		return result
 	}
 	usedPorts := map[int]bool{}
-	for _, session := range a.browserSessions {
+	for _, session := range a.browserSessions.List() {
 		usedPorts[session.Port] = true
 	}
-	a.mu.RUnlock()
 
 	if profilePath == "" {
 		profilePath = filepath.Join(a.dataDir, "browser-profiles", id)
@@ -1043,20 +1038,14 @@ func (a *App) startBrowserLogin(ctx context.Context, id string, auth *accountAut
 		return result
 	}
 
-	a.mu.Lock()
-	a.browserSessions[id] = BrowserLoginSession{AccountID: id, Port: port, StartedAt: time.Now(), PID: cmd.Process.Pid}
-	a.mu.Unlock()
+	a.browserSessions.Set(id, BrowserLoginSession{AccountID: id, Port: port, StartedAt: time.Now(), PID: cmd.Process.Pid})
 
 	// Watchdog: clean up the session entry when the Chrome process exits so
 	// the in-memory map doesn't leak entries for crashed or user-closed
 	// browser windows.
 	go func(accountID string, proc *os.Process) {
 		_, _ = proc.Wait()
-		a.mu.Lock()
-		if existing, ok := a.browserSessions[accountID]; ok && existing.PID == proc.Pid {
-			delete(a.browserSessions, accountID)
-		}
-		a.mu.Unlock()
+		a.browserSessions.DeleteIfPIDMatches(accountID, proc.Pid)
 	}(id, cmd.Process)
 
 	if _, execErr := a.db.ExecContext(ctx, `
@@ -1120,9 +1109,7 @@ func (a *App) saveBrowserLoginSession(ctx context.Context, id string, auth *acco
 	`, id).Scan(&accountName, &siteName)
 	result := browserLoginSaveResult{AccountID: id, AccountName: accountName, SiteName: siteName}
 
-	a.mu.RLock()
-	session, ok := a.browserSessions[id]
-	a.mu.RUnlock()
+	session, ok := a.browserSessions.Get(id)
 	if !ok {
 		result.Status = "missing"
 		result.Message = "没有正在进行的网页登录会话，请先点击网页登录。"
@@ -1159,9 +1146,7 @@ func (a *App) saveBrowserLoginSession(ctx context.Context, id string, auth *acco
 		return result
 	}
 
-	a.mu.Lock()
-	delete(a.browserSessions, id)
-	a.mu.Unlock()
+	a.browserSessions.Delete(id)
 	a.notify("browser_login_saved", "success", "网页登录态已保存", fmt.Sprintf("%s 已保存 %d 个 Cookie。", firstNonEmpty(accountName, id), len(cookies)), "account", id)
 	a.audit("browser_auth.connected", "info", "", "account", id, "网页登录授权已保存。", map[string]interface{}{"accountName": accountName, "siteName": siteName, "cookieCount": len(cookies)})
 
@@ -1629,9 +1614,7 @@ func (a *App) clearAccountSession(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 	var profilePath string
-	a.mu.Lock()
-	delete(a.browserSessions, id)
-	a.mu.Unlock()
+	a.browserSessions.Delete(id)
 	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(browser_profile_path,'') FROM channel_accounts WHERE id=?`, id).Scan(&profilePath)
 	if profilePath != "" && strings.HasPrefix(filepath.Clean(profilePath), filepath.Clean(a.dataDir)) {
 		if rmErr := os.RemoveAll(profilePath); rmErr != nil {

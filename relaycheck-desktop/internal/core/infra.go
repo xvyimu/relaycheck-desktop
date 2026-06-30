@@ -28,7 +28,7 @@ type SharedInfra interface {
 	// DataDir returns the application data directory path.
 	DataDir() string
 	// Locker returns the coarse-grained mutex protecting App state that
-	// domains need to coordinate on (e.g. browserSessions, digestChannels).
+	// domains need to coordinate on (e.g. digestChannels).
 	// Domains that need finer-grained locking should introduce their own
 	// mutex rather than relying on this one.
 	Locker() sync.Locker
