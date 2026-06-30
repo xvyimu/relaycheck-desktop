@@ -32,7 +32,7 @@ type App struct {
 	mu                 sync.RWMutex
 	readCache          *ReadCacheStore
 	client             *http.Client
-	networkProxy       NetworkProxyConfig
+	networkProxy       *NetworkProxyStore
 	notificationHub    *NotificationHub
 	checkinRun         *CheckinRunStore
 	localSyncRun       *SyncJobRunStore
@@ -116,7 +116,7 @@ func NewApp(root string) (*App, error) {
 		client: &http.Client{
 			Timeout: defaultHTTPTimeout,
 		},
-		networkProxy:     defaultNetworkProxyConfig(),
+		networkProxy:     NewNetworkProxyStore(defaultNetworkProxyConfig()),
 		taskRunner:       newTaskRunner(),
 		bind:             "127.0.0.1",
 		port:             3001,

@@ -82,9 +82,7 @@ func (a *App) reloadNetworkProxyConfig(ctx context.Context) error {
 		config = defaultNetworkProxyConfig()
 		config.Enabled = false
 	}
-	a.mu.Lock()
-	a.networkProxy = config
-	a.mu.Unlock()
+	a.networkProxy.Set(config)
 	return nil
 }
 
@@ -107,12 +105,11 @@ func (a *App) currentNetworkProxyConfig() NetworkProxyConfig {
 	if a == nil {
 		return defaultNetworkProxyConfig()
 	}
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	if a.networkProxy.URL == "" {
+	config := a.networkProxy.Get()
+	if config.URL == "" {
 		return defaultNetworkProxyConfig()
 	}
-	return a.networkProxy
+	return config
 }
 
 func (a *App) networkProxyStatus() NetworkProxyStatus {
