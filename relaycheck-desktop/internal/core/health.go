@@ -19,9 +19,9 @@ func (a *App) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (a *App) healthStatus(ctx context.Context) HealthStatus {
 	checks := []HealthCheck{
 		a.healthCheckDB(ctx),
-		a.healthCheckPath("database", "数据库文件", a.databasePath(), false),
-		a.healthCheckPath("data_dir", "数据目录", a.dataDir, true),
-		a.healthCheckPath("keys_dir", "密钥目录", filepath.Join(a.dataDir, "keys"), true),
+		healthCheckPath("database", "数据库文件", a.databasePath(), false),
+		healthCheckPath("data_dir", "数据目录", a.dataDir, true),
+		healthCheckPath("keys_dir", "密钥目录", filepath.Join(a.dataDir, "keys"), true),
 		a.healthCheckScheduler(),
 		a.healthCheckNotificationChannels(),
 	}
@@ -52,7 +52,8 @@ func (a *App) healthCheckDB(ctx context.Context) HealthCheck {
 	return HealthCheck{ID: "db", Label: "SQLite 连接", Status: "ok", Message: "数据库可读写连接正常。"}
 }
 
-func (a *App) healthCheckPath(id string, label string, path string, wantDir bool) HealthCheck {
+// healthCheckPath is a pure function: does not access *App state.
+func healthCheckPath(id string, label string, path string, wantDir bool) HealthCheck {
 	info, err := os.Stat(path)
 	if err != nil {
 		return HealthCheck{ID: id, Label: label, Status: "error", Message: err.Error()}

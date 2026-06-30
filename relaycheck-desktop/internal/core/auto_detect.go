@@ -78,7 +78,7 @@ func (a *App) autoDetectSQLiteDBs(ctx context.Context) []string {
 		if _, err := os.Stat(absPath); err != nil {
 			continue
 		}
-		if a.probeSQLiteHasChannels(ctx, absPath) {
+		if probeSQLiteHasChannels(ctx, absPath) {
 			found = append(found, absPath)
 		}
 	}
@@ -107,7 +107,7 @@ func (a *App) autoDetectSQLiteDBs(ctx context.Context) []string {
 					continue
 				}
 				seen[absPath] = true
-				if a.probeSQLiteHasChannels(ctx, absPath) {
+				if probeSQLiteHasChannels(ctx, absPath) {
 					found = append(found, absPath)
 				}
 			}
@@ -118,7 +118,8 @@ func (a *App) autoDetectSQLiteDBs(ctx context.Context) []string {
 }
 
 // probeSQLiteHasChannels checks if the given SQLite DB has a "channels" table.
-func (a *App) probeSQLiteHasChannels(ctx context.Context, dbPath string) bool {
+// Pure function: does not access *App state, only opens the given path read-only.
+func probeSQLiteHasChannels(ctx context.Context, dbPath string) bool {
 	source, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?mode=ro")
 	if err != nil {
 		return false
