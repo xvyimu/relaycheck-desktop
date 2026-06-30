@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -215,22 +214,6 @@ func (a *App) ensureDefaultSettings(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-func withDefaultHealthNotificationTypes(valueJSON string) string {
-	config, _ := parseNotificationChannelsConfig(valueJSON)
-	for index := range config.Channels {
-		switch config.Channels[index].Type {
-		case "webhook", "telegram":
-			appendUniqueString(&config.Channels[index].Types, "scheduled_channel_health_probe_failed", 20)
-			appendUniqueString(&config.Channels[index].Types, "scheduled_channel_health_probe_warning", 20)
-		}
-	}
-	body, err := json.Marshal(config)
-	if err != nil {
-		return valueJSON
-	}
-	return string(body)
 }
 
 func newID() string {

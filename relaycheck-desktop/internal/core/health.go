@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -75,22 +74,4 @@ func (a *App) healthCheckScheduler() HealthCheck {
 		return HealthCheck{ID: "scheduler", Label: "后台调度器", Status: "warning", Message: "调度器尚未启动；测试实例可能是预期状态。"}
 	}
 	return HealthCheck{ID: "scheduler", Label: "后台调度器", Status: "ok", Message: "后台任务循环已启动。"}
-}
-
-func (a *App) healthCheckNotificationChannels() HealthCheck {
-	config := a.currentNotificationChannelsConfig()
-	if !config.Enabled {
-		return HealthCheck{ID: "notification", Label: "通知渠道", Status: "ok", Message: "外部通知未启用。"}
-	}
-	enabledCount := 0
-	totalCount := len(config.Channels)
-	for _, ch := range config.Channels {
-		if ch.Enabled {
-			enabledCount++
-		}
-	}
-	if enabledCount == 0 {
-		return HealthCheck{ID: "notification", Label: "通知渠道", Status: "warning", Message: "外部通知已启用，但未启用任何渠道。"}
-	}
-	return HealthCheck{ID: "notification", Label: "通知渠道", Status: "ok", Message: fmt.Sprintf("已启用 %d/%d 个外部通知渠道。", enabledCount, totalCount)}
 }
