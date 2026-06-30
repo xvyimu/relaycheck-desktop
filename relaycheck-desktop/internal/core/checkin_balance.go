@@ -1079,41 +1079,11 @@ func (a *App) saveBalanceResult(ctx context.Context, auth accountAuthContext, re
 }
 
 func (a *App) loadAccountAuth(ctx context.Context, id string) (accountAuthContext, error) {
-	var auth accountAuthContext
-	var email, username, cookieEncrypted, accessEncrypted, apiKeyEncrypted, passwordEncrypted, loginURL, checkinConfigJSON string
-	var supportsCheckin, supportsBalance int
-	var siteKind sql.NullString
-	err := a.db.QueryRowContext(ctx, `
-		SELECT a.id, a.display_name, s.id, s.name, COALESCE(s.kind,''), COALESCE(s.channel_id,''), s.base_url,
-		       COALESCE(s.login_url,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
-		       COALESCE(a.password_encrypted,''), COALESCE(a.cookie_encrypted,''),
-		       COALESCE(a.access_token_encrypted,''), COALESCE(a.api_key_encrypted,''),
-		       COALESCE(a.auth_user_id,''), s.supports_checkin, s.supports_balance,
-		       COALESCE(s.checkin_config_json,'')
-		FROM channel_accounts a
-		JOIN upstream_sites s ON s.id = a.upstream_site_id
-		WHERE a.id = ?
-	`, id).Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON)
-	if err == sql.ErrNoRows {
-		return auth, errorsText("账号不存在。")
-	}
+	auth, err := a.accountAuth.Load(ctx, id)
 	if err != nil {
-		return auth, err
+		return accountAuthContext{}, err
 	}
-	auth.LoginName = firstNonEmpty(email, username)
-	auth.SiteKind = siteKind.String
-	auth.LoginPath = pathFromMaybeURL(loginURL)
-	auth.Password, _ = a.decryptText(passwordEncrypted)
-	auth.Cookie, _ = a.decryptText(cookieEncrypted)
-	auth.AccessToken, _ = a.decryptText(accessEncrypted)
-	auth.APIKey, _ = a.decryptText(apiKeyEncrypted)
-	auth.SupportsCheckin = supportsCheckin == 1
-	auth.SupportsBalance = supportsBalance == 1
-	auth.CheckinRules = parseCheckinRules(checkinConfigJSON)
-	if len(auth.CheckinRules) > 0 {
-		auth.SupportsCheckin = true
-	}
-	return auth, nil
+	return *auth, nil
 }
 
 // loadAccountAuths batch-loads accountAuthContext for multiple account IDs in
@@ -1121,58 +1091,7 @@ func (a *App) loadAccountAuth(ctx context.Context, id string) (accountAuthContex
 // keyed by account ID. If a particular ID is not found, it is simply absent
 // from the map; callers should fall back to loadAccountAuth for missing entries.
 func (a *App) loadAccountAuths(ctx context.Context, ids []string) (map[string]accountAuthContext, error) {
-	if len(ids) == 0 {
-		return map[string]accountAuthContext{}, nil
-	}
-	placeholders := strings.Repeat("?,", len(ids))
-	placeholders = placeholders[:len(placeholders)-1]
-	args := make([]interface{}, 0, len(ids))
-	for _, id := range ids {
-		args = append(args, id)
-	}
-	rows, err := a.db.QueryContext(ctx, `
-		SELECT a.id, a.display_name, s.id, s.name, COALESCE(s.kind,''), COALESCE(s.channel_id,''), s.base_url,
-		       COALESCE(s.login_url,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
-		       COALESCE(a.password_encrypted,''), COALESCE(a.cookie_encrypted,''),
-		       COALESCE(a.access_token_encrypted,''), COALESCE(a.api_key_encrypted,''),
-		       COALESCE(a.auth_user_id,''), s.supports_checkin, s.supports_balance,
-		       COALESCE(s.checkin_config_json,'')
-		FROM channel_accounts a
-		JOIN upstream_sites s ON s.id = a.upstream_site_id
-		WHERE a.id IN (`+placeholders+`)
-	`, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	auths := make(map[string]accountAuthContext, len(ids))
-	for rows.Next() {
-		var auth accountAuthContext
-		var email, username, cookieEncrypted, accessEncrypted, apiKeyEncrypted, passwordEncrypted, loginURL, checkinConfigJSON string
-		var supportsCheckin, supportsBalance int
-		var siteKind sql.NullString
-		if err := rows.Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON); err != nil {
-			return nil, err
-		}
-		auth.LoginName = firstNonEmpty(email, username)
-		auth.SiteKind = siteKind.String
-		auth.LoginPath = pathFromMaybeURL(loginURL)
-		auth.Password, _ = a.decryptText(passwordEncrypted)
-		auth.Cookie, _ = a.decryptText(cookieEncrypted)
-		auth.AccessToken, _ = a.decryptText(accessEncrypted)
-		auth.APIKey, _ = a.decryptText(apiKeyEncrypted)
-		auth.SupportsCheckin = supportsCheckin == 1
-		auth.SupportsBalance = supportsBalance == 1
-		auth.CheckinRules = parseCheckinRules(checkinConfigJSON)
-		if len(auth.CheckinRules) > 0 {
-			auth.SupportsCheckin = true
-		}
-		auths[auth.AccountID] = auth
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return auths, nil
+	return a.accountAuth.LoadBatch(ctx, ids)
 }
 
 func parseCheckinRules(raw string) []apiCandidate {

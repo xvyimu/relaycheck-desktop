@@ -26,6 +26,7 @@ type App struct {
 	dataDir            string
 	key                []byte
 	crypto             *CryptoService
+	accountAuth        *AccountAuthRepository
 	browserSessions    map[string]BrowserLoginSession
 	mu                 sync.RWMutex
 	readCache          map[string]readCacheEntry
@@ -105,11 +106,14 @@ func NewApp(root string) (*App, error) {
 	db.SetMaxOpenConns(4)
 	db.SetMaxIdleConns(4)
 
+	accountAuthRepo := NewAccountAuthRepository(db, cryptoSvc)
+
 	app := &App{
 		db:              db,
 		dataDir:         dataDir,
 		key:             key,
 		crypto:          cryptoSvc,
+		accountAuth:     accountAuthRepo,
 		browserSessions: map[string]BrowserLoginSession{},
 		readCache:       map[string]readCacheEntry{},
 		client: &http.Client{
