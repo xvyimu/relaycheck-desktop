@@ -73,6 +73,11 @@ func (c *CryptoService) Decrypt(value string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Guard against malformed input that would panic in gcm.Open: the nonce
+	// must be exactly gcm.NonceSize() bytes, and empty ciphertext is invalid.
+	if len(nonce) != gcm.NonceSize() || len(cipherText) < gcm.Overhead() {
+		return "", nil
+	}
 	plainText, err := gcm.Open(nil, nonce, cipherText, nil)
 	if err != nil {
 		return "", err
