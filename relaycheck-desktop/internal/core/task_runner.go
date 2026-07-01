@@ -141,14 +141,27 @@ type TaskRunner struct {
 	tasks          map[string]*runningTask
 	mu             sync.RWMutex
 	sseSubscribers atomic.Int64
+	rootCtx        context.Context
 }
 
 func newTaskRunner() *TaskRunner {
-	return &TaskRunner{tasks: map[string]*runningTask{}}
+	return &TaskRunner{tasks: map[string]*runningTask{}, rootCtx: context.Background()}
+}
+
+// setRootCtx links the TaskRunner's per-task cancellation contexts to the
+// App's process-level rootCtx so that App.Close() interrupts in-flight tasks
+// in addition to the prelude work executed by the start*Task handlers.
+func (tr *TaskRunner) setRootCtx(ctx context.Context) {
+	tr.mu.Lock()
+	tr.rootCtx = ctx
+	tr.mu.Unlock()
 }
 
 func (tr *TaskRunner) start(id string, taskType TaskType, total int) (*runningTask, context.Context) {
-	ctx, cancel := context.WithCancel(context.Background())
+	tr.mu.RLock()
+	root := tr.rootCtx
+	tr.mu.RUnlock()
+	ctx, cancel := context.WithCancel(root)
 	task := &runningTask{
 		progress: TaskProgress{
 			ID:        id,
@@ -395,7 +408,7 @@ func writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, payload interfac
 
 func (a *App) startCheckinTask(taskID string, _ map[string]interface{}) {
 	go func() {
-		ctx := context.Background()
+		ctx := a.rootCtx
 		accounts, err := a.loadDueCheckinAccounts(ctx, "", 0)
 		if err != nil {
 			task, _ := a.taskRunner.start(taskID, TaskCheckin, 0)
@@ -443,7 +456,7 @@ func (a *App) startCheckinTask(taskID string, _ map[string]interface{}) {
 
 func (a *App) startTestKeysTask(taskID string, params map[string]interface{}) {
 	go func() {
-		ctx := context.Background()
+		ctx := a.rootCtx
 		limit := 50
 		if l, ok := params["limit"].(float64); ok && l > 0 {
 			limit = int(l)
@@ -504,7 +517,7 @@ func (a *App) startTestKeysTask(taskID string, params map[string]interface{}) {
 
 func (a *App) startRefreshBalancesTask(taskID string, params map[string]interface{}) {
 	go func() {
-		ctx := context.Background()
+		ctx := a.rootCtx
 		limit := 50
 		missingOnly := false
 		if l, ok := params["limit"].(float64); ok && l > 0 {
@@ -574,7 +587,7 @@ func (a *App) startRefreshBalancesTask(taskID string, params map[string]interfac
 
 func (a *App) startDetectSitesTask(taskID string, params map[string]interface{}) {
 	go func() {
-		ctx := context.Background()
+		ctx := a.rootCtx
 		limit := 50
 		onlyUnknownOrOpenAI := false
 		if l, ok := params["limit"].(float64); ok && l > 0 {
@@ -638,7 +651,7 @@ func (a *App) startDetectSitesTask(taskID string, params map[string]interface{})
 
 func (a *App) startChannelHealthProbeTask(taskID string, params map[string]interface{}) {
 	go func() {
-		ctx := context.Background()
+		ctx := a.rootCtx
 		limit := 20
 		onlyRisky := false
 		if l, ok := params["limit"].(float64); ok && l > 0 {

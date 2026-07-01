@@ -56,18 +56,27 @@ type NotificationHub struct {
 	digestCancel      context.CancelFunc
 	digestWG          sync.WaitGroup
 	channelRateLimits map[string]*ChannelRateLimiter
+	// sendCtx/sendWG track the fire-and-forget goroutines spawned by Dispatch
+	// so Close can cancel in-flight sends and wait for them to return instead
+	// of stranding goroutines on slow SMTP/webhook endpoints at shutdown.
+	sendCtx    context.Context
+	sendCancel context.CancelFunc
+	sendWG     sync.WaitGroup
 }
 
 // NewNotificationHub constructs a NotificationHub backed by the given
 // database handle, crypto port, and HTTP port (typically the host application
 // itself, which satisfies NotificationHTTPPort).
 func NewNotificationHub(db *sql.DB, crypto CryptoPort, httpPort NotificationHTTPPort) *NotificationHub {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &NotificationHub{
 		db:                db,
 		crypto:            crypto,
 		httpPort:          httpPort,
 		digestChannels:    map[string]*WebhookChannel{},
 		channelRateLimits: map[string]*ChannelRateLimiter{},
+		sendCtx:           ctx,
+		sendCancel:        cancel,
 	}
 }
 
@@ -465,23 +474,38 @@ func (h *NotificationHub) Dispatch(kind, level, title, content string) {
 		if channel == nil {
 			continue
 		}
+		h.mu.RLock()
+		sendCtx := h.sendCtx
+		h.mu.RUnlock()
+		h.sendWG.Add(1)
 		go func(ch Channel) {
-			if err := ch.Send(context.Background(), kind, level, title, content); err != nil {
-				log.Printf("[notification] %s 发送失败: %v", ch.Type(), err)
+			defer h.sendWG.Done()
+			if err := ch.Send(sendCtx, kind, level, title, content); err != nil {
+				if sendCtx.Err() == nil {
+					log.Printf("[notification] %s 发送失败: %v", ch.Type(), err)
+				}
 			}
 		}(channel)
 	}
 }
 
-// Close stops the digest goroutine (if running) and waits for it to drain.
+// Close stops the digest goroutine (if running) and waits for it to drain,
+// then cancels in-flight Dispatch sends and waits for them to return so the
+// process does not leave goroutines stranded on slow network sends.
 func (h *NotificationHub) Close() {
 	h.mu.Lock()
 	cancel := h.digestCancel
 	h.digestCancel = nil
+	sendCancel := h.sendCancel
+	h.sendCancel = nil
 	h.mu.Unlock()
 	if cancel != nil {
 		cancel()
 		h.digestWG.Wait()
+	}
+	if sendCancel != nil {
+		sendCancel()
+		h.sendWG.Wait()
 	}
 }
 

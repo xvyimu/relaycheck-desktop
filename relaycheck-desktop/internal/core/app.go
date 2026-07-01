@@ -56,11 +56,17 @@ type App struct {
 	schedulerStartedAt  time.Time
 	schedulerWG         sync.WaitGroup
 	taskRunner          *TaskRunner
-	bind                string
-	port                int
-	preferredPort       int
-	portConflict        bool
-	allowLocalOutbound  bool
+	// rootCtx is the process-level context cancelled by Close(). Long-running
+	// background tasks (checkin/test-keys/etc.) derive their ctx from it so
+	// that shutdown interrupts prelude work (e.g. loading the job list from
+	// the DB) instead of stranding a context.Background() goroutine.
+	rootCtx            context.Context
+	rootCancel         context.CancelFunc
+	bind               string
+	port               int
+	preferredPort      int
+	portConflict       bool
+	allowLocalOutbound bool
 }
 
 var fallbackIDCounter atomic.Uint64
@@ -139,6 +145,8 @@ func NewApp(root string) (*App, error) {
 		localSyncRun:     NewSyncJobRunStore(),
 		channelHealthRun: NewSyncJobRunStore(),
 	}
+	app.rootCtx, app.rootCancel = context.WithCancel(context.Background())
+	app.taskRunner.setRootCtx(app.rootCtx)
 
 	// Two-phase init: NotificationHTTPPort is satisfied by *App itself
 	// (externalURLPolicy + doHTTPWithTimeout), so the hub can only be wired
@@ -211,10 +219,15 @@ func (a *App) Close() error {
 	a.mu.Lock()
 	cancel := a.schedulerCancel
 	a.schedulerCancel = nil
+	rootCancel := a.rootCancel
+	a.rootCancel = nil
 	a.mu.Unlock()
 	if cancel != nil {
 		cancel()
 		a.schedulerWG.Wait()
+	}
+	if rootCancel != nil {
+		rootCancel()
 	}
 	if a.notificationHub != nil {
 		a.notificationHub.Close()
