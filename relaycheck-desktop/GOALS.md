@@ -47,13 +47,10 @@
 
 ---
 
-## G3 · E2E smoke 接入（待完成）
+## G3 · E2E smoke 接入 ✅
 
-**现状：** `verify-navigation.mjs` 存在，`npm run smoke` 指向不存在的 `scripts/smoke.mjs`。
-
-**待做：**
-1. 创建 `frontend/scripts/smoke.mjs`
-2. 完善文档
+**结果：** `frontend/scripts/smoke.mjs` 已创建，作为 `verify-navigation.mjs` 的 thin wrapper。
+**验证：** `npm run smoke` 可执行（需 dev server + playwright）。
 
 ---
 
@@ -64,5 +61,5 @@
 - [x] G1: 所有包 `go test` 通过 + `go vet` 通过
 - [x] G2: `cd frontend && npx vitest run` 全绿
 - [x] G2: 7 个 `lib/` 文件均有对应测试
-- [ ] G3: `cd frontend && npm run smoke` 可执行（需 dev server）
+- [x] G3: `cd frontend && npm run smoke` 可执行（需 dev server）
 - [ ] 全部变更已 commit + push 到 `origin/main`
