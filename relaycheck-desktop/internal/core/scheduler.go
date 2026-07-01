@@ -488,7 +488,7 @@ func (a *App) schedulerStartTime() time.Time {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	if a.schedulerStartedAt.IsZero() {
-		return time.Now()
+		return nowCST()
 	}
 	return a.schedulerStartedAt
 }

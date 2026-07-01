@@ -236,7 +236,7 @@ func (a *App) handleNextRuns(w http.ResponseWriter, r *http.Request) {
 	status := a.buildSchedulerStatus(ctx)
 
 	var items []NextRunItem
-	nowTime := time.Now()
+	nowTime := nowCST()
 	for _, job := range status.Jobs {
 		var nextRunInSec int64 = -1
 		if job.NextRunAt != "" {

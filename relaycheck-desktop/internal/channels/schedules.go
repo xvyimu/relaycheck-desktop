@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -57,7 +58,9 @@ func (s *Service) ListChannelSchedules(ctx context.Context) ([]ChannelSchedule, 
 		}
 		item.Enabled = enabled != 0
 		if skipDatesJSON != "" && skipDatesJSON != "[]" {
-			_ = json.Unmarshal([]byte(skipDatesJSON), &item.SkipDates)
+			if err := json.Unmarshal([]byte(skipDatesJSON), &item.SkipDates); err != nil {
+				log.Printf("[schedule] skip_dates unmarshal failed for %s: %v", item.ID, err)
+			}
 		}
 		items = append(items, item)
 	}
@@ -131,11 +134,13 @@ func (s *Service) SyncGlobalScheduleRecord(ctx context.Context) {
 	config := s.infra.LoadCheckinScheduleConfig(ctx)
 	delayMin, delayMax := normalizedRandomDelay(config.RandomDelayMinutes)
 	nextRun := ComputeNextRun(config.Time, "", nil, delayMin, delayMax)
-	_, _ = s.infra.DB().ExecContext(ctx, `
+	if _, err := s.infra.DB().ExecContext(ctx, `
 		UPDATE channel_schedules
 		SET enabled=?, checkin_time=?, random_delay_min=?, random_delay_max=?, next_run_at=?, updated_at=?
 		WHERE id=?
-	`, config.Enabled, config.Time, delayMin, delayMax, nextRun, s.infra.Now(), GlobalScheduleSiteID)
+	`, config.Enabled, config.Time, delayMin, delayMax, nextRun, s.infra.Now(), GlobalScheduleSiteID); err != nil {
+		log.Printf("[schedule] sync global schedule record failed: %v", err)
+	}
 }
 
 // ParseCalendarDays mirrors core.parseCalendarDays. Extracts the "days" query

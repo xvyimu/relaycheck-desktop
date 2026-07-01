@@ -321,9 +321,11 @@ func (a *App) handleBulkPasswordLogin(w http.ResponseWriter, r *http.Request) {
 	accountIDs := []string{}
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err == nil {
-			accountIDs = append(accountIDs, id)
+		if err := rows.Scan(&id); err != nil {
+			log.Printf("[accounts] bulk open browser scan failed: %v", err)
+			continue
 		}
+		accountIDs = append(accountIDs, id)
 	}
 	if err := rows.Err(); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -1611,7 +1613,9 @@ func (a *App) clearAccountSession(w http.ResponseWriter, r *http.Request, id str
 	}
 	var profilePath string
 	a.browserSessions.Delete(id)
-	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(browser_profile_path,'') FROM channel_accounts WHERE id=?`, id).Scan(&profilePath)
+	if err := a.db.QueryRowContext(r.Context(), `SELECT COALESCE(browser_profile_path,'') FROM channel_accounts WHERE id=?`, id).Scan(&profilePath); err != nil && err != sql.ErrNoRows {
+		log.Printf("[accounts] clearAccountSession load profile path failed for %s: %v", id, err)
+	}
 	if profilePath != "" && strings.HasPrefix(filepath.Clean(profilePath), filepath.Clean(a.dataDir)) {
 		if rmErr := os.RemoveAll(profilePath); rmErr != nil {
 			log.Printf("[accounts] clearAccountSession: remove profile %s failed: %v", profilePath, rmErr)
@@ -1685,7 +1689,11 @@ func readChromeSession(port int) ([]cdpCookie, string, error) {
 }
 
 func findPageWebSocket(port int) (string, error) {
-	resp, err := http.Get("http://127.0.0.1:" + strconv.Itoa(port) + "/json/list")
+	// Use a bounded-time HTTP client so a stuck Chrome DevTools endpoint
+	// cannot hang the entire saveBrowserLoginSession request indefinitely.
+	// The default http.DefaultClient has no timeout.
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + strconv.Itoa(port) + "/json/list")
 	if err != nil {
 		return "", err
 	}

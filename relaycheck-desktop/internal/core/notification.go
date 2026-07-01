@@ -58,6 +58,7 @@ func (a *App) dispatchNotification(kind, level, title, content string) {
 // ==================== 通知入库与去重（从 routes.go 归拢）====================
 
 func (a *App) notify(kind, level, title, content, relatedType, relatedID string) {
+	ctx := a.rootCtx
 	// Deduplicate: skip if an identical notification (same kind+relatedType+
 	// relatedID+content) was inserted within the dedup window. This prevents
 	// recurring events (e.g. "checkin_unsupported" for sites without a checkin
@@ -66,10 +67,10 @@ func (a *App) notify(kind, level, title, content, relatedType, relatedID string)
 	if kind == "scheduled_channel_health_probe_warning" {
 		dedupWindow = 30 * time.Minute
 	}
-	if a.recentNotificationExists(context.Background(), kind, relatedType, relatedID, content, dedupWindow) {
+	if a.recentNotificationExists(ctx, kind, relatedType, relatedID, content, dedupWindow) {
 		return
 	}
-	if _, execErr := a.db.Exec(`
+	if _, execErr := a.db.ExecContext(ctx, `
 		INSERT INTO app_notifications (id, type, level, title, content, read, related_type, related_id, created_at)
 		VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
 	`, newID(), kind, level, title, content, relatedType, relatedID, now()); execErr != nil {
@@ -82,8 +83,9 @@ func (a *App) notify(kind, level, title, content, relatedType, relatedID string)
 	// models-overview, etc.) are unaffected.
 	a.invalidateReadCacheKeys("dashboard-summary", "action-center", "checkin-status")
 
-	// 异步分发到外部通知渠道
-	go a.dispatchNotification(kind, level, title, content)
+	// 异步分发到外部通知渠道（hub 内部用 sendWG + sendCtx 追踪，
+	// Close 时会 cancel 并 Wait，无需在此处管理 goroutine 生命周期）
+	a.dispatchNotification(kind, level, title, content)
 }
 
 func (a *App) recentNotificationExists(ctx context.Context, kind string, relatedType string, relatedID string, content string, window time.Duration) bool {

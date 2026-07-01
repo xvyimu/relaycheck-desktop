@@ -189,7 +189,10 @@ func (a *App) handleModelSync(w http.ResponseWriter, r *http.Request) {
 		Limit int `json:"limit"`
 	}
 	if r.ContentLength != 0 {
-		_ = decodeJSON(r, &input)
+		if err := decodeJSON(r, &input); err != nil {
+			writeError(w, http.StatusBadRequest, "请求参数无效。")
+			return
+		}
 	}
 	input.Limit = clampBatchLimit(input.Limit, 10)
 	rows, err := a.db.QueryContext(r.Context(), `
@@ -205,9 +208,11 @@ func (a *App) handleModelSync(w http.ResponseWriter, r *http.Request) {
 	ids := []string{}
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err == nil {
-			ids = append(ids, id)
+		if err := rows.Scan(&id); err != nil {
+			log.Printf("[model-sync] scan id failed: %v", err)
+			continue
 		}
+		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -215,12 +220,29 @@ func (a *App) handleModelSync(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = rows.Close()
 	auths, _ := a.loadAccountAuths(r.Context(), ids)
+	successCount := 0
+	failedCount := 0
 	for _, id := range ids {
 		var auth *accountAuthContext
 		if loaded, ok := auths[id]; ok {
 			auth = &loaded
 		}
-		_ = a.testAPIKeyForAccount(r.Context(), id, auth)
+		result := a.testAPIKeyForAccount(r.Context(), id, auth)
+		if result.Status == "failed" {
+			log.Printf("[model-sync] test API key failed for account %s: %s", id, result.Message)
+			failedCount++
+		} else {
+			successCount++
+		}
+	}
+	if len(ids) > 0 {
+		level := "success"
+		msg := fmt.Sprintf("已测试 %d 个账号的 API Key。", len(ids))
+		if failedCount > 0 {
+			level = "warning"
+			msg = fmt.Sprintf("已测试 %d 个 API Key，成功 %d 个，失败 %d 个。", len(ids), successCount, failedCount)
+		}
+		a.notify("model_sync_completed", level, "模型同步完成", msg, "model", "")
 	}
 	records, err := a.loadAccountModelRecords(r)
 	if err != nil {
@@ -325,7 +347,10 @@ func (a *App) handleModelPricingSync(w http.ResponseWriter, r *http.Request) {
 		Limit int `json:"limit"`
 	}
 	if r.ContentLength != 0 {
-		_ = decodeJSON(r, &input)
+		if err := decodeJSON(r, &input); err != nil {
+			writeError(w, http.StatusBadRequest, "请求参数无效。")
+			return
+		}
 	}
 	input.Limit = clampBatchLimit(input.Limit, 10)
 	records, err := a.loadPricingSiteRecords(r.Context(), input.Limit)

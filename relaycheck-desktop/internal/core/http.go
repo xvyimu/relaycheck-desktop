@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -30,13 +31,19 @@ var (
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(apiResponse{OK: true, Data: data})
+	if err := json.NewEncoder(w).Encode(apiResponse{OK: true, Data: data}); err != nil {
+		// Most write failures are client disconnects; log so dropped connections
+		// and encoding bugs are still visible without being silently swallowed.
+		log.Printf("[http] writeJSON encode failed: %v", err)
+	}
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(apiResponse{OK: false, Error: message, ErrorClass: errorClassForStatus(status)})
+	if err := json.NewEncoder(w).Encode(apiResponse{OK: false, Error: message, ErrorClass: errorClassForStatus(status)}); err != nil {
+		log.Printf("[http] writeError encode failed: %v", err)
+	}
 }
 
 func errorClassForStatus(status int) string {

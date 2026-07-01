@@ -157,8 +157,11 @@ func (s *Service) CreateEncryptedExport(ctx context.Context, password string) (*
 		return nil, fmt.Errorf("加密失败: %w", err)
 	}
 
-	// Write to file
-	fileName := fmt.Sprintf("export-%s.rczip", time.Now().Format("20060102-150405"))
+	// Write to file. Use CST (UTC+8) for the filename timestamp so backup
+	// names stay consistent with the rest of the app's schedule/nowCST path
+	// regardless of the server's local timezone.
+	cst := time.FixedZone("CST", 8*3600)
+	fileName := fmt.Sprintf("export-%s.rczip", time.Now().In(cst).Format("20060102-150405"))
 	backupsDir := s.infra.BackupsDir()
 	filePath := filepath.Join(backupsDir, fileName)
 	if err := os.MkdirAll(backupsDir, 0o700); err != nil {
@@ -248,16 +251,28 @@ func (s *Service) RestoreEncryptedExport(ctx context.Context, filePath, password
 
 	// Write imported database
 	if err := os.WriteFile(currentDBPath, dbData, 0o600); err != nil {
-		// Rollback
-		_ = os.Rename(backupPath, currentDBPath)
+		// Rollback: restore previous DB so the user is not left with a
+		// half-written file and no usable database.
+		if renameErr := os.Rename(backupPath, currentDBPath); renameErr != nil {
+			log.Printf("[import] rollback rename failed after write failure (write=%v rename=%v)", err, renameErr)
+		}
 		return nil, fmt.Errorf("写入数据库失败: %w", err)
 	}
 
 	// Reopen database
 	if err := s.infra.ReopenDatabase(); err != nil {
-		// Rollback
-		_ = os.Rename(backupPath, currentDBPath)
-		_ = s.infra.ReopenDatabase()
+		// Rollback: restore previous DB and reopen it so subsequent requests
+		// don't panic on a nil handle. Report both errors so the operator can
+		// diagnose a half-broken state.
+		var reopenErr error
+		if renameErr := os.Rename(backupPath, currentDBPath); renameErr != nil {
+			log.Printf("[import] rollback rename failed after reopen failure (reopen=%v rename=%v)", err, renameErr)
+		} else {
+			reopenErr = s.infra.ReopenDatabase()
+			if reopenErr != nil {
+				log.Printf("[import] rollback reopen failed after primary reopen failure (primary=%v rollback=%v)", err, reopenErr)
+			}
+		}
 		return nil, fmt.Errorf("重新打开数据库失败: %w", err)
 	}
 
@@ -283,10 +298,14 @@ func (s *Service) RestoreEncryptedExport(ctx context.Context, filePath, password
 	}
 
 	// Clean up backup
-	_ = os.Remove(backupPath)
+	if err := os.Remove(backupPath); err != nil && !os.IsNotExist(err) {
+		log.Printf("[import] remove pre-import backup failed: %v", err)
+	}
 
 	// Reload notification config
-	_ = s.infra.ReloadNotificationConfig(ctx)
+	if err := s.infra.ReloadNotificationConfig(ctx); err != nil {
+		log.Printf("[import] reload notification config failed: %v", err)
+	}
 
 	return &manifest, nil
 }

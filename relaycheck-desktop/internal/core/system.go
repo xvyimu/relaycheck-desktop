@@ -250,7 +250,7 @@ func (a *App) createBackup(reason string) (SystemBackup, error) {
 	if err := os.MkdirAll(a.backupsDir(), 0o700); err != nil {
 		return SystemBackup{}, err
 	}
-	timestamp := time.Now().Format("20060102-150405")
+	timestamp := nowCST().Format("20060102-150405")
 	safeReason := strings.NewReplacer(" ", "-", "_", "-", "/", "-", "\\", "-").Replace(strings.TrimSpace(reason))
 	if safeReason == "" {
 		safeReason = "manual"

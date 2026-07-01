@@ -851,11 +851,18 @@ func (c *EmailChannel) Send(ctx context.Context, kind, level, title, content str
 			return fmt.Errorf("SMTP 数据通道失败: %w", err)
 		}
 		if _, err := w.Write([]byte(msg)); err != nil {
-			w.Close()
+			_ = w.Close()
 			return fmt.Errorf("邮件内容写入失败: %w", err)
 		}
-		w.Close()
-		client.Quit()
+		if err := w.Close(); err != nil {
+			return fmt.Errorf("邮件提交失败: %w", err)
+		}
+		if err := client.Quit(); err != nil {
+			// Quit failure does not necessarily mean the mail was not delivered
+			// (the server may have already accepted the DATA), but surface it so
+			// transient connection drops are visible.
+			return fmt.Errorf("SMTP 退出失败: %w", err)
+		}
 		return nil
 	}
 

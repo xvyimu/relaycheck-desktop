@@ -184,9 +184,19 @@ func (s *Service) loadPasswordSites(ctx context.Context) ([]passwordSite, error)
 }
 
 // matchChromePasswordRows matches Chrome rows to sites by host.
+// To avoid an N+1 query (one accountExists call per row×site pair), we first
+// compute the set of (siteID, username) pairs we care about, then issue a
+// single batched query to load existing accounts into a lookup map.
 func (s *Service) matchChromePasswordRows(ctx context.Context, rows []chromePasswordRow, sites []passwordSite) ([]chromePasswordMatch, error) {
 	matches := []chromePasswordMatch{}
 	seen := map[string]bool{}
+	// First pass: collect all candidate matches without touching the DB, so we
+	// know exactly which (siteID, username) pairs we need to look up.
+	type candidate struct {
+		Site passwordSite
+		Row  chromePasswordRow
+	}
+	candidates := make([]candidate, 0, len(rows)*len(sites))
 	for _, row := range rows {
 		rowHost := hostnameForMatch(row.URL)
 		if rowHost == "" {
@@ -201,27 +211,88 @@ func (s *Service) matchChromePasswordRows(ctx context.Context, rows []chromePass
 				continue
 			}
 			seen[key] = true
-			exists, err := s.accountExists(ctx, site.ID, row.Username)
-			if err != nil {
-				return nil, err
-			}
-			matches = append(matches, chromePasswordMatch{
-				SiteID:          site.ID,
-				SiteName:        site.Name,
-				SiteBaseURL:     site.BaseURL,
-				ChromeName:      row.Name,
-				URL:             row.URL,
-				Username:        row.Username,
-				PasswordMasked:  maskSecret(row.Password),
-				ExistingAccount: exists,
-			})
+			candidates = append(candidates, candidate{Site: site, Row: row})
 		}
+	}
+	if len(candidates) == 0 {
+		return matches, nil
+	}
+	// Batch-load existing accounts for the relevant sites/usernames. We query
+	// by upstream_site_id IN (...) and then filter the email/username matches
+	// in memory, which collapses N*M queries into one.
+	siteIDs := make([]interface{}, 0, len(sites))
+	siteIDSet := map[string]bool{}
+	for _, site := range sites {
+		if !siteIDSet[site.ID] {
+			siteIDSet[site.ID] = true
+			siteIDs = append(siteIDs, site.ID)
+		}
+	}
+	existingAccounts, err := s.loadExistingAccountsForSites(ctx, siteIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range candidates {
+		matches = append(matches, chromePasswordMatch{
+			SiteID:          c.Site.ID,
+			SiteName:        c.Site.Name,
+			SiteBaseURL:     c.Site.BaseURL,
+			ChromeName:      c.Row.Name,
+			URL:             c.Row.URL,
+			Username:        c.Row.Username,
+			PasswordMasked:  maskSecret(c.Row.Password),
+			ExistingAccount: existingAccounts.has(c.Site.ID, c.Row.Username),
+		})
 	}
 	return matches, nil
 }
 
+// existingAccountIndex is an in-memory lookup of (siteID, username/email) →
+// exists, populated by a single batched query.
+type existingAccountIndex struct {
+	entries map[string]bool
+}
+
+func (idx existingAccountIndex) has(siteID, username string) bool {
+	return idx.entries[siteID+"\x00"+username]
+}
+
+// loadExistingAccountsForSites runs one IN(...) query per site-list and
+// returns an index keyed by "siteID\x00emailOrUsername".
+func (s *Service) loadExistingAccountsForSites(ctx context.Context, siteIDs []interface{}) (existingAccountIndex, error) {
+	idx := existingAccountIndex{entries: map[string]bool{}}
+	if len(siteIDs) == 0 {
+		return idx, nil
+	}
+	placeholders := strings.Repeat("?,", len(siteIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := `SELECT upstream_site_id, COALESCE(email,''), COALESCE(username,'') FROM channel_accounts WHERE upstream_site_id IN (` + placeholders + `)`
+	rows, err := s.infra.DB().QueryContext(ctx, query, siteIDs...)
+	if err != nil {
+		return idx, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var siteID, email, username string
+		if err := rows.Scan(&siteID, &email, &username); err != nil {
+			return idx, err
+		}
+		if email != "" {
+			idx.entries[siteID+"\x00"+email] = true
+		}
+		if username != "" {
+			idx.entries[siteID+"\x00"+username] = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return idx, err
+	}
+	return idx, nil
+}
+
 // accountExists reports whether an account already exists for the given site
-// and username/email.
+// and username/email. Kept for callers that need a single lookup; the batched
+// matchChromePasswordRows path uses loadExistingAccountsForSites instead.
 func (s *Service) accountExists(ctx context.Context, siteID string, usernameOrEmail string) (bool, error) {
 	var count int
 	err := s.infra.DB().QueryRowContext(ctx, `
