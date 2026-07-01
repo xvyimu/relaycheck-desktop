@@ -123,7 +123,7 @@ func (a *App) StartSchedulers() {
 }
 
 func (a *App) schedulerLoop(ctx context.Context) {
-	_ = a.resetInterruptedSchedulerRuns(context.Background())
+	_ = a.resetInterruptedSchedulerRuns(ctx)
 	a.tickSchedulers(ctx)
 
 	ticker := time.NewTicker(schedulerTickInterval)
@@ -238,7 +238,7 @@ func (a *App) tickCheckinScheduler(ctx context.Context, currentTime time.Time) {
 		summary = "自动签到失败：" + errMessage
 		a.notify("scheduled_checkin_failed", "warning", "自动签到失败", errMessage, "scheduler", schedulerJobCheckin)
 	}
-	if err := a.finishSchedulerJob(context.Background(), schedulerJobCheckin, plan.RunKey, status, summary, errMessage); err != nil {
+	if err := a.finishSchedulerJob(ctx, schedulerJobCheckin, plan.RunKey, status, summary, errMessage); err != nil {
 		log.Printf("[scheduler] finish %s failed: %v", schedulerJobCheckin, err)
 	}
 	a.syncGlobalScheduleRecord(ctx)
@@ -302,7 +302,7 @@ func (a *App) tickSyncScheduler(ctx context.Context, currentTime time.Time) {
 	if result.ProcessedInstances == 0 && result.SkippedInstances > 0 {
 		status = "skipped"
 	}
-	if err := a.finishSchedulerJob(context.Background(), schedulerJobSync, runKey, status, result.Summary(), errMessage); err != nil {
+	if err := a.finishSchedulerJob(ctx, schedulerJobSync, runKey, status, result.Summary(), errMessage); err != nil {
 		log.Printf("[scheduler] finish %s failed: %v", schedulerJobSync, err)
 	}
 }
@@ -368,7 +368,7 @@ func (a *App) tickChannelHealthScheduler(ctx context.Context, currentTime time.T
 		errMessage = fmt.Sprintf("%d 个失败，%d 个预警", result.Failed, result.Warning)
 		a.notify("scheduled_channel_health_probe_warning", "warning", "渠道健康探测发现风险", summary, "scheduler", schedulerJobChannelHealth)
 	}
-	if err := a.finishSchedulerJob(context.Background(), schedulerJobChannelHealth, runKey, status, summary, errMessage); err != nil {
+	if err := a.finishSchedulerJob(ctx, schedulerJobChannelHealth, runKey, status, summary, errMessage); err != nil {
 		log.Printf("[scheduler] finish %s failed: %v", schedulerJobChannelHealth, err)
 	}
 }

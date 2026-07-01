@@ -23,6 +23,12 @@ cd frontend; npx vitest run                      # 187 tests pass
 
 ## What landed this session
 
+### rootCtx lifecycle fix
+
+- `internal/core/scheduler.go`: Removed `parent context.Context` parameter from `StartSchedulers`, changed `WithCancel(parent)` to `WithCancel(a.rootCtx)` so `app.Close()` properly terminates scheduler goroutines
+- `main.go`: Removed unused `"context"` import, changed `app.StartSchedulers(context.Background())` to `app.StartSchedulers()`
+- Commit: `9fb28d4` — pushed to `origin/main`
+
 ### Test coverage sprint (G0–G2)
 
 | Package | Before | After | New test files |
@@ -54,28 +60,25 @@ cd frontend; npx vitest run                      # 187 tests pass
 
 Windows env has cgo disabled, so `go test -race` cannot run. Concurrency code in `notifications/hub.go` and `task_runner.go` is covered by targeted tests but not by the race detector.
 
-### G3 — E2E smoke script missing
+### Remaining context.Background() calls
 
-`frontend/scripts/smoke.mjs` does not exist yet. `npm run smoke` will fail. See GOALS.md G3 for next steps.
+Four `context.Background()` calls remain in lower-priority paths:
+- `scheduler.go:125` — `resetInterruptedSchedulerRuns` (non-cancellable DB write during shutdown)
+- `scheduler.go:240,304,370` — `finishSchedulerJob` (non-cancellable DB finalization writes)
+- `notifications/hub.go:71,145` — internal hub operations (lower priority)
+
+These are deliberate for non-cancellable DB writes and are safe to address in a future session.
 
 ---
 
 ## Suggested next steps (priority order)
 
-### 1. Commit & push current work
+### 1. Raise test coverage in core, accounts, channels, and notifications
 
-Current working tree has new test files + GOALS.md/HANDOFF.md updates that need committing and pushing.
-
-### 2. G3 — Create smoke wrapper
-
-Create `frontend/scripts/smoke.mjs` that wraps `verify-navigation.mjs`.
-
-### 3. Raise core/accounts coverage further
-
-- `internal/core`: large package, pure-function tests only moved needle 0.3%. Need `Infra` mock for handler paths.
-- `internal/accounts`: helpers_test.go functions are unexported — may need to export or restructure for coverage counting.
-- `internal/channels`: DB/HTTP paths need Infra mock.
-- `internal/notifications`: SMTP/HTTP mock needed.
+- `internal/core`: Create `Infra` mock to test handler paths (current pure-function tests only moved coverage 0.3%)
+- `internal/accounts`: Restructure tests to cover unexported helpers (current helpers_test.go not counted in coverage)
+- `internal/channels`: Add DB/HTTP mocks to test full paths (current 60.7% covers only local logic)
+- `internal/notifications`: Implement SMTP/HTTP mocks for full path coverage
 
 ---
 
