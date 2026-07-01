@@ -137,9 +137,11 @@ CREATE TABLE IF NOT EXISTS channel_accounts (
 	upstream_site_id TEXT NOT NULL,
 	display_name TEXT NOT NULL,
 	username TEXT,
+	email TEXT,
 	auth_type TEXT NOT NULL,
 	api_key_encrypted TEXT,
 	password_encrypted TEXT,
+	login_status TEXT NOT NULL DEFAULT 'unknown',
 	created_at TEXT NOT NULL,
 	updated_at TEXT NOT NULL
 );
