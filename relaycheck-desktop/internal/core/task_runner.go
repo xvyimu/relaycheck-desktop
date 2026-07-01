@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -467,6 +468,9 @@ func (a *App) startTestKeysTask(taskID string, params map[string]interface{}) {
 			_ = rows.Scan(&j.ID, &j.Name)
 			jobs = append(jobs, j)
 		}
+		if err := rows.Err(); err != nil {
+			log.Printf("[task:test-keys] query iteration failed: %v", err)
+		}
 		_ = rows.Close()
 
 		task, taskCtx := a.taskRunner.start(taskID, TaskTestKeys, len(jobs))
@@ -530,6 +534,9 @@ func (a *App) startRefreshBalancesTask(taskID string, params map[string]interfac
 			var j job
 			_ = rows.Scan(&j.ID, &j.Name)
 			jobs = append(jobs, j)
+		}
+		if err := rows.Err(); err != nil {
+			log.Printf("[task:refresh-balances] query iteration failed: %v", err)
 		}
 		_ = rows.Close()
 
@@ -597,6 +604,9 @@ func (a *App) startDetectSitesTask(taskID string, params map[string]interface{})
 			var j job
 			_ = rows.Scan(&j.ID, &j.Name, &j.BaseURL)
 			jobs = append(jobs, j)
+		}
+		if err := rows.Err(); err != nil {
+			log.Printf("[task:detect-sites] query iteration failed: %v", err)
 		}
 		_ = rows.Close()
 

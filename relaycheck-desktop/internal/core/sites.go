@@ -238,6 +238,10 @@ func (a *App) handleBulkDetectUpstreamSites(w http.ResponseWriter, r *http.Reque
 			jobs = append(jobs, job)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	_ = rows.Close()
 
 	results := make([]bulkDetectSiteResult, len(jobs))

@@ -208,6 +208,10 @@ func (a *App) handleModelSync(w http.ResponseWriter, r *http.Request) {
 			ids = append(ids, id)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	_ = rows.Close()
 	auths, _ := a.loadAccountAuths(r.Context(), ids)
 	for _, id := range ids {

@@ -33,6 +33,9 @@ func (s *Service) ListLocalNewAPIInstances(ctx context.Context) ([]LocalNewAPIIn
 		item.SyncCapability = syncCapability(item)
 		items = append(items, item)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return items, nil
 }
 

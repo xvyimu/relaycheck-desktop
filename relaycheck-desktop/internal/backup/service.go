@@ -308,5 +308,8 @@ func (s *Service) listAllSettings(ctx context.Context) ([]Setting, error) {
 		}
 		settings = append(settings, setting)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return settings, nil
 }

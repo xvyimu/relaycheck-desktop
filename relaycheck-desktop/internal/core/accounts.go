@@ -325,6 +325,10 @@ func (a *App) handleBulkPasswordLogin(w http.ResponseWriter, r *http.Request) {
 			accountIDs = append(accountIDs, id)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	_ = rows.Close()
 
 	results := []bulkPasswordLoginResult{}
@@ -421,6 +425,10 @@ func (a *App) handleBulkOpenBrowserLogin(w http.ResponseWriter, r *http.Request)
 			if err := rows.Scan(&id); err == nil {
 				accountIDs = append(accountIDs, id)
 			}
+		}
+		if err := rows.Err(); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
 		}
 		_ = rows.Close()
 	}
@@ -1247,6 +1255,10 @@ func (a *App) handleBulkTestAPIKeys(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&id); err == nil {
 			ids = append(ids, id)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	_ = rows.Close()
 

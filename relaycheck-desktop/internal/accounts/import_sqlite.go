@@ -163,6 +163,9 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 		}
 		imported++
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	if notify {
 		s.infra.Notify("channels_imported", "success", "渠道导入完成", fmt.Sprintf("从 SQLite 导入 %d 条渠道，生成 %d 个站点，合并 %d 个站点。", imported, sitesCreated, sitesMerged), "local_newapi_instance", instanceID)

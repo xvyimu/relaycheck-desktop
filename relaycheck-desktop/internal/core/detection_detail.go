@@ -281,7 +281,11 @@ func (a *App) loadSiteDetail(ctx context.Context, id string) (SiteDetail, error)
 		return detail, err
 	}
 	defer logRows.Close()
-	detail.CheckinLogs = scanCheckinLogs(logRows)
+	logs, err := scanCheckinLogs(logRows)
+	if err != nil {
+		return detail, err
+	}
+	detail.CheckinLogs = logs
 	detail.Suggestions = siteSuggestions(detail.Site, detail.Detection, detail.Accounts)
 	return detail, nil
 }

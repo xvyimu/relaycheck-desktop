@@ -177,6 +177,9 @@ func (s *Service) loadPasswordSites(ctx context.Context) ([]passwordSite, error)
 			sites = append(sites, site)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return sites, nil
 }
 

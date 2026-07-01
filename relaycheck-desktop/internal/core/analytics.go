@@ -33,12 +33,12 @@ type ResponseTimePoint struct {
 
 // SiteReliability aggregates per-site checkin reliability over the analytics window.
 type SiteReliability struct {
-	SiteID         string  `json:"siteId"`
-	SiteName       string  `json:"siteName"`
-	TotalCheckins  int     `json:"totalCheckins"`
-	SuccessRate    float64 `json:"successRate"`
-	AvgLatencyMs   int64   `json:"avgLatencyMs"`
-	LastCheckinAt  string  `json:"lastCheckinAt"`
+	SiteID        string  `json:"siteId"`
+	SiteName      string  `json:"siteName"`
+	TotalCheckins int     `json:"totalCheckins"`
+	SuccessRate   float64 `json:"successRate"`
+	AvgLatencyMs  int64   `json:"avgLatencyMs"`
+	LastCheckinAt string  `json:"lastCheckinAt"`
 }
 
 // BalanceDeltaPoint represents one day's balance change and cumulative total.
@@ -50,13 +50,13 @@ type BalanceDeltaPoint struct {
 
 // AnalyticsResult aggregates all analytics data for the dashboard.
 type AnalyticsResult struct {
-	GeneratedAt         string                  `json:"generatedAt"`
-	Days                int                     `json:"days"`
-	BalanceTrend        []BalanceTrendPoint     `json:"balanceTrend"`
+	GeneratedAt         string                    `json:"generatedAt"`
+	Days                int                       `json:"days"`
+	BalanceTrend        []BalanceTrendPoint       `json:"balanceTrend"`
 	CheckinDistribution []CheckinDistributionItem `json:"checkinDistribution"`
-	ResponseTimes       []ResponseTimePoint     `json:"responseTimes"`
-	SiteReliability     []SiteReliability       `json:"siteReliability"`
-	BalanceDeltas       []BalanceDeltaPoint     `json:"balanceDeltas"`
+	ResponseTimes       []ResponseTimePoint       `json:"responseTimes"`
+	SiteReliability     []SiteReliability         `json:"siteReliability"`
+	BalanceDeltas       []BalanceDeltaPoint       `json:"balanceDeltas"`
 }
 
 // analyticsDaysBounds clamps the requested day window to a sane range.
@@ -114,6 +114,9 @@ func (a *App) handleAnalytics(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
+		if err := rows.Err(); err != nil {
+			log.Printf("[analytics] balance trend iteration failed: %v", err)
+		}
 		rows.Close()
 	}
 
@@ -130,21 +133,21 @@ func (a *App) handleAnalytics(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[analytics] checkin distribution query failed: %v", err)
 	} else {
 		statusLabels := map[string]string{
-			"success":       "成功",
-			"already":       "已签到",
+			"success":         "成功",
+			"already":         "已签到",
 			"already_checked": "已签到",
-			"failed":        "失败",
-			"unsupported":   "不支持",
-			"auth_expired":  "授权过期",
+			"failed":          "失败",
+			"unsupported":     "不支持",
+			"auth_expired":    "授权过期",
 			"manual_required": "需手动",
 		}
 		statusColors := map[string]string{
-			"success":      "#34b87a",
-			"already":      "#4b8bf5",
+			"success":         "#34b87a",
+			"already":         "#4b8bf5",
 			"already_checked": "#4b8bf5",
-			"failed":       "#e85a6d",
-			"unsupported":  "#8a9bb4",
-			"auth_expired": "#d4a03c",
+			"failed":          "#e85a6d",
+			"unsupported":     "#8a9bb4",
+			"auth_expired":    "#d4a03c",
 			"manual_required": "#d4a03c",
 		}
 		for distRows.Next() {
@@ -167,6 +170,9 @@ func (a *App) handleAnalytics(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
+		if err := distRows.Err(); err != nil {
+			log.Printf("[analytics] checkin distribution iteration failed: %v", err)
+		}
 		distRows.Close()
 	}
 
@@ -187,6 +193,9 @@ func (a *App) handleAnalytics(w http.ResponseWriter, r *http.Request) {
 			if err := respRows.Scan(&item.AccountName, &item.SiteName, &item.LatencyMs, &item.Status); err == nil {
 				result.ResponseTimes = append(result.ResponseTimes, item)
 			}
+		}
+		if err := respRows.Err(); err != nil {
+			log.Printf("[analytics] response times iteration failed: %v", err)
 		}
 		respRows.Close()
 	}
@@ -225,6 +234,9 @@ func (a *App) handleAnalytics(w http.ResponseWriter, r *http.Request) {
 				}
 				result.SiteReliability = append(result.SiteReliability, item)
 			}
+		}
+		if err := siteRows.Err(); err != nil {
+			log.Printf("[analytics] site reliability iteration failed: %v", err)
 		}
 		siteRows.Close()
 	}

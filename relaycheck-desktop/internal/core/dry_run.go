@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -103,6 +104,9 @@ func (a *App) handleDryRun(w http.ResponseWriter, r *http.Request) {
 			AuthType:       authType,
 			SupportsCheckin: supportsCheckin,
 		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("[dry-run] account info iteration failed: %v", err)
 	}
 	rows.Close()
 

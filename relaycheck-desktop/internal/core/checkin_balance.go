@@ -189,7 +189,12 @@ func (a *App) handleTodayCheckins(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-	writeJSON(w, http.StatusOK, scanCheckinLogs(rows))
+	logs, err := scanCheckinLogs(rows)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, logs)
 }
 
 func (a *App) handleCheckinStatus(w http.ResponseWriter, r *http.Request) {
@@ -271,6 +276,9 @@ func (a *App) loadBalanceRefreshAccountIDs(ctx context.Context, limit int, missi
 		}
 		ids = append(ids, id)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return ids, nil
 }
 
@@ -322,17 +330,27 @@ func (a *App) handleCheckinLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-	writeJSON(w, http.StatusOK, scanCheckinLogs(rows))
+	items, err := scanCheckinLogs(rows)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
 }
 
-func scanCheckinLogs(rows *sql.Rows) []CheckinLog {
+func scanCheckinLogs(rows *sql.Rows) ([]CheckinLog, error) {
 	items := []CheckinLog{}
 	for rows.Next() {
 		var item CheckinLog
-		_ = rows.Scan(&item.ID, &item.AccountID, &item.AccountName, &item.UpstreamSiteID, &item.UpstreamSiteName, &item.ChannelID, &item.Status, &item.Reward, &item.Message, &item.RawResponseMasked, &item.StartedAt, &item.FinishedAt)
+		if err := rows.Scan(&item.ID, &item.AccountID, &item.AccountName, &item.UpstreamSiteID, &item.UpstreamSiteName, &item.ChannelID, &item.Status, &item.Reward, &item.Message, &item.RawResponseMasked, &item.StartedAt, &item.FinishedAt); err != nil {
+			return nil, err
+		}
 		items = append(items, item)
 	}
-	return items
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 func (a *App) handleRunAllCheckins(w http.ResponseWriter, r *http.Request) {
@@ -929,6 +947,10 @@ func (a *App) handleBalanceSnapshots(w http.ResponseWriter, r *http.Request) {
 		item.UsedQuota = nullableFloat(used)
 		item.TotalQuota = nullableFloat(total)
 		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	writeJSON(w, http.StatusOK, items)
 }
