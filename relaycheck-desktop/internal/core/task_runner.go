@@ -137,9 +137,9 @@ type runningTask struct {
 
 // TaskRunner manages all running batch tasks.
 type TaskRunner struct {
-	tasks           map[string]*runningTask
-	mu              sync.RWMutex
-	sseSubscribers  atomic.Int64
+	tasks          map[string]*runningTask
+	mu             sync.RWMutex
+	sseSubscribers atomic.Int64
 }
 
 func newTaskRunner() *TaskRunner {
@@ -341,11 +341,7 @@ func (a *App) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 
 	// Send initial snapshot.
-	snapshot := task.snapshot()
-	if data, err := json.Marshal(snapshot); err == nil {
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		flusher.Flush()
-	}
+	writeSSEEvent(w, flusher, task.snapshot())
 
 	ch := task.subscribe()
 	defer task.unsubscribe(ch)
@@ -364,19 +360,12 @@ func (a *App) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			if data, err := json.Marshal(p); err == nil {
-				fmt.Fprintf(w, "data: %s\n\n", data)
-				flusher.Flush()
-			}
+			writeSSEEvent(w, flusher, p)
 			if p.Status != TaskStatusRunning {
 				return
 			}
 		case <-task.done:
-			final := task.snapshot()
-			if data, err := json.Marshal(final); err == nil {
-				fmt.Fprintf(w, "data: %s\n\n", data)
-				flusher.Flush()
-			}
+			writeSSEEvent(w, flusher, task.snapshot())
 			return
 		case <-ticker.C:
 			// Write failure indicates the client has disconnected; bail
@@ -387,6 +376,18 @@ func (a *App) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+// writeSSEEvent marshals payload as an SSE data event and flushes. Marshal
+// failures are silently skipped (consistent with the prior inline pattern);
+// a nil payload produces no output.
+func writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, payload interface{}) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(w, "data: %s\n\n", data)
+	flusher.Flush()
 }
 
 // --- Task handlers ---

@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// ==================== DB fixture ====================
+// ==================== DB & hub fixtures ====================
 
 // newTestDB returns an in-memory SQLite DB with the system_settings table
 // pre-created. MaxOpenConns is forced to 1 so every query hits the same
@@ -42,6 +42,23 @@ func seedConfig(t testing.TB, db *sql.DB, json string) {
 	if _, err := db.Exec(`INSERT INTO system_settings (key, value_json) VALUES ('notification.channels', ?)`, json); err != nil {
 		t.Fatalf("seed config: %v", err)
 	}
+}
+
+// newTestHub returns a NotificationHub wired to the fake crypto and HTTP
+// ports, with nil DB. Most tests don't need a real DB; pass one explicitly
+// via NewNotificationHub when they do.
+func newTestHub(t testing.TB) *NotificationHub {
+	t.Helper()
+	return NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+}
+
+// failingCryptoPort is a CryptoPort whose Decrypt always errors. Used to
+// exercise the "reset to empty on decrypt failure" branch.
+type failingCryptoPort struct{}
+
+func (f *failingCryptoPort) Encrypt(value string) (string, error) { return "v1." + value, nil }
+func (f *failingCryptoPort) Decrypt(value string) (string, error) {
+	return "", fmt.Errorf("decryption disabled")
 }
 
 // ==================== Construction & nil safety ====================
@@ -74,7 +91,7 @@ func TestCurrentConfig_NilHub(t *testing.T) {
 }
 
 func TestCurrentConfig_FreshHub(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	cfg := hub.CurrentConfig()
 	if cfg.Enabled {
 		t.Fatal("fresh hub should return disabled default config")
@@ -84,7 +101,7 @@ func TestCurrentConfig_FreshHub(t *testing.T) {
 // ==================== LoadConfig ====================
 
 func TestLoadConfig_NilDB(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	cfg, err := hub.LoadConfig(context.Background())
 	if err != nil {
 		t.Fatalf("nil db should not error: %v", err)
@@ -126,7 +143,7 @@ func TestLoadConfig_ValidRow(t *testing.T) {
 // ==================== Reload ====================
 
 func TestReload_NilDB(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	if err := hub.Reload(context.Background()); err != nil {
 		t.Fatalf("nil db Reload should not error: %v", err)
 	}
@@ -193,7 +210,7 @@ func TestReload_StopsPreviousDigestGoroutine(t *testing.T) {
 // ==================== SetConfig / CurrentConfig round-trip ====================
 
 func TestSetConfig_CurrentConfig_RoundTrip(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	original := ChannelsConfig{
 		Enabled:       true,
 		DefaultLevels: []string{"error"},
@@ -211,28 +228,28 @@ func TestSetConfig_CurrentConfig_RoundTrip(t *testing.T) {
 // ==================== BuildChannel edge cases ====================
 
 func TestBuildChannel_NilConfig(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	if ch := hub.BuildChannel(ChannelEntry{Type: "webhook", Config: nil}); ch != nil {
 		t.Fatal("nil config should return nil channel")
 	}
 }
 
 func TestBuildChannel_UnknownType(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	if ch := hub.BuildChannel(ChannelEntry{Type: "nonexistent", Config: MarshalRaw(BarkConfig{URL: "https://x"})}); ch != nil {
 		t.Fatalf("unknown type should return nil, got %T", ch)
 	}
 }
 
 func TestBuildChannel_MalformedJSON(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	if ch := hub.BuildChannel(ChannelEntry{Type: "webhook", Config: json.RawMessage(`{not json`)}); ch != nil {
 		t.Fatalf("malformed JSON should return nil, got %T", ch)
 	}
 }
 
 func TestBuildChannel_AllValidTypes(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	cases := []struct {
 		typeStr string
 		config  interface{}
@@ -260,7 +277,7 @@ func TestBuildChannel_AllValidTypes(t *testing.T) {
 // ==================== EncryptEntrySecrets / DecryptEntrySecrets ====================
 
 func TestEncryptDecryptEntrySecrets_RoundTrip(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	cases := []struct {
 		typeStr string
 		config  interface{}
@@ -313,7 +330,6 @@ func matchesOriginalSecret(typeStr string, raw json.RawMessage, original interfa
 	if err := json.Unmarshal(raw, &got); err != nil {
 		return false
 	}
-	// Marshal original to JSON then back to map for uniform comparison.
 	origRaw, _ := json.Marshal(original)
 	var want map[string]interface{}
 	if err := json.Unmarshal(origRaw, &want); err != nil {
@@ -340,7 +356,7 @@ func secretField(typeStr string) string {
 }
 
 func TestDecryptEntrySecrets_NonV1Prefix_Unchanged(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	// Plaintext secret without v1. prefix should be left as-is by Decrypt.
 	entry := &ChannelEntry{
 		Type:   "webhook",
@@ -378,26 +394,17 @@ func TestDecryptEntrySecrets_DecryptFailure_ResetsToEmpty(t *testing.T) {
 	}
 }
 
-// failingCryptoPort is a CryptoPort whose Decrypt always errors. Used to
-// exercise the "reset to empty on decrypt failure" branch.
-type failingCryptoPort struct{}
-
-func (f *failingCryptoPort) Encrypt(value string) (string, error) { return "v1." + value, nil }
-func (f *failingCryptoPort) Decrypt(value string) (string, error) {
-	return "", fmt.Errorf("decryption disabled")
-}
-
 // ==================== Dispatch ====================
 
 func TestDispatch_DisabledConfig_NoOp(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	hub.SetConfig(ChannelsConfig{Enabled: false})
 	// Should return without panicking; nothing to assert beyond that.
 	hub.Dispatch("any", "error", "title", "content")
 }
 
 func TestDispatch_NoMatchingChannels(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	hub.SetConfig(ChannelsConfig{
 		Enabled: true,
 		Channels: []ChannelEntry{
@@ -410,7 +417,7 @@ func TestDispatch_NoMatchingChannels(t *testing.T) {
 }
 
 func TestDispatch_DisabledChannel_Skipped(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	hub.SetConfig(ChannelsConfig{
 		Enabled: true,
 		Channels: []ChannelEntry{
@@ -422,7 +429,7 @@ func TestDispatch_DisabledChannel_Skipped(t *testing.T) {
 }
 
 func TestDispatch_RateLimit_BlocksAfterMax(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 
 	var sent int64
 	server := newCountingServer(t, &sent)
@@ -481,7 +488,7 @@ func newCountingServer(t testing.TB, counter *int64) *httptest.Server {
 // ==================== Close ====================
 
 func TestClose_NoDigestRunning_NoOp(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	// Should not block or panic when no digest goroutine is running.
 	done := make(chan struct{})
 	go func() {
@@ -521,7 +528,7 @@ func TestClose_AfterReloadWithDigest_DrainsGoroutine(t *testing.T) {
 // ==================== EncryptEntrySecrets on unknown type ====================
 
 func TestEncryptEntrySecrets_UnknownType_NoOp(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	entry := &ChannelEntry{Type: "unknown", Config: MarshalRaw(map[string]string{"k": "v"})}
 	if err := hub.EncryptEntrySecrets(entry); err != nil {
 		t.Fatalf("encrypt unknown type should not error: %v", err)
@@ -529,7 +536,7 @@ func TestEncryptEntrySecrets_UnknownType_NoOp(t *testing.T) {
 }
 
 func TestDecryptEntrySecrets_UnknownType_NoOp(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	entry := &ChannelEntry{Type: "unknown", Config: MarshalRaw(map[string]string{"k": "v"})}
 	if err := hub.DecryptEntrySecrets(entry); err != nil {
 		t.Fatalf("decrypt unknown type should not error: %v", err)
@@ -539,7 +546,7 @@ func TestDecryptEntrySecrets_UnknownType_NoOp(t *testing.T) {
 // ==================== EncryptEntrySecrets nil config ====================
 
 func TestEncryptEntrySecrets_NilConfig(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	entry := &ChannelEntry{Type: "webhook", Config: nil}
 	if err := hub.EncryptEntrySecrets(entry); err != nil {
 		t.Fatalf("nil config should not error: %v", err)
@@ -547,7 +554,7 @@ func TestEncryptEntrySecrets_NilConfig(t *testing.T) {
 }
 
 func TestDecryptEntrySecrets_NilConfig(t *testing.T) {
-	hub := NewNotificationHub(nil, &fakeCryptoPort{}, &fakeHTTPPort{})
+	hub := newTestHub(t)
 	entry := &ChannelEntry{Type: "webhook", Config: nil}
 	if err := hub.DecryptEntrySecrets(entry); err != nil {
 		t.Fatalf("nil config should not error: %v", err)
