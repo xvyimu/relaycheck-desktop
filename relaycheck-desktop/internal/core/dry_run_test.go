@@ -246,6 +246,37 @@ func TestDryRunHandlesUnknownType(t *testing.T) {
 	}
 }
 
+// TestDryRunCheckinSkipsLoggedOutStatus verifies that loginStatus "logged_out"
+// hits the same skip_expired branch as "expired" in the checkin path.
+func TestDryRunCheckinSkipsLoggedOutStatus(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	id := "acc-logged-out"
+	insertDryRunAccount(t, app, id, "Logged Out Account", "LoggedOut Site", "logged_out", "api_key", 1)
+
+	body := `{"type":"checkin","accountIds":["` + id + `"]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/tasks/dry-run", strings.NewReader(body))
+	req.Header.Set("content-type", "application/json")
+	rec := httptest.NewRecorder()
+	app.handleDryRun(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	preview := decodeDryRunResponse(t, rec)
+
+	if len(preview.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(preview.Items))
+	}
+	if preview.Items[0].Action != "skip_expired" {
+		t.Fatalf("expected skip_expired for logged_out, got %q", preview.Items[0].Action)
+	}
+	if preview.Skipped != 1 || preview.WillRun != 0 {
+		t.Fatalf("expected skipped=1 willRun=0, got skipped=%d willRun=%d", preview.Skipped, preview.WillRun)
+	}
+}
+
 // TestDryRunTestAndIdentifyTypesAlwaysWillRun 验证：test 和 identify 类型对存在的账号总是 will_run。
 func TestDryRunTestAndIdentifyTypesAlwaysWillRun(t *testing.T) {
 	app := newTestApp(t)
