@@ -1,6 +1,6 @@
 # internal/core Package Index
 
-Last updated: 2026-06-30
+Last updated: 2026-07-02 (commit `0bd8c13`, local)
 
 The `internal/core` package is the assembly root for RelayCheck Desktop's backend. It holds the `App` struct (`app.go`), HTTP handlers, cross-cutting concerns (audit/crypto/network/url_safety), and forwarding methods to 8 extracted domain packages under `internal/<domain>/`. See `CLAUDE.md` for the architecture overview.
 
@@ -16,8 +16,8 @@ Domain logic lives outside `core` in dedicated packages. Dependency direction: `
 | `internal/legacycheck` | `service.go` | Legacy Python code detection. `Infra` interface (DataDir). |
 | `internal/autostart` | `service.go`, `platform_windows.go`, `platform_other.go` | OS auto-start shortcut management. No Infra (pure). |
 | `internal/sites` | `service.go`, `types.go`, `detection.go`, `detection_test.go`, `scanner.go`, `scanner_test.go` | Upstream site CRUD, detection (headers/HTML/API), local network scanner. |
-| `internal/channels` | `service.go`, `types.go`, `helpers.go`, `channels.go`, `models.go`, `health.go`, `schedules.go`, `pricing.go`, `models_overview.go` | Channel CRUD, model sync, health overview, schedules, pricing, model overview. |
-| `internal/accounts` | `service.go`, `types.go`, `helpers.go`, `chrome_password.go`, `import_admin_api.go`, `import_sqlite.go`, `legacy_config.go`, `local_newapi.go`, `sync_preview.go`, `auto_detect.go` | Account CRUD + 5 import paths + sync preview + auto-detect. |
+| `internal/channels` | `service.go`, `types.go`, `helpers.go`, `channels.go`, `models.go`, `health.go`, `schedules.go`, `pricing.go`, `models_overview.go` + 7 test files (`helpers_test.go`, `health_test.go`, `models_test.go`, `models_overview_test.go`, `pricing_test.go`, `schedules_test.go`, `channels_test.go`) | Channel CRUD, model sync, health overview, schedules, pricing, model overview. Coverage 60.7%. |
+| `internal/accounts` | `service.go`, `types.go`, `helpers.go`, `chrome_password.go`, `import_admin_api.go`, `import_sqlite.go`, `legacy_config.go`, `local_newapi.go`, `sync_preview.go`, `auto_detect.go` + 2 test files (`helpers_test.go`, `chrome_password_test.go`) | Account CRUD + 5 import paths + sync preview + auto-detect. Coverage 25.4%. |
 
 ## File Groups (within `internal/core`)
 

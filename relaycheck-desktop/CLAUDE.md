@@ -104,15 +104,22 @@ See `docs/superpowers/specs/2026-06-29-architecture-evolution-design.md` for the
 
 - Zip exports: PBKDF2-SHA256 with 200,000 iterations + random 32-byte salt (no raw SHA-256)
 - Zip imports: max 256MB total, 200MB per entry (zip-bomb protection)
-- API responses must not include absolute filesystem paths
+- API responses must not include absolute filesystem paths (no DB paths or OS errors in diagnostics)
 - Batch account ID operations: use `IN (...)` clauses, not N+1 queries (max 200 IDs for dry-run)
 - Scheduled tasks: use `time.FixedZone("CST", 8*3600)`, never server local time
 - All write endpoints: `requireSession` + CSRF/same-origin validation
-- EventSource (SSE): close before creating new; prevents connection leaks
-- SQL: parameterized statements only; check `rows.Err()` after iteration
+- EventSource (SSE): close existing connection before creating new; prevents connection leaks
+- EventSource (SSE): emit heartbeat comment `": heartbeat\n\n"` every 15s to keep proxy alive and detect dead clients
+- EventSource (SSE): cap concurrent subscribers at 50; return HTTP 503 when exceeded (atomic counter in `task_runner.go`)
+- Background tasks: use a root context canceled during application shutdown (`rootCtx`/`rootCancel` in `app.go`); do not use `context.Background()` for long-running work
+- Notification send goroutines: use a dedicated context + `sync.WaitGroup` so sends can be cancelled and awaited during shutdown (see `internal/notifications/hub.go`)
+- SQL: parameterized statements only; check `rows.Err()` after every `for rows.Next()` loop
 - Balance aggregation: `AVG(NULLIF(balance, 0))` with `sql.NullFloat64`, not `AVG(COALESCE(balance, 0))`
-- Errors: propagate to UI, no silent failure; log + return meaningful feedback
-- Promises: handle rejections; no unhandled rejections
+- Errors: propagate to UI, no silent failure; log + return meaningful feedback (no `scan` errors swallowed in `for rows.Next()` — `continue` + log instead)
+- Promises (frontend): handle rejections with try/catch; no unhandled rejections
+- Time validation: schedule hour ∈ [0,23], minute ∈ [0,59]
+- HTTP: validate `http.NewRequestWithContext` errors; configure timeouts on outbound calls
+- SMTP: call `Close()`/`Quit()` on connections; do not leak
 
 ## File navigation
 
@@ -154,3 +161,49 @@ Git root: `e:\zidqiandao` (the `relaycheck-desktop` subdirectory is the active p
 2. Read `internal/core/app.go` lines 24-50 for the current `App` struct
 3. Run the verification commands to confirm a clean baseline
 4. Check `git log --oneline -20` for recent refactor history
+5. Read `HANDOFF.md` for current task state and pending items (authoritative handoff doc)
+
+## Recent fixes (commits `926ef7e`..`0bd8c13`, July 2026)
+
+These landed after the Phase 2 domain extraction and are reflected in current code:
+
+| Commit | Theme | What changed |
+|--------|-------|--------------|
+| `926ef7e` | `rows.Err()` enforcement | Added `rows.Err()` checks after all 18 `for rows.Next()` loops that were missing them |
+| `9a51aea` | Surface swallowed errors | Removed DB absolute paths + OS errors from `diagnostics.go` API responses; added `http.NewRequestWithContext` error checks in `accounts.go`; improved error logging in `system.go` restore/rollback, `checkin_balance.go`, `models_pricing.go` |
+| `23cfb46` | Shutdown cancellation | Wired `rootCtx`/`rootCancel` for background tasks; added dedicated context + `sync.WaitGroup` to notification send goroutines so they cancel + drain on shutdown |
+| `883e3dc` | Backend M/L-tier fixes | Chrome password N+1 → batch `IN(...)` query; error propagation in notification/schedules/backup/models_pricing/http; CST timezone unification; `scan` error checks; SMTP `Close`/`Quit`; HTTP timeouts |
+| `656c5dc` | Frontend Promise rejections | Wrapped 12 unhandled Promise rejections in try/catch across frontend hooks/handlers |
+| `0bd8c13` | Test coverage | Raised domain package coverage: channels 14%→60.7%, accounts 19.6%→25.4%, versioncheck 27.3%→32.8%. Extracted `decodeSettingString` from `versioncheck.getSettingString` as a testable pure function |
+
+## Test coverage (as of `0bd8c13`)
+
+Run `go test -mod=vendor -cover -count=1 ./internal/...` to reproduce.
+
+| Package | Coverage | Notes |
+|---------|----------|-------|
+| `internal/legacycheck` | 97.4% | Near-complete |
+| `internal/lock` | 78.6% | High |
+| `internal/notifications` | 65.9% | Hub + 6 channels; boundary tests in `hub_test.go` |
+| `internal/channels` | 60.7% | Pure functions covered; DB/HTTP paths via `Infra` not mocked |
+| `internal/sites` | 54.6% | Detection + scanner covered |
+| `internal/core` | 42.2% | Large package; integration-heavy handlers dominate uncovered lines |
+| `internal/autostart` | 33.3% | Platform-specific; Windows path requires shortcut COM stubs |
+| `internal/versioncheck` | 32.8% | `decodeSettingString` + `CompareVersions` covered; `CheckVersion` needs HTTP mock |
+| `internal/backup` | 32.1% | `zip_crypto` covered; `service.go` end-to-end needs DB + filesystem |
+| `internal/accounts` | 25.4% | Pure helpers + CSV parsing covered; import paths need DB |
+
+## Suggested next steps (priority order)
+
+1. **Push blocked commits** — local branch is 7 commits ahead of `origin/main` due to a git proxy TLS issue. Resolve the proxy (or push from a network without the proxy) before doing anything else; otherwise work risks diverging.
+2. **Raise `internal/core` coverage** — currently 42.2%. Pure helpers in `filters.go`, `dry_run.go`, `crypto.go` (`maskSecret`, `secretFingerprint`), and `models_pricing.go` are low-hanging fruit. Integration handlers need an `Infra` mock.
+3. **Raise `internal/accounts` coverage** — 25.4%. The import paths (`import_admin_api.go`, `import_sqlite.go`, `legacy_config.go`) have pure helpers worth testing; the rest needs a DB fixture.
+4. **Raise `internal/backup` coverage** — 32.1%. `service.go` export/import round-trip could be tested against a temp DB + temp dir.
+5. **Raise `internal/versioncheck` coverage** — 32.8%. `CheckVersion` needs an `httptest.Server` + a stub `Infra` (DB row + `ValidateOutboundURLStrict` passthrough).
+6. **Frontend test coverage** — currently no automated tests; `npm run build` + `tsc --noEmit` are the only gates. Consider adding Vitest for `lib/` pure helpers (`format.ts`, `labels.ts`, `tone.ts`, `navigation.ts`).
+7. **E2E smoke** — `frontend/scripts/verify-navigation.mjs` + `npm run smoke` exist but require a running server + `RELAYCHECK_SMOKE_PASSWORD`. Worth wiring into a pre-release checklist.
+
+## Known blockers
+
+- **Git push blocked** — `git push` fails with a TLS handshake error through the local proxy. All 7 commits since `3e581d1` are local-only. Workaround: push from a different network or bypass the proxy.
+- **Race detector unavailable** — Windows env has cgo disabled, so `go test -race` cannot run. Concurrency bugs in `notifications/hub.go` and `task_runner.go` are covered by targeted tests but not by the race detector.
