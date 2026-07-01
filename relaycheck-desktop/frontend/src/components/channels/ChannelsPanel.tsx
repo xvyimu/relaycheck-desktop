@@ -81,7 +81,12 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
   useEffect(() => {
     if (healthTask.progress?.status === "done") {
       setHealthProbeMessage(`健康探测完成：已处理 ${healthTask.progress.current}/${healthTask.progress.total} 个站点。`);
-      void refreshAll();
+      // actions.refresh and health.refresh catch internally, but onRefresh is
+      // a parent prop whose implementation may reject; guard the call site so
+      // a failure there doesn't surface as an unhandled promise rejection.
+      void refreshAll().catch((err) => {
+        setHealthProbeMessage(err instanceof Error ? `刷新失败：${err.message}` : "刷新失败");
+      });
     } else if (healthTask.progress?.status === "cancelled") {
       setHealthProbeMessage("健康探测已取消。");
     }

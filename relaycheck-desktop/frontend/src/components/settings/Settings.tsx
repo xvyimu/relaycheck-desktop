@@ -111,18 +111,26 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
   }
 
   async function refresh() {
-    const [nextSettings, nextBackups, nextScheduler, nextAuditLogs, nextExports] = await Promise.all([
-      api<SystemSetting[]>("/api/system/settings"),
-      api<SystemBackup[]>("/api/system/backups"),
-      api<SchedulerStatus>("/api/system/scheduler-status"),
-      api<AuditLogItem[]>("/api/system/audit-log"),
-      api<ExportResult[]>("/api/system/exports").catch(() => []),
-    ]);
-    setSettings(nextSettings);
-    setBackups(nextBackups);
-    setScheduler(nextScheduler);
-    setAuditLogs(nextAuditLogs);
-    setExports(nextExports || []);
+    try {
+      const [nextSettings, nextBackups, nextScheduler, nextAuditLogs, nextExports] = await Promise.all([
+        api<SystemSetting[]>("/api/system/settings"),
+        api<SystemBackup[]>("/api/system/backups"),
+        api<SchedulerStatus>("/api/system/scheduler-status"),
+        api<AuditLogItem[]>("/api/system/audit-log"),
+        api<ExportResult[]>("/api/system/exports").catch(() => []),
+      ]);
+      setSettings(nextSettings);
+      setBackups(nextBackups);
+      setScheduler(nextScheduler);
+      setAuditLogs(nextAuditLogs);
+      setExports(nextExports || []);
+    } catch (err) {
+      // refresh() is called via `void` on mount and after backup/restore
+      // operations; without this catch a failure of any of the four
+      // unguarded api() calls surfaces as an unhandled rejection and the
+      // panel silently keeps stale data with no error message.
+      setMessage(err instanceof Error ? `加载设置失败：${err.message}` : "加载设置失败");
+    }
   }
 
   async function createBackup() {

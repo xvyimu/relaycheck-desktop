@@ -249,16 +249,23 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
   }
 
   async function copyKeyExportPreview() {
-    const preview = keyExportPreview || (await api<KeyExportPreview>("/api/keys/export-preview"));
-    setKeyExportPreview(preview);
-    const body = JSON.stringify(preview, null, 2);
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(body);
-      setMessage("已复制脱敏 Key 清单。真实 Key 不会被导出。");
-      return;
+    try {
+      const preview = keyExportPreview || (await api<KeyExportPreview>("/api/keys/export-preview"));
+      setKeyExportPreview(preview);
+      const body = JSON.stringify(preview, null, 2);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(body);
+        setMessage("已复制脱敏 Key 清单。真实 Key 不会被导出。");
+        return;
+      }
+      downloadJSON("relaycheck-key-export-preview.json", body);
+      setMessage("浏览器不支持剪贴板，已下载脱敏 Key 清单 JSON。");
+    } catch (err) {
+      // Both api() (network/500) and navigator.clipboard.writeText()
+      // (permission denied) can reject; without this catch the onClick
+      // handler emits an unhandled rejection and the user sees no feedback.
+      setMessage(err instanceof Error ? err.message : "复制失败");
     }
-    downloadJSON("relaycheck-key-export-preview.json", body);
-    setMessage("浏览器不支持剪贴板，已下载脱敏 Key 清单 JSON。");
   }
 
   function downloadKeyExportPreview() {

@@ -143,9 +143,15 @@ export function ChannelTable({
                 disabled={!channel.baseUrl}
                 onClick={async () => {
                   onSetMessage("");
-                  await api(`/api/channels/${channel.id}/detect`, { method: "POST" });
-                  onSetMessage(`${channel.name} 已识别并同步到上游站点`);
-                  await onRefresh();
+                  try {
+                    await api(`/api/channels/${channel.id}/detect`, { method: "POST" });
+                    onSetMessage(`${channel.name} 已识别并同步到上游站点`);
+                    await onRefresh();
+                  } catch (err) {
+                    // Without this catch a detect failure surfaces as an
+                    // unhandled rejection and the message area stays blank.
+                    onSetMessage(err instanceof Error ? `识别失败：${err.message}` : "识别失败");
+                  }
                 }}
               >
                 识别并生成站点

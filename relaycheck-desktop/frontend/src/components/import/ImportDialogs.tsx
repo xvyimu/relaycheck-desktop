@@ -19,7 +19,35 @@ export function LegacyConfigImport({ onDone }: ImportDialogProps) {
       return;
     }
     setFileName(file.name);
-    setConfigContent(await file.text());
+    try {
+      setConfigContent(await file.text());
+    } catch (err) {
+      // file.text() can reject on permission denied or if the file is
+      // removed mid-read; called via `void` from onChange.
+      setMessage(err instanceof Error ? `读取文件失败：${err.message}` : "读取文件失败");
+      setFileName("");
+    }
+  }
+
+  async function importConfig() {
+    try {
+      const result = await api<{
+        baseUrl: string;
+        siteCreated: boolean;
+        accountImported: boolean;
+        hasCheckinRule: boolean;
+        hasBalanceRule: boolean;
+      }>("/api/accounts/import-legacy-config", {
+        method: "POST",
+        body: JSON.stringify({ configContent, fileName }),
+      });
+      setMessage(
+        `已导入 ${result.baseUrl}，站点${result.siteCreated ? "已创建" : "已合并"}，账号${result.accountImported ? "已导入" : "未新增"}，签到规则${result.hasCheckinRule ? "已写入" : "无"}。`,
+      );
+      await onDone();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "导入失败");
+    }
   }
 
   return (
@@ -32,22 +60,7 @@ export function LegacyConfigImport({ onDone }: ImportDialogProps) {
         <input type="file" accept=".json,application/json" onChange={(event) => void loadFile(event.target.files?.[0])} />
         <button
           disabled={!configContent}
-          onClick={async () => {
-            const result = await api<{
-              baseUrl: string;
-              siteCreated: boolean;
-              accountImported: boolean;
-              hasCheckinRule: boolean;
-              hasBalanceRule: boolean;
-            }>("/api/accounts/import-legacy-config", {
-              method: "POST",
-              body: JSON.stringify({ configContent, fileName }),
-            });
-            setMessage(
-              `已导入 ${result.baseUrl}，站点${result.siteCreated ? "已创建" : "已合并"}，账号${result.accountImported ? "已导入" : "未新增"}，签到规则${result.hasCheckinRule ? "已写入" : "无"}。`,
-            );
-            await onDone();
-          }}
+          onClick={() => void importConfig()}
         >
           导入旧配置
         </button>
@@ -78,7 +91,41 @@ export function ChromePasswordImport({ onDone }: ImportDialogProps) {
       return;
     }
     setFileName(file.name);
-    setCsvContent(await file.text());
+    try {
+      setCsvContent(await file.text());
+    } catch (err) {
+      setMessage(err instanceof Error ? `读取文件失败：${err.message}` : "读取文件失败");
+      setFileName("");
+    }
+  }
+
+  async function previewMatches() {
+    try {
+      const result = await api<ChromePasswordPreview>("/api/accounts/import-chrome-passwords/preview", {
+        method: "POST",
+        body: JSON.stringify({ csvContent }),
+      });
+      setPreview(result);
+      setMessage(`已读取 ${result.totalRows} 条，匹配 ${result.matchedRows} 条，覆盖 ${result.uniqueSiteCount} 个站点。`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "预览失败");
+    }
+  }
+
+  async function confirmImport() {
+    try {
+      const result = await api<{ importedCount: number; matchedRows: number; skippedExisting: number }>(
+        "/api/accounts/import-chrome-passwords/import",
+        {
+          method: "POST",
+          body: JSON.stringify({ csvContent }),
+        },
+      );
+      setMessage(`已导入 ${result.importedCount} 个账号，匹配 ${result.matchedRows} 条，跳过 ${result.skippedExisting} 个已存在账号。`);
+      await onDone();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "导入失败");
+    }
   }
 
   return (
@@ -95,30 +142,13 @@ export function ChromePasswordImport({ onDone }: ImportDialogProps) {
         />
         <button
           disabled={!csvContent}
-          onClick={async () => {
-            const result = await api<ChromePasswordPreview>("/api/accounts/import-chrome-passwords/preview", {
-              method: "POST",
-              body: JSON.stringify({ csvContent }),
-            });
-            setPreview(result);
-            setMessage(`已读取 ${result.totalRows} 条，匹配 ${result.matchedRows} 条，覆盖 ${result.uniqueSiteCount} 个站点。`);
-          }}
+          onClick={() => void previewMatches()}
         >
           预览匹配
         </button>
         <button
           disabled={!csvContent || !preview?.matchedRows}
-          onClick={async () => {
-            const result = await api<{ importedCount: number; matchedRows: number; skippedExisting: number }>(
-              "/api/accounts/import-chrome-passwords/import",
-              {
-                method: "POST",
-                body: JSON.stringify({ csvContent }),
-              },
-            );
-            setMessage(`已导入 ${result.importedCount} 个账号，匹配 ${result.matchedRows} 条，跳过 ${result.skippedExisting} 个已存在账号。`);
-            await onDone();
-          }}
+          onClick={() => void confirmImport()}
         >
           确认导入匹配账号
         </button>

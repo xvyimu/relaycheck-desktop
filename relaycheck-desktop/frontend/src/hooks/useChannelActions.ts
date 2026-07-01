@@ -39,15 +39,23 @@ export function useChannelActions(): ChannelActionsResult {
   const [drawer, setDrawer] = useState<DetailDrawerState | null>(null);
 
   const refresh = useCallback(async () => {
-    const [nextChannels, nextModels, nextAccounts] = await Promise.all([
-      api<ImportedChannel[]>("/api/channels"),
-      api<ChannelModelOverview>("/api/channels/models/overview"),
-      api<Account[]>("/api/accounts"),
-    ]);
-    setChannels(nextChannels);
-    setModelOverview(nextModels);
-    setAccounts(nextAccounts);
-    setLoaded(true);
+    try {
+      const [nextChannels, nextModels, nextAccounts] = await Promise.all([
+        api<ImportedChannel[]>("/api/channels"),
+        api<ChannelModelOverview>("/api/channels/models/overview"),
+        api<Account[]>("/api/accounts"),
+      ]);
+      setChannels(nextChannels);
+      setModelOverview(nextModels);
+      setAccounts(nextAccounts);
+      setLoaded(true);
+    } catch (err) {
+      // Callers invoke refresh() with `void`; without this catch a network
+      // failure bubbles up as an unhandled rejection and `loaded` never
+      // becomes true, leaving the panel stuck on the loading state.
+      setMessage(err instanceof Error ? `加载失败：${err.message}` : "加载渠道数据失败");
+      setLoaded(true);
+    }
   }, []);
 
   const syncChannelModels = useCallback(async () => {
@@ -81,9 +89,15 @@ export function useChannelActions(): ChannelActionsResult {
         if (!confirmed) return;
       }
       setMessage(`${channel.name} 正在${nextLabel}…`);
-      await api(`/api/channels/${channel.id}/${action}`, { method: "POST" });
-      setMessage(`${channel.name} 已${nextLabel}`);
-      await refresh();
+      try {
+        await api(`/api/channels/${channel.id}/${action}`, { method: "POST" });
+        setMessage(`${channel.name} 已${nextLabel}`);
+        await refresh();
+      } catch (err) {
+        // Callers invoke this with `void`; without this catch a POST failure
+        // leaves the "正在…" message displayed forever with no error feedback.
+        setMessage(err instanceof Error ? `${nextLabel}失败：${err.message}` : `${nextLabel}失败`);
+      }
     },
     [refresh],
   );
@@ -96,12 +110,16 @@ export function useChannelActions(): ChannelActionsResult {
       const confirmed = window.confirm(`确认${actionLabel}全部"${statusLabel}"渠道？这只会修改本地状态，不会删除任何账号、余额或日志。`);
       if (!confirmed) return;
       setMessage(`正在批量${actionLabel} ${statusLabel} 渠道…`);
-      const result = await api<{ affected: number }>("/api/channels/bulk-source-status", {
-        method: "POST",
-        body: JSON.stringify({ fromStatus, toStatus }),
-      });
-      setMessage(`已批量${actionLabel} ${result.affected} 条渠道`);
-      await refresh();
+      try {
+        const result = await api<{ affected: number }>("/api/channels/bulk-source-status", {
+          method: "POST",
+          body: JSON.stringify({ fromStatus, toStatus }),
+        });
+        setMessage(`已批量${actionLabel} ${result.affected} 条渠道`);
+        await refresh();
+      } catch (err) {
+        setMessage(err instanceof Error ? `批量${actionLabel}失败：${err.message}` : `批量${actionLabel}失败`);
+      }
     },
     [refresh],
   );

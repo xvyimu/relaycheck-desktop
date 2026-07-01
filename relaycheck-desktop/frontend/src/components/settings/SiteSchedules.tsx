@@ -23,41 +23,49 @@ export function SiteSchedules() {
   const [forms, setForms] = useState<Record<string, SiteScheduleForm>>({});
 
   async function refresh() {
-    const [nextSchedules, nextSites] = await Promise.all([
-      api<ChannelSchedule[]>("/api/scheduler/channel-schedules"),
-      api<UpstreamSite[]>("/api/upstream-sites"),
-    ]);
-    setSchedules(nextSchedules);
-    setSites(nextSites);
+    try {
+      const [nextSchedules, nextSites] = await Promise.all([
+        api<ChannelSchedule[]>("/api/scheduler/channel-schedules"),
+        api<UpstreamSite[]>("/api/upstream-sites"),
+      ]);
+      setSchedules(nextSchedules);
+      setSites(nextSites);
 
-    // Initialize forms from fetched data
-    const nextForms: Record<string, SiteScheduleForm> = {};
-    for (const s of nextSchedules) {
-      nextForms[s.upstreamSiteId] = {
-        upstreamSiteId: s.upstreamSiteId,
-        enabled: s.enabled,
-        checkinTime: s.checkinTime,
-        cronExpr: s.cronExpr || "",
-        skipDates: s.skipDates || [],
-        randomDelayMin: s.randomDelayMin,
-        randomDelayMax: s.randomDelayMax,
-      };
-    }
-    // Add default form for sites without a schedule
-    for (const site of nextSites) {
-      if (!nextForms[site.id]) {
-        nextForms[site.id] = {
-          upstreamSiteId: site.id,
-          enabled: false,
-          checkinTime: "08:00",
-          cronExpr: "",
-          skipDates: [],
-          randomDelayMin: 0,
-          randomDelayMax: 30,
+      // Initialize forms from fetched data
+      const nextForms: Record<string, SiteScheduleForm> = {};
+      for (const s of nextSchedules) {
+        nextForms[s.upstreamSiteId] = {
+          upstreamSiteId: s.upstreamSiteId,
+          enabled: s.enabled,
+          checkinTime: s.checkinTime,
+          cronExpr: s.cronExpr || "",
+          skipDates: s.skipDates || [],
+          randomDelayMin: s.randomDelayMin,
+          randomDelayMax: s.randomDelayMax,
         };
       }
+      // Add default form for sites without a schedule
+      for (const site of nextSites) {
+        if (!nextForms[site.id]) {
+          nextForms[site.id] = {
+            upstreamSiteId: site.id,
+            enabled: false,
+            checkinTime: "08:00",
+            cronExpr: "",
+            skipDates: [],
+            randomDelayMin: 0,
+            randomDelayMax: 30,
+          };
+        }
+      }
+      setForms(nextForms);
+    } catch (err) {
+      // refresh() is called via `void` on mount and from saveSchedule's
+      // try block; without this catch a network failure here would either
+      // surface as an unhandled rejection (mount) or be misreported as
+      // "保存失败" by saveSchedule's catch even though the save succeeded.
+      setMessage(err instanceof Error ? `加载排程失败：${err.message}` : "加载排程失败");
     }
-    setForms(nextForms);
   }
 
   async function saveSchedule(siteId: string) {
