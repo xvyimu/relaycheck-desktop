@@ -103,13 +103,14 @@ func (r scheduledSyncResult) Summary() string {
 }
 
 // StartSchedulers launches the checkin, sync, and channel-health scheduler goroutines.
-func (a *App) StartSchedulers(parent context.Context) {
+// It derives its lifecycle from a.rootCtx so that app.Close() cancels all scheduler work.
+func (a *App) StartSchedulers() {
 	a.mu.Lock()
 	if a.schedulerCancel != nil {
 		a.mu.Unlock()
 		return
 	}
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancel(a.rootCtx)
 	a.schedulerCancel = cancel
 	a.schedulerStartedAt = time.Now()
 	a.mu.Unlock()

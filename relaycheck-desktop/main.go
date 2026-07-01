@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"embed"
 	"io/fs"
 	"log"
@@ -49,7 +48,7 @@ func main() {
 	}
 	app.SetRuntimeAddress(bind, actualPort)
 	app.SetPortConflict(preferredPort, actualPort != preferredPort)
-	app.StartSchedulers(context.Background())
+	app.StartSchedulers()
 
 	addr := bind + ":" + strconv.Itoa(actualPort)
 	server := &http.Server{
