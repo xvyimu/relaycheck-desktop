@@ -141,6 +141,14 @@ func (s *Service) getSettingString(ctx context.Context, key string) string {
 	if err := s.infra.DB().QueryRowContext(ctx, `SELECT value_json FROM system_settings WHERE key=?`, key).Scan(&valueJSON); err != nil {
 		return ""
 	}
+	return decodeSettingString(valueJSON)
+}
+
+// decodeSettingString decodes a JSON-encoded string setting value. If the
+// value is not valid JSON, it falls back to returning the raw value with
+// surrounding double-quotes stripped. Extracted from getSettingString so the
+// decoding logic is unit-testable without a database.
+func decodeSettingString(valueJSON string) string {
 	var str string
 	if err := json.Unmarshal([]byte(valueJSON), &str); err != nil {
 		// Not a JSON string, try raw value
