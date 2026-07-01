@@ -62,4 +62,4 @@
 - [x] G2: `cd frontend && npx vitest run` 全绿
 - [x] G2: 7 个 `lib/` 文件均有对应测试
 - [x] G3: `cd frontend && npm run smoke` 可执行（需 dev server）
-- [x] 全部变更已 commit + push 到 `origin/main`（`9fb28d4`）
+- [x] 全部变更已 commit + push 到 `origin/main`（`9fb28d4` + `ac8687e`）

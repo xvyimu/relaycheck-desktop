@@ -60,14 +60,9 @@ cd frontend; npx vitest run                      # 187 tests pass
 
 Windows env has cgo disabled, so `go test -race` cannot run. Concurrency code in `notifications/hub.go` and `task_runner.go` is covered by targeted tests but not by the race detector.
 
-### Remaining context.Background() calls
+### All context.Background() calls resolved ✅
 
-Four `context.Background()` calls remain in lower-priority paths:
-- `scheduler.go:125` — `resetInterruptedSchedulerRuns` (non-cancellable DB write during shutdown)
-- `scheduler.go:240,304,370` — `finishSchedulerJob` (non-cancellable DB finalization writes)
-- `notifications/hub.go:71,145` — internal hub operations (lower priority)
-
-These are deliberate for non-cancellable DB writes and are safe to address in a future session.
+All `context.Background()` calls in `scheduler.go` have been replaced with the cancellable `ctx` derived from `a.rootCtx` (commit `ac8687e`). `notifications/hub.go` retains two `context.Background()` calls — these are deliberate because the hub creates its own cancelable context in `NewNotificationHub` and cancels it in `Close()`, so the lifecycle is self-contained and correct.
 
 ---
 
@@ -113,6 +108,7 @@ These are deliberate for non-cancellable DB writes and are safe to address in a 
 
 | Date | Session | Outcome |
 |------|---------|---------|
+| 2026-07-02 | rootCtx lifecycle + cleanup | `9fb28d4`: StartSchedulers derives from a.rootCtx. `ac8687e`: all remaining context.Background() in scheduler.go replaced with ctx. 861 tests pass. |
 | 2026-07-02 | Coverage sprint G0–G2 | G0: 8 commits pushed. G1: weighted avg 61.4% (beat 55%). G2: 187 frontend tests. New: crypto_util_test, filters_test, helpers_test, versioncheck extended, backup service_test. |
 | 2026-07-02 | Domain coverage batch | +2035 lines across 7 test files + 1 extraction. channels 14%→60.7%, accounts 19.6%→25.4%, versioncheck 27.3%→32.8% |
 | 2026-07-01 | Backend M/L-tier fixes | `883e3dc` + `656c5dc`: error propagation, CST unification, SMTP/HTTP timeouts, 12 frontend Promise rejections |
