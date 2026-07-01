@@ -1165,7 +1165,11 @@ func (a *App) testAccountLogin(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 
-	req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, normalizeBaseURL(baseURL)+"/api/user/self", nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, normalizeBaseURL(baseURL)+"/api/user/self", nil)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "账号 Base URL 无效，无法测试登录态。")
+		return
+	}
 	if userAgent != "" {
 		req.Header.Set("user-agent", userAgent)
 	}

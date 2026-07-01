@@ -128,10 +128,21 @@ func (a *App) handleUpdateSystemSettings(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = a.reloadNetworkProxyConfig(r.Context())
-	_ = a.reloadNotificationConfig(r.Context())
+	var reloadWarnings []string
+	if err := a.reloadNetworkProxyConfig(r.Context()); err != nil {
+		log.Printf("[settings] reload network proxy failed: %v", err)
+		reloadWarnings = append(reloadWarnings, "代理配置已保存但运行时未刷新： "+err.Error())
+	}
+	if err := a.reloadNotificationConfig(r.Context()); err != nil {
+		log.Printf("[settings] reload notification channels failed: %v", err)
+		reloadWarnings = append(reloadWarnings, "通知渠道配置已保存但运行时未刷新： "+err.Error())
+	}
 	a.audit("settings.updated", "info", "", "system_settings", "", fmt.Sprintf("已保存 %d 项系统设置。", len(input.Settings)), map[string]interface{}{"count": len(input.Settings)})
-	writeJSON(w, http.StatusOK, map[string]interface{}{"updated": len(input.Settings)})
+	response := map[string]interface{}{"updated": len(input.Settings)}
+	if len(reloadWarnings) > 0 {
+		response["warnings"] = reloadWarnings
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (a *App) handleSystemBackups(w http.ResponseWriter, r *http.Request) {
@@ -284,7 +295,9 @@ func (a *App) restoreFromBackup(backupPath string) error {
 	currentMoved := false
 	if _, err := os.Stat(dbPath); err == nil {
 		if err := os.Rename(dbPath, currentPath); err != nil {
-			_ = a.reopenDatabase()
+			if reopenErr := a.reopenDatabase(); reopenErr != nil {
+				log.Printf("[restore] rename current db failed and reopen also failed: rename=%v reopen=%v", err, reopenErr)
+			}
 			return err
 		}
 		currentMoved = true
@@ -314,11 +327,19 @@ func (a *App) restoreFromBackup(backupPath string) error {
 }
 
 func (a *App) rollbackRestore(dbPath string, currentPath string, currentMoved bool, cause error) error {
-	_ = a.db.Close()
+	if err := a.db.Close(); err != nil {
+		log.Printf("[restore] close broken db during rollback failed: %v", err)
+	}
 	if currentMoved {
-		_ = os.Remove(dbPath)
-		_ = os.Rename(currentPath, dbPath)
-		_ = a.reopenDatabase()
+		if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
+			log.Printf("[restore] remove broken db during rollback failed: %v", err)
+		}
+		if err := os.Rename(currentPath, dbPath); err != nil {
+			log.Printf("[restore] restore previous db during rollback failed: %v", err)
+		}
+		if reopenErr := a.reopenDatabase(); reopenErr != nil {
+			log.Printf("[restore] reopen previous db during rollback failed: %v", reopenErr)
+		}
 	}
 	return cause
 }
@@ -378,10 +399,10 @@ func (a *App) backupsDir() string {
 // internal/backup package depends on. They are thin wrappers around the
 // unexported methods so that the rest of core can keep using the lowercase
 // call sites while *App still satisfies backup.Infra.
-func (a *App) DatabasePath() string         { return a.databasePath() }
-func (a *App) BackupsDir() string           { return a.backupsDir() }
-func (a *App) ReopenDatabase() error        { return a.reopenDatabase() }
-func (a *App) ProductVersion() string       { return productVersion }
+func (a *App) DatabasePath() string   { return a.databasePath() }
+func (a *App) BackupsDir() string     { return a.backupsDir() }
+func (a *App) ReopenDatabase() error  { return a.reopenDatabase() }
+func (a *App) ProductVersion() string { return productVersion }
 
 func copyFile(sourcePath, targetPath string) error {
 	source, err := os.Open(sourcePath)

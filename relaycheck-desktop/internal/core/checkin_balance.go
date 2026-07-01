@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"net/http/cookiejar"
@@ -111,25 +112,25 @@ const (
 )
 
 type accountAuthContext struct {
-	AccountID           string
-	AccountName         string
-	UpstreamSiteID      string
-	UpstreamSite        string
-	SiteKind            string
-	ChannelID           string
-	BaseURL             string
-	LoginPath           string
-	BrowserProfilePath  string
-	UserAgent           string
-	LoginName           string
-	Password            string
-	AuthUserID          string
-	Cookie              string
-	AccessToken         string
-	APIKey              string
-	SupportsCheckin     bool
-	SupportsBalance     bool
-	CheckinRules        []apiCandidate
+	AccountID          string
+	AccountName        string
+	UpstreamSiteID     string
+	UpstreamSite       string
+	SiteKind           string
+	ChannelID          string
+	BaseURL            string
+	LoginPath          string
+	BrowserProfilePath string
+	UserAgent          string
+	LoginName          string
+	Password           string
+	AuthUserID         string
+	Cookie             string
+	AccessToken        string
+	APIKey             string
+	SupportsCheckin    bool
+	SupportsBalance    bool
+	CheckinRules       []apiCandidate
 }
 
 type checkinResult struct {
@@ -669,12 +670,16 @@ func (a *App) runAccountCheckin(ctx context.Context, id string, auth *accountAut
 	}
 	if !auth.SupportsCheckin {
 		result := checkinResult{Status: "unsupported", Message: "该站点未探测到签到接口。"}
-		_ = a.saveCheckinResult(ctx, *auth, result, now(), now())
+		if err := a.saveCheckinResult(ctx, *auth, result, now(), now()); err != nil {
+			log.Printf("[checkin] save result failed for account %s: %v", id, err)
+		}
 		return result, nil
 	}
 	if err := a.ensureAccountSession(ctx, auth); err != nil && auth.Cookie == "" && auth.AccessToken == "" && auth.APIKey == "" {
 		result := checkinResult{Status: "auth_expired", Message: "账号密码登录失败：" + err.Error()}
-		_ = a.saveCheckinResult(ctx, *auth, result, now(), now())
+		if err := a.saveCheckinResult(ctx, *auth, result, now(), now()); err != nil {
+			log.Printf("[checkin] save result failed for account %s: %v", id, err)
+		}
 		return result, nil
 	}
 
@@ -702,7 +707,9 @@ func (a *App) runAccountCheckin(ctx context.Context, id string, auth *accountAut
 				result.RawResponseMasked = ""
 				result.RetryCount = retries
 				result = annotateCheckinRetry(result)
-				_ = a.saveCheckinResult(ctx, *auth, result, startedAt, now())
+				if err := a.saveCheckinResult(ctx, *auth, result, startedAt, now()); err != nil {
+					log.Printf("[checkin] save result failed for account %s: %v", id, err)
+				}
 				return result, nil
 			}
 			var retryAfterLogin int
@@ -722,10 +729,14 @@ func (a *App) runAccountCheckin(ctx context.Context, id string, auth *accountAut
 			result.Message = fmt.Sprintf("%s %s 返回 HTTP %d", candidate.Method, candidate.Path, status)
 		}
 		result = annotateCheckinRetry(result)
-		_ = a.saveCheckinResult(ctx, *auth, result, startedAt, now())
+		if err := a.saveCheckinResult(ctx, *auth, result, startedAt, now()); err != nil {
+			log.Printf("[checkin] save result failed for account %s: %v", id, err)
+		}
 		return result, nil
 	}
-	_ = a.saveCheckinResult(ctx, *auth, lastUnsupported, startedAt, now())
+	if err := a.saveCheckinResult(ctx, *auth, lastUnsupported, startedAt, now()); err != nil {
+		log.Printf("[checkin] save result failed for account %s: %v", id, err)
+	}
 	return lastUnsupported, nil
 }
 

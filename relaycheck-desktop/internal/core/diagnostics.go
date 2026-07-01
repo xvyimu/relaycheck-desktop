@@ -28,7 +28,7 @@ func (a *App) systemDiagnostics(r *http.Request) (SystemDiagnostics, error) {
 			ID:          "database",
 			Level:       "success",
 			Title:       "SQLite 数据库可用",
-			Description: fmt.Sprintf("数据库文件 %.1f MB，路径：%s", float64(info.Size())/1024/1024, dbPath),
+			Description: fmt.Sprintf("数据库文件 %.1f MB", float64(info.Size())/1024/1024),
 			Action:      "无需处理。建议定期在设置页备份数据库。",
 		})
 	} else {
@@ -36,7 +36,7 @@ func (a *App) systemDiagnostics(r *http.Request) (SystemDiagnostics, error) {
 			ID:          "database",
 			Level:       "danger",
 			Title:       "SQLite 数据库不可访问",
-			Description: err.Error(),
+			Description: "数据库文件不可访问，请检查 data 目录权限后重启工具。",
 			Action:      "去设置页恢复最近备份；若没有备份，检查 data 目录权限后重启工具。",
 			SolutionSteps: []string{
 				"关闭正在占用数据库的旧 relaycheck 进程，确认 data 目录可读写。",
@@ -89,7 +89,7 @@ func (a *App) systemDiagnostics(r *http.Request) (SystemDiagnostics, error) {
 		"invalidAccounts":     `SELECT COUNT(*) FROM channel_accounts WHERE login_status IN ('expired','manual_required','captcha_required','two_factor_required')`,
 		"failedCheckinsToday": `SELECT COUNT(*) FROM checkin_logs WHERE status NOT IN ('success','already_checked') AND substr(started_at,1,10)=substr(datetime('now','+8 hours'),1,10)`,
 		"unreadNotifications": `SELECT COUNT(*) FROM app_notifications WHERE read=0`,
-		"cookieExpiringSoon": `SELECT COUNT(*) FROM channel_accounts WHERE cookie_expiry_at != '' AND cookie_expiry_at != '' AND datetime(cookie_expiry_at) BETWEEN datetime('now') AND datetime('now','+7 days')`,
+		"cookieExpiringSoon":  `SELECT COUNT(*) FROM channel_accounts WHERE cookie_expiry_at != '' AND cookie_expiry_at != '' AND datetime(cookie_expiry_at) BETWEEN datetime('now') AND datetime('now','+7 days')`,
 	}
 	for key, query := range queries {
 		var count int

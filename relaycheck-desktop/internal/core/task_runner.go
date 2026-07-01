@@ -465,7 +465,10 @@ func (a *App) startTestKeysTask(taskID string, params map[string]interface{}) {
 		jobs := []job{}
 		for rows.Next() {
 			var j job
-			_ = rows.Scan(&j.ID, &j.Name)
+			if err := rows.Scan(&j.ID, &j.Name); err != nil {
+				log.Printf("[task:test-keys] scan failed: %v", err)
+				continue
+			}
 			jobs = append(jobs, j)
 		}
 		if err := rows.Err(); err != nil {
@@ -532,7 +535,10 @@ func (a *App) startRefreshBalancesTask(taskID string, params map[string]interfac
 		jobs := []job{}
 		for rows.Next() {
 			var j job
-			_ = rows.Scan(&j.ID, &j.Name)
+			if err := rows.Scan(&j.ID, &j.Name); err != nil {
+				log.Printf("[task:refresh-balances] scan failed: %v", err)
+				continue
+			}
 			jobs = append(jobs, j)
 		}
 		if err := rows.Err(); err != nil {
@@ -602,7 +608,10 @@ func (a *App) startDetectSitesTask(taskID string, params map[string]interface{})
 		jobs := []job{}
 		for rows.Next() {
 			var j job
-			_ = rows.Scan(&j.ID, &j.Name, &j.BaseURL)
+			if err := rows.Scan(&j.ID, &j.Name, &j.BaseURL); err != nil {
+				log.Printf("[task:detect-sites] scan failed: %v", err)
+				continue
+			}
 			jobs = append(jobs, j)
 		}
 		if err := rows.Err(); err != nil {

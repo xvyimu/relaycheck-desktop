@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -332,8 +333,13 @@ func (a *App) handleModelPricingSync(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	failedSites := []string{}
 	for _, record := range records {
-		_ = a.syncSitePricing(r.Context(), record)
+		item := a.syncSitePricing(r.Context(), record)
+		if item.Status != "" && item.Status != "success" {
+			log.Printf("[pricing] sync site %s (%s) returned status=%s: %s", record.SiteID, record.SiteName, item.Status, item.Message)
+			failedSites = append(failedSites, record.SiteName)
+		}
 	}
 	rawSources, err := a.loadRawChannelPricingSources(r.Context())
 	if err != nil {
@@ -352,7 +358,13 @@ func (a *App) handleModelPricingSync(w http.ResponseWriter, r *http.Request) {
 	}
 	overview := buildPricingOverview(append(rawSources, cacheSources...), cacheItems, accountRecords)
 	if len(records) > 0 {
-		a.notify("pricing_sync_completed", "success", "价格同步完成", fmt.Sprintf("已探测 %d 个上游站点的 /api/pricing。", len(records)), "pricing", "")
+		msg := fmt.Sprintf("已探测 %d 个上游站点的 /api/pricing。", len(records))
+		level := "success"
+		if len(failedSites) > 0 {
+			level = "warning"
+			msg += fmt.Sprintf(" %d 个站点同步失败：%s。", len(failedSites), strings.Join(failedSites, "、"))
+		}
+		a.notify("pricing_sync_completed", level, "价格同步完成", msg, "pricing", "")
 	}
 	writeJSON(w, http.StatusOK, overview)
 }

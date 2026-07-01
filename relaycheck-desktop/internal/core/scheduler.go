@@ -198,7 +198,9 @@ func (a *App) tickCheckinScheduler(ctx context.Context, currentTime time.Time) {
 	plan := makeCheckinPlan(config, currentTime)
 	record, _ := a.loadSchedulerRun(ctx, schedulerJobCheckin)
 	if !plan.Enabled {
-		_ = a.upsertSchedulerPlan(ctx, schedulerJobCheckin, "", "", "自动签到未启用。")
+		if err := a.upsertSchedulerPlan(ctx, schedulerJobCheckin, "", "", "自动签到未启用。"); err != nil {
+			log.Printf("[scheduler] upsert %s plan failed: %v", schedulerJobCheckin, err)
+		}
 		return
 	}
 
@@ -209,7 +211,9 @@ func (a *App) tickCheckinScheduler(ctx context.Context, currentTime time.Time) {
 		// Preserve the CST offset in the stored string instead of normalising
 		// to UTC; the parsed value is later interpreted in CST via In(cstZone).
 		nextRunAt = runAt.Format(time.RFC3339Nano)
-		_ = a.upsertSchedulerPlan(ctx, schedulerJobCheckin, plan.RunKey, nextRunAt, "等待自动签到窗口。")
+		if err := a.upsertSchedulerPlan(ctx, schedulerJobCheckin, plan.RunKey, nextRunAt, "等待自动签到窗口。"); err != nil {
+			log.Printf("[scheduler] upsert %s plan failed: %v", schedulerJobCheckin, err)
+		}
 	} else if parsed, err := time.Parse(time.RFC3339Nano, nextRunAt); err == nil {
 		plan.RunAt = parsed.In(cstZone())
 	}
@@ -233,7 +237,9 @@ func (a *App) tickCheckinScheduler(ctx context.Context, currentTime time.Time) {
 		summary = "自动签到失败：" + errMessage
 		a.notify("scheduled_checkin_failed", "warning", "自动签到失败", errMessage, "scheduler", schedulerJobCheckin)
 	}
-	_ = a.finishSchedulerJob(context.Background(), schedulerJobCheckin, plan.RunKey, status, summary, errMessage)
+	if err := a.finishSchedulerJob(context.Background(), schedulerJobCheckin, plan.RunKey, status, summary, errMessage); err != nil {
+		log.Printf("[scheduler] finish %s failed: %v", schedulerJobCheckin, err)
+	}
 	a.syncGlobalScheduleRecord(ctx)
 }
 
@@ -241,7 +247,9 @@ func (a *App) tickSyncScheduler(ctx context.Context, currentTime time.Time) {
 	config := a.loadSyncScheduleConfig(ctx)
 	record, _ := a.loadSchedulerRun(ctx, schedulerJobSync)
 	if !config.Enabled || config.Mode == "manual-only" {
-		_ = a.upsertSchedulerPlan(ctx, schedulerJobSync, "", "", "定时同步未启用。")
+		if err := a.upsertSchedulerPlan(ctx, schedulerJobSync, "", "", "定时同步未启用。"); err != nil {
+			log.Printf("[scheduler] upsert %s plan failed: %v", schedulerJobSync, err)
+		}
 		return
 	}
 
@@ -270,7 +278,9 @@ func (a *App) tickSyncScheduler(ctx context.Context, currentTime time.Time) {
 			due = true
 		}
 	}
-	_ = a.upsertSchedulerPlan(ctx, schedulerJobSync, runKey, nextRun.Format(time.RFC3339Nano), "等待下一次 NewAPI 同步。")
+	if err := a.upsertSchedulerPlan(ctx, schedulerJobSync, runKey, nextRun.Format(time.RFC3339Nano), "等待下一次 NewAPI 同步。"); err != nil {
+		log.Printf("[scheduler] upsert %s plan failed: %v", schedulerJobSync, err)
+	}
 	if !due {
 		return
 	}
@@ -291,14 +301,18 @@ func (a *App) tickSyncScheduler(ctx context.Context, currentTime time.Time) {
 	if result.ProcessedInstances == 0 && result.SkippedInstances > 0 {
 		status = "skipped"
 	}
-	_ = a.finishSchedulerJob(context.Background(), schedulerJobSync, runKey, status, result.Summary(), errMessage)
+	if err := a.finishSchedulerJob(context.Background(), schedulerJobSync, runKey, status, result.Summary(), errMessage); err != nil {
+		log.Printf("[scheduler] finish %s failed: %v", schedulerJobSync, err)
+	}
 }
 
 func (a *App) tickChannelHealthScheduler(ctx context.Context, currentTime time.Time) {
 	config := a.loadChannelHealthScheduleConfig(ctx)
 	record, _ := a.loadSchedulerRun(ctx, schedulerJobChannelHealth)
 	if !config.Enabled {
-		_ = a.upsertSchedulerPlan(ctx, schedulerJobChannelHealth, "", "", "渠道健康探测未启用。")
+		if err := a.upsertSchedulerPlan(ctx, schedulerJobChannelHealth, "", "", "渠道健康探测未启用。"); err != nil {
+			log.Printf("[scheduler] upsert %s plan failed: %v", schedulerJobChannelHealth, err)
+		}
 		return
 	}
 
@@ -327,7 +341,9 @@ func (a *App) tickChannelHealthScheduler(ctx context.Context, currentTime time.T
 			due = true
 		}
 	}
-	_ = a.upsertSchedulerPlan(ctx, schedulerJobChannelHealth, runKey, nextRun.Format(time.RFC3339Nano), "等待下一次渠道健康探测。")
+	if err := a.upsertSchedulerPlan(ctx, schedulerJobChannelHealth, runKey, nextRun.Format(time.RFC3339Nano), "等待下一次渠道健康探测。"); err != nil {
+		log.Printf("[scheduler] upsert %s plan failed: %v", schedulerJobChannelHealth, err)
+	}
 	if !due {
 		return
 	}
@@ -351,7 +367,9 @@ func (a *App) tickChannelHealthScheduler(ctx context.Context, currentTime time.T
 		errMessage = fmt.Sprintf("%d 个失败，%d 个预警", result.Failed, result.Warning)
 		a.notify("scheduled_channel_health_probe_warning", "warning", "渠道健康探测发现风险", summary, "scheduler", schedulerJobChannelHealth)
 	}
-	_ = a.finishSchedulerJob(context.Background(), schedulerJobChannelHealth, runKey, status, summary, errMessage)
+	if err := a.finishSchedulerJob(context.Background(), schedulerJobChannelHealth, runKey, status, summary, errMessage); err != nil {
+		log.Printf("[scheduler] finish %s failed: %v", schedulerJobChannelHealth, err)
+	}
 }
 
 func (a *App) runScheduledChannelHealthProbe(ctx context.Context, config channelHealthScheduleConfig) (channelHealthProbeResult, error) {
