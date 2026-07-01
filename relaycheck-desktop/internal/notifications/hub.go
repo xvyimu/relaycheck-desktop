@@ -83,7 +83,11 @@ func (h *NotificationHub) Reload(ctx context.Context) error {
 		defer h.mu.Unlock()
 		c := h.digestCancel
 		h.digestCancel = nil
-		h.digestWG = sync.WaitGroup{}
+		// Note: do NOT reset digestWG here. The old digest goroutine still
+		// holds a reference to it and will call Done() on exit; replacing the
+		// WG would cause "negative WaitGroup counter" panics. After
+		// cancel()+Wait() below, the counter returns to 0 and the same WG
+		// can be reused for the next generation of digest goroutines.
 		h.digestChannels = map[string]*WebhookChannel{}
 		h.channelRateLimits = map[string]*ChannelRateLimiter{}
 		return c

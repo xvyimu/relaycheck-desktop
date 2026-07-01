@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -21,6 +22,13 @@ const taskCleanupTTL = 5 * time.Minute
 // to keep the connection alive through proxies and to detect dead clients
 // (write failure returns the handler, releasing the subscriber).
 const sseHeartbeatInterval = 15 * time.Second
+
+// maxSSESubscribers caps the total number of concurrent SSE task-stream
+// connections the process will accept. Each connection holds a goroutine
+// and a subscriber channel; without a cap a misbehaving client (or a
+// retry storm) can exhaust goroutines and memory. Desktop-scale app: 50
+// is far above any legitimate usage.
+const maxSSESubscribers = 50
 
 // TaskType identifies a batch operation.
 type TaskType string
@@ -129,8 +137,9 @@ type runningTask struct {
 
 // TaskRunner manages all running batch tasks.
 type TaskRunner struct {
-	tasks map[string]*runningTask
-	mu    sync.RWMutex
+	tasks           map[string]*runningTask
+	mu              sync.RWMutex
+	sseSubscribers  atomic.Int64
 }
 
 func newTaskRunner() *TaskRunner {
@@ -302,6 +311,18 @@ func (a *App) handleTaskCancel(w http.ResponseWriter, r *http.Request) {
 func (a *App) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 	taskID := strings.TrimPrefix(r.URL.Path, "/api/tasks/")
 	taskID = strings.TrimSuffix(taskID, "/stream")
+
+	// S3: Enforce a per-process SSE subscriber cap. Each connection holds a
+	// goroutine and a subscriber channel for the lifetime of the stream;
+	// without a cap a client retry storm can exhaust goroutines. We count
+	// before looking up the task so rejected connections don't need to
+	// touch the tasks map at all.
+	if a.taskRunner.sseSubscribers.Add(1) > maxSSESubscribers {
+		a.taskRunner.sseSubscribers.Add(-1)
+		writeError(w, http.StatusServiceUnavailable, "SSE 连接数已达上限，请稍后重试。")
+		return
+	}
+	defer a.taskRunner.sseSubscribers.Add(-1)
 
 	task := a.taskRunner.get(taskID)
 	if task == nil {
