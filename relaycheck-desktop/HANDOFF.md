@@ -33,8 +33,8 @@ cd frontend; npx vitest run                      # 187 tests pass
 
 | Package | Before | After | New test files |
 |---------|--------|-------|----------------|
-| `internal/core` | 42.2% | **42.5%** | `crypto_util_test.go`, `filters_test.go` |
-| `internal/accounts` | 25.4% | **25.4%** | `helpers_test.go` (526 lines) |
+| `internal/core` | 42.2% | **43.8%** | `handler_health_test.go` (13 handler tests) |
+| `internal/accounts` | 25.4% | **31.5%** | `service_test.go` (stubInfra + in-memory SQLite, 9 tests) |
 | `internal/versioncheck` | 32.8% | **92.5%** | extended `service_test.go` w/ httptest.Server |
 | `internal/backup` | 32.1% | **81.4%** | `service_test.go` (10+ tests, export/import round-trip) |
 | `internal/channels` | 60.7% | **60.7%** | (unchanged this session) |
@@ -111,6 +111,7 @@ All `context.Background()` calls in `scheduler.go` have been replaced with the c
 | 2026-07-02 | rootCtx lifecycle + cleanup | `9fb28d4`: StartSchedulers derives from a.rootCtx. `ac8687e`: all remaining context.Background() in scheduler.go replaced with ctx. 861 tests pass. |
 | 2026-07-02 | Coverage sprint G0–G2 | G0: 8 commits pushed. G1: weighted avg 61.4% (beat 55%). G2: 187 frontend tests. New: crypto_util_test, filters_test, helpers_test, versioncheck extended, backup service_test. |
 | 2026-07-02 | Domain coverage batch | +2035 lines across 7 test files + 1 extraction. channels 14%→60.7%, accounts 19.6%→25.4%, versioncheck 27.3%→32.8% |
+| 2026-07-02 | Handler + Service tests | `27288f7`: core handler_health_test.go (13 tests, 43.8%), accounts service_test.go (stubInfra pattern, 31.5%). Weighted avg 62.6%. |
 | 2026-07-01 | Backend M/L-tier fixes | `883e3dc` + `656c5dc`: error propagation, CST unification, SMTP/HTTP timeouts, 12 frontend Promise rejections |
 | 2026-07-01 | rows.Err + diagnostics + shutdown | `926ef7e` + `9a51aea` + `23cfb46`: 18 rows.Err checks, API path scrubbing, rootCtx shutdown, notification WG |
 | 2026-07-01 | NotificationHub + SSE cap | `63420b0`: 25 hub boundary tests, 50-subscriber SSE cap, digest WG panic fix |

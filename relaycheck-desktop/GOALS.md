@@ -14,12 +14,12 @@
 
 ## G1 · Go 后端测试覆盖率提升 ✅
 
-**加权平均覆盖率：** (42.5+25.4+92.5+81.4+60.7+65.9)/6 ≈ **61.4%** → 超过 55% 目标 ✅
+**加权平均覆盖率：** (43.8+31.5+92.5+81.4+60.7+65.9)/6 ≈ **62.6%** → 超过 55% 目标 ✅
 
 | 包 | 之前 | 目标 | 实际 | 状态 |
 |----|------|------|------|------|
-| `internal/core` | 42.2% | 55%+ | **42.5%** | ❌ 纯函数测试已覆盖（crypto_util + filters），但包体量大覆盖率受益有限 |
-| `internal/accounts` | 25.4% | 40%+ | **25.4%** | ❌ helpers_test.go 526 行，但覆盖的多为 unexported 函数，未被 go test -cover 计入 |
+| `internal/core` | 42.2% | 55%+ | **43.8%** | ❌ handler tests 覆盖路由/方法检查；需 Infra mock 覆盖 DB/HTTP 路径 |
+| `internal/accounts` | 25.4% | 40%+ | **31.5%** | ❌ service-level Infra mock 测试已添加；unexported helpers 仍未覆盖 |
 | `internal/versioncheck` | 32.8% | 50%+ | **92.5%** | ✅ 严重超预期：httptest.Server + stub Infra |
 | `internal/backup` | 32.1% | 45%+ | **81.4%** | ✅ 严重超预期：10+ 测试覆盖 export/import round-trip |
 | `internal/channels` | 60.7% | 70%+ | **60.7%** | ❌ 剩余为 DB/HTTP 路径，需 Infra mock |
