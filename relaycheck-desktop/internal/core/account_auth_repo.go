@@ -33,7 +33,7 @@ func (r *AccountAuthRepository) Load(ctx context.Context, id string) (*accountAu
 	var siteKind sql.NullString
 	err := r.db.QueryRowContext(ctx, `
 		SELECT a.id, a.display_name, s.id, s.name, COALESCE(s.kind,''), COALESCE(s.channel_id,''), s.base_url,
-		       COALESCE(s.login_url,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
+		       COALESCE(s.login_url,''), COALESCE(a.browser_profile_path,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
 		       COALESCE(a.password_encrypted,''), COALESCE(a.cookie_encrypted,''),
 		       COALESCE(a.access_token_encrypted,''), COALESCE(a.api_key_encrypted,''),
 		       COALESCE(a.auth_user_id,''), s.supports_checkin, s.supports_balance,
@@ -41,7 +41,7 @@ func (r *AccountAuthRepository) Load(ctx context.Context, id string) (*accountAu
 		FROM channel_accounts a
 		JOIN upstream_sites s ON s.id = a.upstream_site_id
 		WHERE a.id = ?
-	`, id).Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON)
+	`, id).Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &auth.BrowserProfilePath, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON)
 	if err == sql.ErrNoRows {
 		return nil, errorsText("账号不存在。")
 	}
@@ -80,7 +80,7 @@ func (r *AccountAuthRepository) LoadBatch(ctx context.Context, ids []string) (ma
 	}
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT a.id, a.display_name, s.id, s.name, COALESCE(s.kind,''), COALESCE(s.channel_id,''), s.base_url,
-		       COALESCE(s.login_url,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
+		       COALESCE(s.login_url,''), COALESCE(a.browser_profile_path,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
 		       COALESCE(a.password_encrypted,''), COALESCE(a.cookie_encrypted,''),
 		       COALESCE(a.access_token_encrypted,''), COALESCE(a.api_key_encrypted,''),
 		       COALESCE(a.auth_user_id,''), s.supports_checkin, s.supports_balance,
@@ -99,7 +99,7 @@ func (r *AccountAuthRepository) LoadBatch(ctx context.Context, ids []string) (ma
 		var email, username, cookieEncrypted, accessEncrypted, apiKeyEncrypted, passwordEncrypted, loginURL, checkinConfigJSON string
 		var supportsCheckin, supportsBalance int
 		var siteKind sql.NullString
-		if err := rows.Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON); err != nil {
+		if err := rows.Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &auth.BrowserProfilePath, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON); err != nil {
 			return nil, err
 		}
 		auth.LoginName = firstNonEmpty(email, username)

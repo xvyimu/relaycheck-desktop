@@ -7,7 +7,20 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
+
+// taskCleanupTTL is how long a finished task's entry remains in the
+// TaskRunner.tasks map before being garbage-collected. The TTL gives SSE
+// clients a window to attach (or re-attach) and read the final snapshot
+// after the task has completed, while bounding memory growth from
+// accumulated finished entries.
+const taskCleanupTTL = 5 * time.Minute
+
+// sseHeartbeatInterval is how often the SSE handler emits a comment line
+// to keep the connection alive through proxies and to detect dead clients
+// (write failure returns the handler, releasing the subscriber).
+const sseHeartbeatInterval = 15 * time.Second
 
 // TaskType identifies a batch operation.
 type TaskType string
@@ -142,6 +155,20 @@ func (tr *TaskRunner) start(id string, taskType TaskType, total int) (*runningTa
 	tr.mu.Lock()
 	tr.tasks[id] = task
 	tr.mu.Unlock()
+	// S1: Schedule deferred cleanup so finished task entries don't leak the
+	// tasks map. We wait for task.done (closed by finish()), then sleep the
+	// TTL, then remove the entry. If a new task reuses the same id before
+	// cleanup, the map already points to the new entry; only delete when
+	// the entry still matches this task pointer.
+	go func() {
+		<-task.done
+		time.Sleep(taskCleanupTTL)
+		tr.mu.Lock()
+		if current := tr.tasks[id]; current == task {
+			delete(tr.tasks, id)
+		}
+		tr.mu.Unlock()
+	}()
 	return task, ctx
 }
 
@@ -302,6 +329,12 @@ func (a *App) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 	ch := task.subscribe()
 	defer task.unsubscribe(ch)
 
+	// S2: Heartbeat ticker. SSE comment lines (": ...") are ignored by
+	// EventSource clients but keep the connection alive through idle
+	// proxies and let us detect dead clients when the write fails.
+	ticker := time.NewTicker(sseHeartbeatInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-r.Context().Done():
@@ -324,6 +357,13 @@ func (a *App) handleTaskStream(w http.ResponseWriter, r *http.Request) {
 				flusher.Flush()
 			}
 			return
+		case <-ticker.C:
+			// Write failure indicates the client has disconnected; bail
+			// out so the subscriber is released and the goroutine exits.
+			if _, err := fmt.Fprintf(w, ": heartbeat\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
 		}
 	}
 }
@@ -662,11 +702,14 @@ func (a *App) runChannelHealthProbe(ctx context.Context, jobs []channelHealthPro
 			onItem(item)
 		}
 	}
-	a.invalidateReadCache()
+	// Per-key invalidation: channel health probe changes channel health data,
+	// which affects channel-health-overview, channels-list, action-center
+	// (channel health risks), and dashboard-summary (counts).
+	a.invalidateReadCacheKeys("channel-health-overview", "channels-list", "action-center", "dashboard-summary")
 	return result
 }
 
-func (a *App) probeChannelHealthSite(ctx context.Context, id string, name string, baseURL string) ItemResult {
+func (a *App) probeChannelHealthSite(ctx context.Context, id, name, baseURL string) ItemResult {
 	detection := a.detectAndSaveSite(ctx, id, name, baseURL)
 	item := ItemResult{ID: id, Name: name, Status: "success", Message: detection.HealthStatus}
 	if detection.Error != "" {

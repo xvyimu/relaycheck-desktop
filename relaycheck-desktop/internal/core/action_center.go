@@ -10,7 +10,9 @@ func (a *App) handleActionCenter(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	center, err := a.actionCenter(r)
+	center, err := cachedRead(a, "action-center", overviewReadCacheTTL, func() (ActionCenter, error) {
+		return a.buildActionCenter(r)
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -18,7 +20,7 @@ func (a *App) handleActionCenter(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, center)
 }
 
-func (a *App) actionCenter(r *http.Request) (ActionCenter, error) {
+func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 	items := []ActionItem{}
 	type actionQuery struct {
 		id                string

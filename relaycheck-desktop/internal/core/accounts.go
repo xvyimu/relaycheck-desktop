@@ -960,24 +960,11 @@ func (a *App) startBrowserLogin(ctx context.Context, id string, auth *accountAut
 		}
 		auth = &loaded
 	}
-	var accountName, siteName, baseURL, loginURL, profilePath string
-	err := a.db.QueryRowContext(ctx, `
-		SELECT a.display_name, s.name, s.base_url, COALESCE(s.login_url,''), COALESCE(a.browser_profile_path,'')
-		FROM channel_accounts a
-		JOIN upstream_sites s ON s.id = a.upstream_site_id
-		WHERE a.id = ?
-	`, id).Scan(&accountName, &siteName, &baseURL, &loginURL, &profilePath)
+	accountName := auth.AccountName
+	siteName := auth.UpstreamSite
+	baseURL := auth.BaseURL
+	profilePath := auth.BrowserProfilePath
 	result := browserLoginOpenResult{AccountID: id, AccountName: accountName, SiteName: siteName}
-	if err == sql.ErrNoRows {
-		result.Status = "failed"
-		result.Message = "账号不存在。"
-		return result
-	}
-	if err != nil {
-		result.Status = "failed"
-		result.Message = err.Error()
-		return result
-	}
 
 	if session, ok := a.browserSessions.Get(id); ok {
 		result.Status = "already_open"
@@ -1000,7 +987,7 @@ func (a *App) startBrowserLogin(ctx context.Context, id string, auth *accountAut
 		return result
 	}
 
-	targetURL := loginURL
+	targetURL := auth.LoginPath
 	if targetURL == "" {
 		targetURL = strings.TrimRight(baseURL, "/") + "/login"
 	}
@@ -1100,14 +1087,7 @@ func (a *App) saveBrowserLoginSession(ctx context.Context, id string, auth *acco
 		}
 		auth = &loaded
 	}
-	var accountName, siteName string
-	_ = a.db.QueryRowContext(ctx, `
-		SELECT a.display_name, s.name
-		FROM channel_accounts a
-		JOIN upstream_sites s ON s.id = a.upstream_site_id
-		WHERE a.id = ?
-	`, id).Scan(&accountName, &siteName)
-	result := browserLoginSaveResult{AccountID: id, AccountName: accountName, SiteName: siteName}
+	result := browserLoginSaveResult{AccountID: id, AccountName: auth.AccountName, SiteName: auth.UpstreamSite}
 
 	session, ok := a.browserSessions.Get(id)
 	if !ok {
@@ -1147,8 +1127,8 @@ func (a *App) saveBrowserLoginSession(ctx context.Context, id string, auth *acco
 	}
 
 	a.browserSessions.Delete(id)
-	a.notify("browser_login_saved", "success", "网页登录态已保存", fmt.Sprintf("%s 已保存 %d 个 Cookie。", firstNonEmpty(accountName, id), len(cookies)), "account", id)
-	a.audit("browser_auth.connected", "info", "", "account", id, "网页登录授权已保存。", map[string]interface{}{"accountName": accountName, "siteName": siteName, "cookieCount": len(cookies)})
+	a.notify("browser_login_saved", "success", "网页登录态已保存", fmt.Sprintf("%s 已保存 %d 个 Cookie。", firstNonEmpty(auth.AccountName, id), len(cookies)), "account", id)
+	a.audit("browser_auth.connected", "info", "", "account", id, "网页登录授权已保存。", map[string]interface{}{"accountName": auth.AccountName, "siteName": auth.UpstreamSite, "cookieCount": len(cookies)})
 
 	result.Status = "saved"
 	result.Message = "网页登录态已保存。"

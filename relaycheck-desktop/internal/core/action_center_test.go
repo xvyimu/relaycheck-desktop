@@ -24,9 +24,9 @@ func TestActionCenterAnnotatesOperationalMetadata(t *testing.T) {
 		t.Fatalf("seed accounts: %v", err)
 	}
 
-	center, err := app.actionCenter(httptest.NewRequest("GET", "/api/system/action-center", nil))
+	center, err := app.buildActionCenter(httptest.NewRequest("GET", "/api/system/action-center", nil))
 	if err != nil {
-		t.Fatalf("actionCenter: %v", err)
+		t.Fatalf("buildActionCenter: %v", err)
 	}
 
 	keyIssue := findActionItem(t, center.Items, "api-key-problems")
@@ -87,9 +87,9 @@ func TestActionCenterIncludesChannelHealthRisks(t *testing.T) {
 		t.Fatalf("seed channel: %v", err)
 	}
 
-	center, err := app.actionCenter(httptest.NewRequest("GET", "/api/system/action-center", nil))
+	center, err := app.buildActionCenter(httptest.NewRequest("GET", "/api/system/action-center", nil))
 	if err != nil {
-		t.Fatalf("actionCenter: %v", err)
+		t.Fatalf("buildActionCenter: %v", err)
 	}
 
 	item := findActionItem(t, center.Items, "channel-health-risks")

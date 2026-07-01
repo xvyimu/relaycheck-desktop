@@ -70,6 +70,21 @@ func (c *ReadCacheStore) Invalidate() {
 	c.mu.Unlock()
 }
 
+// InvalidateKeys removes only the named keys from the cache, leaving other
+// entries untouched. This is the per-key invalidation path used by high-
+// frequency writers (e.g. notify()) that only affect a subset of cached
+// reads.
+func (c *ReadCacheStore) InvalidateKeys(keys ...string) {
+	if len(keys) == 0 {
+		return
+	}
+	c.mu.Lock()
+	for _, key := range keys {
+		delete(c.store, key)
+	}
+	c.mu.Unlock()
+}
+
 // cachedRead is a thin forwarding helper so existing call sites
 // (accounts, channels, channel_health, models_pricing, routes, sites,
 // usage_overview, read_cache_test) need no changes. New code should call
@@ -82,4 +97,12 @@ func cachedRead[T any](a *App, key string, ttl time.Duration, build func() (T, e
 // 8 existing call sites remain unchanged.
 func (a *App) invalidateReadCache() {
 	a.readCache.Invalidate()
+}
+
+// invalidateReadCacheKeys removes only the named keys, leaving other cached
+// entries intact. Use this instead of invalidateReadCache() when a write
+// only affects a known subset of cached reads (e.g. notify() only affects
+// dashboard-summary's unread count, not accounts-list or channels-list).
+func (a *App) invalidateReadCacheKeys(keys ...string) {
+	a.readCache.InvalidateKeys(keys...)
 }

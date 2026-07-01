@@ -75,7 +75,12 @@ func (a *App) notify(kind, level, title, content, relatedType, relatedID string)
 	`, newID(), kind, level, title, content, relatedType, relatedID, now()); execErr != nil {
 		log.Printf("[notify] notification insert failed: %v", execErr)
 	}
-	a.invalidateReadCache()
+	// Per-key invalidation: only dashboard-summary (unread count),
+	// action-center (action items may reference notification state), and
+	// checkin-status (checkin results trigger notifications) depend on
+	// notification inserts. Other cached reads (accounts-list, channels-list,
+	// models-overview, etc.) are unaffected.
+	a.invalidateReadCacheKeys("dashboard-summary", "action-center", "checkin-status")
 
 	// 异步分发到外部通知渠道
 	go a.dispatchNotification(kind, level, title, content)
@@ -172,7 +177,7 @@ func (a *App) handleMarkAllNotificationsRead(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.invalidateReadCache()
+	a.invalidateReadCacheKeys("dashboard-summary", "action-center")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -185,7 +190,7 @@ func (a *App) handleClearReadNotifications(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.invalidateReadCache()
+	a.invalidateReadCacheKeys("dashboard-summary", "action-center")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -205,7 +210,7 @@ func (a *App) handleTrimNotifications(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.invalidateReadCache()
+	a.invalidateReadCacheKeys("dashboard-summary", "action-center")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -234,7 +239,7 @@ func (a *App) handleMarkNotificationRead(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	a.invalidateReadCache()
+	a.invalidateReadCacheKeys("dashboard-summary", "action-center")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

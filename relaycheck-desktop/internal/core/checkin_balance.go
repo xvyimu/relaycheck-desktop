@@ -111,24 +111,25 @@ const (
 )
 
 type accountAuthContext struct {
-	AccountID       string
-	AccountName     string
-	UpstreamSiteID  string
-	UpstreamSite    string
-	SiteKind        string
-	ChannelID       string
-	BaseURL         string
-	LoginPath       string
-	UserAgent       string
-	LoginName       string
-	Password        string
-	AuthUserID      string
-	Cookie          string
-	AccessToken     string
-	APIKey          string
-	SupportsCheckin bool
-	SupportsBalance bool
-	CheckinRules    []apiCandidate
+	AccountID           string
+	AccountName         string
+	UpstreamSiteID      string
+	UpstreamSite        string
+	SiteKind            string
+	ChannelID           string
+	BaseURL             string
+	LoginPath           string
+	BrowserProfilePath  string
+	UserAgent           string
+	LoginName           string
+	Password            string
+	AuthUserID          string
+	Cookie              string
+	AccessToken         string
+	APIKey              string
+	SupportsCheckin     bool
+	SupportsBalance     bool
+	CheckinRules        []apiCandidate
 }
 
 type checkinResult struct {
@@ -195,7 +196,9 @@ func (a *App) handleCheckinStatus(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	status, err := a.buildCheckinStatus(r.Context(), nowCST())
+	status, err := cachedRead(a, "checkin-status", shortReadCacheTTL, func() (CheckinStatus, error) {
+		return a.buildCheckinStatus(r.Context(), nowCST())
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -273,12 +276,10 @@ func (a *App) loadBalanceRefreshAccountIDs(ctx context.Context, limit int, missi
 
 func (a *App) refreshBalanceForBulk(ctx context.Context, id string, auth *accountAuthContext) bulkBalanceRefreshItem {
 	item := bulkBalanceRefreshItem{AccountID: id, Status: "failed"}
-	_ = a.db.QueryRowContext(ctx, `
-		SELECT a.display_name, s.name
-		FROM channel_accounts a
-		JOIN upstream_sites s ON s.id = a.upstream_site_id
-		WHERE a.id = ?
-	`, id).Scan(&item.AccountName, &item.SiteName)
+	if auth != nil {
+		item.AccountName = auth.AccountName
+		item.SiteName = auth.UpstreamSite
+	}
 	result, err := a.refreshAccountBalance(ctx, id, auth)
 	if err != nil {
 		item.Message = err.Error()

@@ -93,9 +93,9 @@ func TestChannelHealthProbeTaskRefreshesSitesAndModels(t *testing.T) {
 		t.Fatalf("overview = %#v, want one failed model channel warning", overview)
 	}
 
-	center, err := app.actionCenter(httptest.NewRequest("GET", "/api/system/action-center", nil))
+	center, err := app.buildActionCenter(httptest.NewRequest("GET", "/api/system/action-center", nil))
 	if err != nil {
-		t.Fatalf("actionCenter: %v", err)
+		t.Fatalf("buildActionCenter: %v", err)
 	}
 	item := findActionItem(t, center.Items, "channel-health-risks")
 	if item.Count != 1 {
