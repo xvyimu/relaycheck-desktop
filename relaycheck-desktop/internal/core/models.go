@@ -292,24 +292,28 @@ type SyncPreviewItem struct {
 // Kind is "newapi" | "oneapi" | "sub2api" | "unknown".
 // HealthStatus is "healthy" | "degraded" | "down" | "unknown".
 type UpstreamSite struct {
-	ID                  string  `json:"id"`
-	ChannelID           string  `json:"channelId,omitempty"`
-	Name                string  `json:"name"`
-	HomepageURL         string  `json:"homepageUrl,omitempty"`
-	BaseURL             string  `json:"baseUrl"`
-	LoginURL            string  `json:"loginUrl,omitempty"`
-	Kind                string  `json:"kind"`
-	DetectionConfidence float64 `json:"detectionConfidence"`
-	HealthStatus        string  `json:"healthStatus"`
-	SupportsCheckin     bool    `json:"supportsCheckin"`
-	SupportsBalance     bool    `json:"supportsBalance"`
-	SupportsModels      bool    `json:"supportsModels"`
-	SupportsPricing     bool    `json:"supportsPricing"`
-	AccountCount        int     `json:"accountCount,omitempty"`
-	DetectionJSON       string  `json:"detectionJson,omitempty"`
-	LastHealthCheckAt   string  `json:"lastHealthCheckAt,omitempty"`
-	CreatedAt           string  `json:"createdAt"`
-	UpdatedAt           string  `json:"updatedAt"`
+	ID                  string          `json:"id"`
+	ChannelID           string          `json:"channelId,omitempty"`
+	Name                string          `json:"name"`
+	HomepageURL         string          `json:"homepageUrl,omitempty"`
+	BaseURL             string          `json:"baseUrl"`
+	LoginURL            string          `json:"loginUrl,omitempty"`
+	LoginURLSource      string          `json:"loginUrlSource,omitempty"`
+	LoginURLConfidence  float64         `json:"loginUrlConfidence,omitempty"`
+	LoginDiscoveryJSON  string          `json:"loginDiscoveryJson,omitempty"`
+	LoginDiscovery      *LoginDiscovery `json:"loginDiscovery,omitempty"`
+	Kind                string          `json:"kind"`
+	DetectionConfidence float64         `json:"detectionConfidence"`
+	HealthStatus        string          `json:"healthStatus"`
+	SupportsCheckin     bool            `json:"supportsCheckin"`
+	SupportsBalance     bool            `json:"supportsBalance"`
+	SupportsModels      bool            `json:"supportsModels"`
+	SupportsPricing     bool            `json:"supportsPricing"`
+	AccountCount        int             `json:"accountCount,omitempty"`
+	DetectionJSON       string          `json:"detectionJson,omitempty"`
+	LastHealthCheckAt   string          `json:"lastHealthCheckAt,omitempty"`
+	CreatedAt           string          `json:"createdAt"`
+	UpdatedAt           string          `json:"updatedAt"`
 }
 
 // ImportedChannel is a channel imported from a local NewAPI instance.

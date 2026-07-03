@@ -39,6 +39,7 @@ func (a *App) DetectUpstreamForImport(ctx context.Context, raw string) (accounts
 		BaseURL:             d.BaseURL,
 		HomepageURL:         d.HomepageURL,
 		LoginURL:            d.LoginURL,
+		LoginDiscovery:      loginDiscoveryToAccounts(d.LoginDiscovery),
 		Kind:                d.Kind,
 		HealthStatus:        d.HealthStatus,
 		DetectionConfidence: d.DetectionConfidence,
@@ -63,6 +64,7 @@ func (a *App) EnsureChannelSiteForImport(ctx context.Context, channelID, name, r
 			BaseURL:             detection.BaseURL,
 			HomepageURL:         detection.HomepageURL,
 			LoginURL:            detection.LoginURL,
+			LoginDiscovery:      loginDiscoveryFromAccounts(detection.LoginDiscovery),
 			Kind:                detection.Kind,
 			HealthStatus:        detection.HealthStatus,
 			DetectionConfidence: detection.DetectionConfidence,
@@ -74,4 +76,28 @@ func (a *App) EnsureChannelSiteForImport(ctx context.Context, channelID, name, r
 		}
 	}
 	return a.ensureUpstreamSiteForChannel(ctx, channelID, name, rawBaseURL, kind, coreDetection)
+}
+
+func loginDiscoveryToAccounts(input *LoginDiscovery) *accounts.LoginDiscovery {
+	if input == nil {
+		return nil
+	}
+	return &accounts.LoginDiscovery{
+		URL:        input.URL,
+		Source:     input.Source,
+		Confidence: input.Confidence,
+		Candidates: append([]string{}, input.Candidates...),
+	}
+}
+
+func loginDiscoveryFromAccounts(input *accounts.LoginDiscovery) *LoginDiscovery {
+	if input == nil {
+		return nil
+	}
+	return &LoginDiscovery{
+		URL:        input.URL,
+		Source:     input.Source,
+		Confidence: input.Confidence,
+		Candidates: append([]string{}, input.Candidates...),
+	}
 }

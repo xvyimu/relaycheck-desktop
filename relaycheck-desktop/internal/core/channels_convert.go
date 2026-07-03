@@ -137,6 +137,7 @@ func detectionFromMirror(d channels.Detection) UpstreamDetection {
 		BaseURL:             d.BaseURL,
 		HomepageURL:         d.HomepageURL,
 		LoginURL:            d.LoginURL,
+		LoginDiscovery:      loginDiscoveryFromChannels(d.LoginDiscovery),
 		Kind:                d.Kind,
 		HealthStatus:        d.HealthStatus,
 		DetectionConfidence: d.DetectionConfidence,

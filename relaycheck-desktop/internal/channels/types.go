@@ -120,17 +120,25 @@ type ChannelHealthSite struct {
 // Used by Service.DetectChannel to return the detection result without
 // importing core.
 type Detection struct {
-	BaseURL             string   `json:"baseUrl"`
-	HomepageURL         string   `json:"homepageUrl"`
-	LoginURL            string   `json:"loginUrl"`
-	Kind                string   `json:"kind"`
-	HealthStatus        string   `json:"healthStatus"`
-	DetectionConfidence float64  `json:"detectionConfidence"`
-	SupportsCheckin     bool     `json:"supportsCheckin"`
-	SupportsBalance     bool     `json:"supportsBalance"`
-	SupportsModels      bool     `json:"supportsModels"`
-	SupportsPricing     bool     `json:"supportsPricing"`
-	MatchedSignals      []string `json:"matchedSignals"`
+	BaseURL             string          `json:"baseUrl"`
+	HomepageURL         string          `json:"homepageUrl"`
+	LoginURL            string          `json:"loginUrl"`
+	LoginDiscovery      *LoginDiscovery `json:"loginDiscovery,omitempty"`
+	Kind                string          `json:"kind"`
+	HealthStatus        string          `json:"healthStatus"`
+	DetectionConfidence float64         `json:"detectionConfidence"`
+	SupportsCheckin     bool            `json:"supportsCheckin"`
+	SupportsBalance     bool            `json:"supportsBalance"`
+	SupportsModels      bool            `json:"supportsModels"`
+	SupportsPricing     bool            `json:"supportsPricing"`
+	MatchedSignals      []string        `json:"matchedSignals"`
+}
+
+type LoginDiscovery struct {
+	URL        string   `json:"url"`
+	Source     string   `json:"source"`
+	Confidence float64  `json:"confidence"`
+	Candidates []string `json:"candidates,omitempty"`
 }
 
 // EnsureSiteInput is the channels-package-local mirror of sites.EnsureSiteInput.

@@ -33,6 +33,7 @@ func (a *App) DetectUpstream(ctx context.Context, raw string) (channels.Detectio
 		BaseURL:             d.BaseURL,
 		HomepageURL:         d.HomepageURL,
 		LoginURL:            d.LoginURL,
+		LoginDiscovery:      loginDiscoveryToChannels(d.LoginDiscovery),
 		Kind:                d.Kind,
 		HealthStatus:        d.HealthStatus,
 		DetectionConfidence: d.DetectionConfidence,
@@ -56,6 +57,7 @@ func (a *App) EnsureUpstreamSiteForChannel(ctx context.Context, input channels.E
 			BaseURL:             input.Detection.BaseURL,
 			HomepageURL:         input.Detection.HomepageURL,
 			LoginURL:            input.Detection.LoginURL,
+			LoginDiscovery:      loginDiscoveryFromChannels(input.Detection.LoginDiscovery),
 			Kind:                input.Detection.Kind,
 			HealthStatus:        input.Detection.HealthStatus,
 			DetectionConfidence: input.Detection.DetectionConfidence,
@@ -67,6 +69,30 @@ func (a *App) EnsureUpstreamSiteForChannel(ctx context.Context, input channels.E
 		}
 	}
 	return a.ensureUpstreamSiteForChannel(ctx, input.ChannelID, input.Name, input.RawBaseURL, input.Kind, detection)
+}
+
+func loginDiscoveryToChannels(input *LoginDiscovery) *channels.LoginDiscovery {
+	if input == nil {
+		return nil
+	}
+	return &channels.LoginDiscovery{
+		URL:        input.URL,
+		Source:     input.Source,
+		Confidence: input.Confidence,
+		Candidates: append([]string{}, input.Candidates...),
+	}
+}
+
+func loginDiscoveryFromChannels(input *channels.LoginDiscovery) *LoginDiscovery {
+	if input == nil {
+		return nil
+	}
+	return &LoginDiscovery{
+		URL:        input.URL,
+		Source:     input.Source,
+		Confidence: input.Confidence,
+		Candidates: append([]string{}, input.Candidates...),
+	}
 }
 
 // InvalidateReadCache is the exported adapter for the channels package's

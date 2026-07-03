@@ -69,7 +69,8 @@ func NewService(infra Infra) *Service {
 func (s *Service) ListUpstreamSites(ctx context.Context) ([]Site, error) {
 	rows, err := s.infra.DB().QueryContext(ctx, `
 		SELECT s.id, COALESCE(s.channel_id,''), s.name, COALESCE(s.homepage_url,''), s.base_url,
-		       COALESCE(s.login_url,''), s.kind, s.detection_confidence, s.health_status,
+		       COALESCE(s.login_url,''), COALESCE(s.login_url_source,''), COALESCE(s.login_url_confidence,0), COALESCE(s.login_discovery_json,''),
+		       s.kind, s.detection_confidence, s.health_status,
 		       s.supports_checkin, s.supports_balance, s.supports_models, s.supports_pricing,
 		       COALESCE(s.detection_json,''), COALESCE(s.last_health_check_at,''), s.created_at, s.updated_at,
 		       (SELECT COUNT(*) FROM channel_accounts a WHERE a.upstream_site_id = s.id)
@@ -86,7 +87,29 @@ func (s *Service) ListUpstreamSites(ctx context.Context) ([]Site, error) {
 	for rows.Next() {
 		var item Site
 		var checkin, balance, models, pricing int
-		if err := rows.Scan(&item.ID, &item.ChannelID, &item.Name, &item.HomepageURL, &item.BaseURL, &item.LoginURL, &item.Kind, &item.DetectionConfidence, &item.HealthStatus, &checkin, &balance, &models, &pricing, &item.DetectionJSON, &item.LastHealthCheckAt, &item.CreatedAt, &item.UpdatedAt, &item.AccountCount); err != nil {
+		if err := rows.Scan(
+			&item.ID,
+			&item.ChannelID,
+			&item.Name,
+			&item.HomepageURL,
+			&item.BaseURL,
+			&item.LoginURL,
+			&item.LoginURLSource,
+			&item.LoginURLConfidence,
+			&item.LoginDiscoveryJSON,
+			&item.Kind,
+			&item.DetectionConfidence,
+			&item.HealthStatus,
+			&checkin,
+			&balance,
+			&models,
+			&pricing,
+			&item.DetectionJSON,
+			&item.LastHealthCheckAt,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+			&item.AccountCount,
+		); err != nil {
 			return nil, err
 		}
 		item.SupportsCheckin = checkin == 1

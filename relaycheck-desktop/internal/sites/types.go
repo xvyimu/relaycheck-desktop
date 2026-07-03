@@ -6,17 +6,25 @@ package sites
 // forwarding helpers convert them back to core.UpstreamDetection so existing
 // call sites are unchanged.
 type Detection struct {
-	BaseURL             string   `json:"baseUrl"`
-	HomepageURL         string   `json:"homepageUrl"`
-	LoginURL            string   `json:"loginUrl"`
-	Kind                string   `json:"kind"`
-	HealthStatus        string   `json:"healthStatus"`
-	DetectionConfidence float64  `json:"detectionConfidence"`
-	SupportsCheckin     bool     `json:"supportsCheckin"`
-	SupportsBalance     bool     `json:"supportsBalance"`
-	SupportsModels      bool     `json:"supportsModels"`
-	SupportsPricing     bool     `json:"supportsPricing"`
-	MatchedSignals      []string `json:"matchedSignals"`
+	BaseURL             string          `json:"baseUrl"`
+	HomepageURL         string          `json:"homepageUrl"`
+	LoginURL            string          `json:"loginUrl"`
+	LoginDiscovery      *LoginDiscovery `json:"loginDiscovery,omitempty"`
+	Kind                string          `json:"kind"`
+	HealthStatus        string          `json:"healthStatus"`
+	DetectionConfidence float64         `json:"detectionConfidence"`
+	SupportsCheckin     bool            `json:"supportsCheckin"`
+	SupportsBalance     bool            `json:"supportsBalance"`
+	SupportsModels      bool            `json:"supportsModels"`
+	SupportsPricing     bool            `json:"supportsPricing"`
+	MatchedSignals      []string        `json:"matchedSignals"`
+}
+
+type LoginDiscovery struct {
+	URL        string   `json:"url"`
+	Source     string   `json:"source"`
+	Confidence float64  `json:"confidence"`
+	Candidates []string `json:"candidates,omitempty"`
 }
 
 // ProbeResult is the sites-package-local mirror of the host's ProbeResult
@@ -34,24 +42,28 @@ type ProbeResult struct {
 // Site values and the host's handlers convert them so the JSON shape and
 // existing call sites are unchanged.
 type Site struct {
-	ID                  string  `json:"id"`
-	ChannelID           string  `json:"channelId,omitempty"`
-	Name                string  `json:"name"`
-	HomepageURL         string  `json:"homepageUrl,omitempty"`
-	BaseURL             string  `json:"baseUrl"`
-	LoginURL            string  `json:"loginUrl,omitempty"`
-	Kind                string  `json:"kind"`
-	DetectionConfidence float64 `json:"detectionConfidence"`
-	HealthStatus        string  `json:"healthStatus"`
-	SupportsCheckin     bool    `json:"supportsCheckin"`
-	SupportsBalance     bool    `json:"supportsBalance"`
-	SupportsModels      bool    `json:"supportsModels"`
-	SupportsPricing     bool    `json:"supportsPricing"`
-	AccountCount        int     `json:"accountCount,omitempty"`
-	DetectionJSON       string  `json:"detectionJson,omitempty"`
-	LastHealthCheckAt   string  `json:"lastHealthCheckAt,omitempty"`
-	CreatedAt           string  `json:"createdAt"`
-	UpdatedAt           string  `json:"updatedAt"`
+	ID                  string          `json:"id"`
+	ChannelID           string          `json:"channelId,omitempty"`
+	Name                string          `json:"name"`
+	HomepageURL         string          `json:"homepageUrl,omitempty"`
+	BaseURL             string          `json:"baseUrl"`
+	LoginURL            string          `json:"loginUrl,omitempty"`
+	LoginURLSource      string          `json:"loginUrlSource,omitempty"`
+	LoginURLConfidence  float64         `json:"loginUrlConfidence,omitempty"`
+	LoginDiscoveryJSON  string          `json:"loginDiscoveryJson,omitempty"`
+	LoginDiscovery      *LoginDiscovery `json:"loginDiscovery,omitempty"`
+	Kind                string          `json:"kind"`
+	DetectionConfidence float64         `json:"detectionConfidence"`
+	HealthStatus        string          `json:"healthStatus"`
+	SupportsCheckin     bool            `json:"supportsCheckin"`
+	SupportsBalance     bool            `json:"supportsBalance"`
+	SupportsModels      bool            `json:"supportsModels"`
+	SupportsPricing     bool            `json:"supportsPricing"`
+	AccountCount        int             `json:"accountCount,omitempty"`
+	DetectionJSON       string          `json:"detectionJson,omitempty"`
+	LastHealthCheckAt   string          `json:"lastHealthCheckAt,omitempty"`
+	CreatedAt           string          `json:"createdAt"`
+	UpdatedAt           string          `json:"updatedAt"`
 }
 
 // BulkDetectResult captures the outcome of detecting and persisting a single

@@ -126,7 +126,8 @@ func (a *App) loadSiteDetail(ctx context.Context, id string) (SiteDetail, error)
 	var checkin, balance, models, pricing int
 	err := a.db.QueryRowContext(ctx, `
 		SELECT s.id, COALESCE(s.channel_id,''), s.name, COALESCE(s.homepage_url,''), s.base_url,
-		       COALESCE(s.login_url,''), s.kind, s.detection_confidence, s.health_status,
+		       COALESCE(s.login_url,''), COALESCE(s.login_url_source,''), COALESCE(s.login_url_confidence,0), COALESCE(s.login_discovery_json,''),
+		       s.kind, s.detection_confidence, s.health_status,
 		       s.supports_checkin, s.supports_balance, s.supports_models, s.supports_pricing,
 		       COALESCE(s.detection_json,''), COALESCE(s.last_health_check_at,''), s.created_at, s.updated_at,
 		       (SELECT COUNT(*) FROM channel_accounts a WHERE a.upstream_site_id = s.id)
@@ -139,6 +140,9 @@ func (a *App) loadSiteDetail(ctx context.Context, id string) (SiteDetail, error)
 		&detail.Site.HomepageURL,
 		&detail.Site.BaseURL,
 		&detail.Site.LoginURL,
+		&detail.Site.LoginURLSource,
+		&detail.Site.LoginURLConfidence,
+		&detail.Site.LoginDiscoveryJSON,
 		&detail.Site.Kind,
 		&detail.Site.DetectionConfidence,
 		&detail.Site.HealthStatus,

@@ -19,17 +19,25 @@ type ProbeResult struct {
 }
 
 type UpstreamDetection struct {
-	BaseURL             string   `json:"baseUrl"`
-	HomepageURL         string   `json:"homepageUrl"`
-	LoginURL            string   `json:"loginUrl"`
-	Kind                string   `json:"kind"`
-	HealthStatus        string   `json:"healthStatus"`
-	DetectionConfidence float64  `json:"detectionConfidence"`
-	SupportsCheckin     bool     `json:"supportsCheckin"`
-	SupportsBalance     bool     `json:"supportsBalance"`
-	SupportsModels      bool     `json:"supportsModels"`
-	SupportsPricing     bool     `json:"supportsPricing"`
-	MatchedSignals      []string `json:"matchedSignals"`
+	BaseURL             string          `json:"baseUrl"`
+	HomepageURL         string          `json:"homepageUrl"`
+	LoginURL            string          `json:"loginUrl"`
+	LoginDiscovery      *LoginDiscovery `json:"loginDiscovery,omitempty"`
+	Kind                string          `json:"kind"`
+	HealthStatus        string          `json:"healthStatus"`
+	DetectionConfidence float64         `json:"detectionConfidence"`
+	SupportsCheckin     bool            `json:"supportsCheckin"`
+	SupportsBalance     bool            `json:"supportsBalance"`
+	SupportsModels      bool            `json:"supportsModels"`
+	SupportsPricing     bool            `json:"supportsPricing"`
+	MatchedSignals      []string        `json:"matchedSignals"`
+}
+
+type LoginDiscovery struct {
+	URL        string   `json:"url"`
+	Source     string   `json:"source"`
+	Confidence float64  `json:"confidence"`
+	Candidates []string `json:"candidates,omitempty"`
 }
 
 func (a *App) handleScanLocalNewAPI(w http.ResponseWriter, r *http.Request) {
@@ -99,6 +107,7 @@ func (a *App) detectUpstream(ctx context.Context, raw string) UpstreamDetection 
 		BaseURL:             d.BaseURL,
 		HomepageURL:         d.HomepageURL,
 		LoginURL:            d.LoginURL,
+		LoginDiscovery:      loginDiscoveryFromSites(d.LoginDiscovery),
 		Kind:                d.Kind,
 		HealthStatus:        d.HealthStatus,
 		DetectionConfidence: d.DetectionConfidence,
@@ -107,6 +116,30 @@ func (a *App) detectUpstream(ctx context.Context, raw string) UpstreamDetection 
 		SupportsModels:      d.SupportsModels,
 		SupportsPricing:     d.SupportsPricing,
 		MatchedSignals:      d.MatchedSignals,
+	}
+}
+
+func loginDiscoveryFromSites(input *sites.LoginDiscovery) *LoginDiscovery {
+	if input == nil {
+		return nil
+	}
+	return &LoginDiscovery{
+		URL:        input.URL,
+		Source:     input.Source,
+		Confidence: input.Confidence,
+		Candidates: append([]string{}, input.Candidates...),
+	}
+}
+
+func loginDiscoveryToSites(input *LoginDiscovery) *sites.LoginDiscovery {
+	if input == nil {
+		return nil
+	}
+	return &sites.LoginDiscovery{
+		URL:        input.URL,
+		Source:     input.Source,
+		Confidence: input.Confidence,
+		Candidates: append([]string{}, input.Candidates...),
 	}
 }
 
@@ -122,6 +155,7 @@ func (a *App) ensureUpstreamSiteForChannel(ctx context.Context, channelID string
 			BaseURL:             detection.BaseURL,
 			HomepageURL:         detection.HomepageURL,
 			LoginURL:            detection.LoginURL,
+			LoginDiscovery:      loginDiscoveryToSites(detection.LoginDiscovery),
 			Kind:                detection.Kind,
 			HealthStatus:        detection.HealthStatus,
 			DetectionConfidence: detection.DetectionConfidence,

@@ -393,6 +393,13 @@ export type ImportedChannel = {
   lastDetectedAt?: string;
 };
 
+export type LoginDiscovery = {
+  url: string;
+  source: string;
+  confidence: number;
+  candidates?: string[];
+};
+
 export type UpstreamSite = {
   id: string;
   channelId?: string;
@@ -400,6 +407,10 @@ export type UpstreamSite = {
   homepageUrl?: string;
   baseUrl: string;
   loginUrl?: string;
+  loginUrlSource?: string;
+  loginUrlConfidence?: number;
+  loginDiscoveryJson?: string;
+  loginDiscovery?: LoginDiscovery;
   kind: string;
   detectionConfidence?: number;
   healthStatus: string;
@@ -418,6 +429,7 @@ export type DetectionInfo = {
   baseUrl: string;
   homepageUrl?: string;
   loginUrl?: string;
+  loginDiscovery?: LoginDiscovery;
   kind: string;
   healthStatus: string;
   detectionConfidence: number;

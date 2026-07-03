@@ -69,3 +69,36 @@ func TestEnsureColumnAcceptsValidDefaultDeclarations(t *testing.T) {
 		})
 	}
 }
+
+func TestMigrateAddsLoginDiscoveryColumns(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	rows, err := app.db.QueryContext(context.Background(), "PRAGMA table_info(upstream_sites)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	columns := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notNull int
+		var defaultValue interface{}
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			t.Fatal(err)
+		}
+		columns[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"login_url_source", "login_url_confidence", "login_discovery_json"} {
+		if !columns[name] {
+			t.Fatalf("expected upstream_sites.%s to exist", name)
+		}
+	}
+}
