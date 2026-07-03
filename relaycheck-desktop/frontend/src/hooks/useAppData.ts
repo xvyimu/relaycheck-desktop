@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/api/client";
 import type {
   Account,
@@ -33,6 +33,7 @@ export interface AppData {
 
 export function useAppData(): AppData & { reload: () => Promise<void> } {
   const [loading, setLoading] = useState(true);
+  const loadedOnceRef = useRef(false);
   const [error, setError] = useState("");
   const [startupVersion, setStartupVersion] = useState("");
   const [status, setStatus] = useState<StatusPayload | null>(null);
@@ -87,7 +88,9 @@ export function useAppData(): AppData & { reload: () => Promise<void> } {
   }, []);
 
   const reload = useCallback(async () => {
-    setLoading(true);
+    if (!loadedOnceRef.current) {
+      setLoading(true);
+    }
     setError("");
     try {
       const health = await api<{ status?: string }>("/api/health").catch(() => null);
@@ -98,6 +101,7 @@ export function useAppData(): AppData & { reload: () => Promise<void> } {
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载数据失败");
     } finally {
+      loadedOnceRef.current = true;
       setLoading(false);
     }
   }, [loadData]);
