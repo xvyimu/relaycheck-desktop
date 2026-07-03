@@ -1,7 +1,7 @@
 # GOALS.md — RelayCheck Desktop 当前冲刺目标
 
 **Created:** 2026-07-01
-**Status:** Sprint Complete (see below for per-goal status)
+**Status:** Sprint Complete; maintenance coverage cleanup continues in small commits
 
 ---
 
@@ -9,6 +9,12 @@
 
 **结果：** 已推送。8 个 commit 通过 `ALL_PROXY= git push origin main` 成功推送。
 **验证：** `git log --oneline origin/main..HEAD` 返回空。
+
+**Current maintenance note:** later cleanup commit `2558a9b` is local if `git status --branch --short` reports `ahead 1`. Push is currently blocked by GitHub HTTPS connectivity (`Failed to connect to github.com port 443`). Retry with:
+
+```powershell
+rtk git push origin main
+```
 
 ---
 
@@ -18,14 +24,23 @@
 
 | 包 | 之前 | 目标 | 实际 | 状态 |
 |----|------|------|------|------|
-| `internal/core` | 42.2% | 55%+ | **43.8%** | ❌ handler tests 覆盖路由/方法检查；需 Infra mock 覆盖 DB/HTTP 路径 |
+| `internal/core` | 42.2% | 55%+ | **44.1%** | ❌ handler tests + account helper defaults covered；仍需 Infra mock 覆盖 DB/HTTP 路径 |
 | `internal/accounts` | 25.4% | 40%+ | **31.5%** | ❌ service-level Infra mock 测试已添加；unexported helpers 仍未覆盖 |
 | `internal/versioncheck` | 32.8% | 50%+ | **92.5%** | ✅ 严重超预期：httptest.Server + stub Infra |
 | `internal/backup` | 32.1% | 45%+ | **81.4%** | ✅ 严重超预期：10+ 测试覆盖 export/import round-trip |
 | `internal/channels` | 60.7% | 70%+ | **60.7%** | ❌ 剩余为 DB/HTTP 路径，需 Infra mock |
 | `internal/notifications` | 65.9% | 70%+ | **65.9%** | ❌ 需 SMTP/HTTP mock |
+| `internal/autostart` | n/a | n/a | **38.9%** | ➕ maintenance slice: Windows startup helper tests |
 
-**验收：** 861 tests pass + go vet clean ✅
+**验收：** 928 tests pass + go vet clean ✅
+
+### Maintenance coverage slices · 2026-07-03
+
+| Commit | Scope | Result |
+|--------|-------|--------|
+| `10def66` | `channels` / `sites` exported helper tests | Pure helper wrappers covered |
+| `9aff466` | `autostart` Windows helper tests | No shell startup mutation; helper behavior covered |
+| `2558a9b` | `core` account helper defaults | Auth inference, display names, cookie expiry/header, status defaults covered |
 
 ---
 
@@ -63,3 +78,5 @@
 - [x] G2: 7 个 `lib/` 文件均有对应测试
 - [x] G3: `cd frontend && npm run smoke` 可执行（需 dev server）
 - [x] 全部变更已 commit + push 到 `origin/main`（`9fb28d4` + `ac8687e`）
+
+Maintenance caveat: if `git status --branch --short` shows `ahead`, the original sprint remains complete, but later maintenance commits still need a successful push.

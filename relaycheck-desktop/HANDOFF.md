@@ -9,32 +9,59 @@ Read this first, then `CLAUDE.md` for architecture.
 
 ## Current state
 
-The project is stable. The schedule UI/API hardening work is committed and pushed:
+The project is stable. The latest local code/test cleanup commit is:
 
-- Commit: `09969ad` — `fix(scheduler): harden per-site schedule settings`
-- Pushed to `origin/main`
+- Commit: `2558a9b` — `test(core): cover account helper defaults`
 
-Files changed by that commit:
+Remote sync note:
 
-- `frontend/src/components/settings/SiteSchedules.tsx`
-- `frontend/src/styles.css`
-- `internal/core/channel_schedules.go`
-- `internal/core/channel_schedules_test.go`
+- `origin/main` currently points at `9aff466` (`test(autostart): cover windows startup helpers`) unless a later push has succeeded.
+- The local worktree is clean, but `main` may be ahead of `origin/main` because GitHub HTTPS connectivity failed with `Failed to connect to github.com port 443`.
+- When network recovers, run `rtk git push origin main`, then confirm `rtk git status --branch --short` no longer reports `ahead`.
 
-All verification gates pass:
+Latest Go verification gates pass:
 
 ```powershell
-go build -mod=vendor ./...
 go vet -mod=vendor ./...
-go test -mod=vendor -count=1 ./...               # 888 tests pass
+go test -mod=vendor -count=1 ./...               # 928 tests pass
+go test -mod=vendor -cover -count=1 ./internal/core ./internal/accounts ./internal/channels ./internal/notifications ./internal/autostart ./internal/backup ./internal/versioncheck
+git diff --check
+```
+
+Recent frontend gates from the schedule hardening slice also passed:
+
+```powershell
 cd frontend; npm run build                       # tsc + vite
-cd frontend; npx vitest run                      # 187 tests pass
+cd frontend; npm test                            # 187 tests pass
+cd frontend; npm run smoke:schedules
 git diff --check
 ```
 
 ---
 
 ## What landed this session
+
+### Maintenance coverage cleanup
+
+- `10def66` — `test: cover exported scanner helpers`
+  - `internal/channels/helpers_test.go`: covered exported `LooksLikeModelID`.
+  - `internal/sites/scanner_test.go`: covered exported site scanner helpers (`HostLabel`, `IsManagedRelayKind`, `IsExcludedRelaySite`).
+- `9aff466` — `test(autostart): cover windows startup helpers`
+  - `internal/autostart/platform_windows_test.go`: covered hidden process attrs, PowerShell single-quote escaping, startup folder error handling, and shortcut path construction without mutating shell startup state.
+- `2558a9b` — `test(core): cover account helper defaults`
+  - `internal/core/accounts_helpers_test.go`: covered account auth inference, default display names, estimated cookie expiry, cookie header assembly, and API key status defaults.
+
+Latest package-level Go coverage snapshot:
+
+| Package | Coverage |
+|---------|----------|
+| `internal/core` | **44.1%** |
+| `internal/accounts` | **31.5%** |
+| `internal/channels` | **60.7%** |
+| `internal/notifications` | **65.9%** |
+| `internal/autostart` | **38.9%** |
+| `internal/backup` | **81.4%** |
+| `internal/versioncheck` | **92.5%** |
 
 ### Schedule UI/API hardening
 
@@ -113,7 +140,17 @@ All `context.Background()` calls in `scheduler.go` have been replaced with the c
 
 ## Suggested next steps (priority order)
 
-### 1. Raise test coverage in core, accounts, channels, and notifications
+### 1. Push local maintenance commits when GitHub connectivity recovers
+
+```powershell
+cd E:\zidqiandao\relaycheck-desktop
+rtk git push origin main
+rtk git status --branch --short
+```
+
+Expected final state: no `ahead` marker.
+
+### 2. Raise test coverage in core, accounts, channels, and notifications
 
 - `internal/core`: Create `Infra` mock to test handler paths (current pure-function tests only moved coverage 0.3%)
 - `internal/accounts`: Restructure tests to cover unexported helpers (current helpers_test.go not counted in coverage)
@@ -153,6 +190,7 @@ All `context.Background()` calls in `scheduler.go` have been replaced with the c
 
 | Date | Session | Outcome |
 |------|---------|---------|
+| 2026-07-03 | Maintenance coverage cleanup | `10def66`, `9aff466`, `2558a9b`: exported scanner helpers, Windows autostart helpers, core account helper defaults. 928 Go tests pass. Push of `2558a9b` is pending if GitHub 443 remains unreachable. |
 | 2026-07-03 | Schedule UI/API hardening | `09969ad`: per-site schedule random-delay validation, non-silent preview failures, responsive schedule preview rows, `npm run smoke:schedules`. Verification passed and pushed to `origin/main`. |
 | 2026-07-02 | rootCtx lifecycle + cleanup | `9fb28d4`: StartSchedulers derives from a.rootCtx. `ac8687e`: all remaining context.Background() in scheduler.go replaced with ctx. 861 tests pass. |
 | 2026-07-02 | Coverage sprint G0–G2 | G0: 8 commits pushed. G1: weighted avg 61.4% (beat 55%). G2: 187 frontend tests. New: crypto_util_test, filters_test, helpers_test, versioncheck extended, backup service_test. |
