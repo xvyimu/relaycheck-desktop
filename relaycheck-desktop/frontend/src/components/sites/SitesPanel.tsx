@@ -1,7 +1,8 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "@/api/client";
 import { formatConfidence, formatDuration, formatTime } from "@/lib/format";
+import { loginDiscoverySourceLabel, normalizeLoginDiscovery, parseLoginDiscovery } from "@/lib/loginDiscovery";
 import type { LoginDiscovery, NextRunItem, NavigationIntent, SiteDetail, UpstreamSite } from "@/types";
 import { useNextRuns } from "@/hooks/useNextRuns";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
@@ -25,36 +26,13 @@ function capabilityLabel(enabled?: boolean) {
   return enabled ? "支持" : "未知/否";
 }
 
-function loginDiscoverySourceLabel(source?: string) {
-  switch ((source || "").toLowerCase()) {
-    case "manual":
-      return "手动指定";
-    case "html_form":
-      return "登录表单";
-    case "html_link":
-      return "页面链接";
-    case "path_probe":
-      return "路径探测";
-    case "spa_fallback":
-      return "SPA 回退";
-    case "fallback":
-      return "默认回退";
-    default:
-      return source || "未知";
-  }
-}
-
-function parseLoginDiscovery(raw?: string): LoginDiscovery | null {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as LoginDiscovery;
-  } catch {
-    return null;
-  }
-}
-
 function siteLoginDiscovery(site: UpstreamSite, detection?: SiteDetail["detection"]): LoginDiscovery | null {
-  return site.loginDiscovery || parseLoginDiscovery(site.loginDiscoveryJson) || detection?.loginDiscovery || null;
+  return (
+    normalizeLoginDiscovery(site.loginDiscovery) ||
+    parseLoginDiscovery(site.loginDiscoveryJson) ||
+    normalizeLoginDiscovery(detection?.loginDiscovery) ||
+    null
+  );
 }
 
 function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
@@ -64,6 +42,7 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
   const [message, setMessage] = useState("");
   const [healthFilter, setHealthFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
+  const detailRequestRef = useRef(0);
   const task = useTaskProgress();
   const { nextRuns } = useNextRuns();
 
@@ -135,28 +114,43 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
   }
 
   async function openDetail(site: UpstreamSite) {
+    const requestId = detailRequestRef.current + 1;
+    detailRequestRef.current = requestId;
     setDetailBusyId(site.id);
     setMessage("");
     try {
-      setDetail(await api<SiteDetail>(`/api/upstream-sites/${site.id}`));
+      const nextDetail = await api<SiteDetail>(`/api/upstream-sites/${site.id}`);
+      if (detailRequestRef.current === requestId) {
+        setDetail(nextDetail);
+      }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "加载站点详情失败。");
+      if (detailRequestRef.current === requestId) {
+        setMessage(error instanceof Error ? error.message : "加载站点详情失败。");
+      }
     } finally {
-      setDetailBusyId("");
+      if (detailRequestRef.current === requestId) {
+        setDetailBusyId("");
+      }
     }
   }
+
+  const closeDetail = useCallback(() => {
+    detailRequestRef.current += 1;
+    setDetail(null);
+    setDetailBusyId("");
+  }, []);
 
   useEffect(() => {
     if (!detail) return;
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setDetail(null);
+      if (event.key === "Escape") closeDetail();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [detail]);
+  }, [closeDetail, detail]);
 
   const detailDiscovery = detail ? siteLoginDiscovery(detail.site, detail.detection) : null;
-  const detailCandidates = detailDiscovery?.candidates?.filter(Boolean).slice(0, 6) || [];
+  const detailCandidates = detailDiscovery?.candidates?.slice(0, 6) || [];
 
   return (
     <section className="sites-panel">
@@ -336,7 +330,7 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
       </div>
 
       {detail ? (
-        <div className="drawer-backdrop" role="presentation" onClick={() => setDetail(null)}>
+        <div className="drawer-backdrop" role="presentation" onClick={closeDetail}>
           <aside
             className="detail-drawer detail-drawer-wide"
             role="dialog"
@@ -350,7 +344,7 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
                 <h2 id="site-detail-title">{detail.site.name}</h2>
                 <p>{detail.site.kind || "unknown"} · {detail.site.healthStatus || "未知"}</p>
               </div>
-              <button type="button" className="ghost" onClick={() => setDetail(null)}>关闭</button>
+              <button type="button" className="ghost" onClick={closeDetail}>关闭</button>
             </div>
 
             <div className="detail-grid">
