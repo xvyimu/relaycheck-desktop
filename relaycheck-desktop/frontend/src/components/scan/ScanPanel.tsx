@@ -25,6 +25,12 @@ type ScanPanelProps = {
   onRefresh: () => Promise<void>;
 };
 
+export function scanFeedbackProps(hasErrors: boolean) {
+  return hasErrors
+    ? ({ role: "alert", "aria-live": "assertive", "aria-atomic": true } as const)
+    : ({ role: "status", "aria-live": "polite", "aria-atomic": true } as const);
+}
+
 function ScanPanelBase({ onRefresh }: ScanPanelProps) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<AutoDetectResponse | null>(null);
@@ -49,10 +55,10 @@ function ScanPanelBase({ onRefresh }: ScanPanelProps) {
     }
   }
 
-  const hasErrors = result?.results.some((r) => r.error);
+  const hasErrors = Boolean(result?.results.some((r) => r.error) || result?.message.includes("失败"));
 
   return (
-    <section className="scan-panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <section className="scan-panel" aria-label="本机 NewAPI 扫描" aria-busy={busy} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Card>
         <CardHeader>
           <CardTitle>本机 NewAPI 扫描</CardTitle>
@@ -63,10 +69,16 @@ function ScanPanelBase({ onRefresh }: ScanPanelProps) {
             识别其中的渠道数据并导入到 RelayCheck。
           </p>
           <div>
-            <Button onClick={handleScan} disabled={busy} size="lg">
+            <Button
+              onClick={handleScan}
+              disabled={busy}
+              size="lg"
+              aria-busy={busy}
+              aria-label={busy ? "正在扫描本机 NewAPI 数据库" : "检测并导入本机 NewAPI 数据库"}
+            >
               {busy ? (
                 <>
-                  <span className="spinner" style={{ display: "inline-block", width: 14, height: 14, border: "2px solid currentColor", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+                  <span className="spinner" aria-hidden="true" />
                   扫描中…
                 </>
               ) : (
@@ -81,7 +93,7 @@ function ScanPanelBase({ onRefresh }: ScanPanelProps) {
       </Card>
 
       {result ? (
-        <Card>
+        <Card {...scanFeedbackProps(hasErrors)}>
           <CardHeader>
             <CardTitle>
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -141,7 +153,7 @@ function ScanPanelBase({ onRefresh }: ScanPanelProps) {
       ) : null}
 
       {!busy && !result ? (
-        <Card>
+        <Card {...scanFeedbackProps(false)}>
           <CardContent>
             <p className="text-sm text-muted-foreground" style={{ margin: 0, textAlign: "center", padding: "24px 0" }}>
               点击上方按钮开始扫描本机 NewAPI 数据库
