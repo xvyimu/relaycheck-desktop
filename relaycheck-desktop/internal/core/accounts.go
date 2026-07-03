@@ -1012,10 +1012,7 @@ func (a *App) startBrowserLogin(ctx context.Context, id string, auth *accountAut
 		return result
 	}
 
-	targetURL := auth.LoginPath
-	if targetURL == "" {
-		targetURL = strings.TrimRight(baseURL, "/") + "/login"
-	}
+	targetURL := firstNonEmpty(auth.BrowserLoginURL, auth.LoginPath)
 	targetURL = resolveLoginTargetURL(baseURL, targetURL)
 	port, err := freeDebugPort(usedPorts)
 	if err != nil {

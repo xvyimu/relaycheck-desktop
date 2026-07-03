@@ -3,8 +3,11 @@ package core
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"strings"
 )
+
+const browserLoginConfidenceThreshold = 0.6
 
 // AccountAuthRepository loads accountAuthContext records from the database.
 // It is extracted from *App.loadAccountAuth / *App.loadAccountAuths so that
@@ -28,12 +31,14 @@ func NewAccountAuthRepository(db *sql.DB, crypto *CryptoService) *AccountAuthRep
 // the decrypt error with "_").
 func (r *AccountAuthRepository) Load(ctx context.Context, id string) (*accountAuthContext, error) {
 	var auth accountAuthContext
-	var email, username, cookieEncrypted, accessEncrypted, apiKeyEncrypted, passwordEncrypted, loginURL, checkinConfigJSON string
+	var email, username, cookieEncrypted, accessEncrypted, apiKeyEncrypted, passwordEncrypted, loginURL, loginURLSource, loginDiscoveryJSON, checkinConfigJSON string
+	var loginURLConfidence float64
 	var supportsCheckin, supportsBalance int
 	var siteKind sql.NullString
 	err := r.db.QueryRowContext(ctx, `
 		SELECT a.id, a.display_name, s.id, s.name, COALESCE(s.kind,''), COALESCE(s.channel_id,''), s.base_url,
-		       COALESCE(s.login_url,''), COALESCE(a.browser_profile_path,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
+		       COALESCE(s.login_url,''), COALESCE(s.login_url_source,''), COALESCE(s.login_url_confidence,0), COALESCE(s.login_discovery_json,''),
+		       COALESCE(a.browser_profile_path,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
 		       COALESCE(a.password_encrypted,''), COALESCE(a.cookie_encrypted,''),
 		       COALESCE(a.access_token_encrypted,''), COALESCE(a.api_key_encrypted,''),
 		       COALESCE(a.auth_user_id,''), s.supports_checkin, s.supports_balance,
@@ -41,7 +46,7 @@ func (r *AccountAuthRepository) Load(ctx context.Context, id string) (*accountAu
 		FROM channel_accounts a
 		JOIN upstream_sites s ON s.id = a.upstream_site_id
 		WHERE a.id = ?
-	`, id).Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &auth.BrowserProfilePath, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON)
+	`, id).Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &loginURLSource, &loginURLConfidence, &loginDiscoveryJSON, &auth.BrowserProfilePath, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON)
 	if err == sql.ErrNoRows {
 		return nil, errorsText("账号不存在。")
 	}
@@ -51,6 +56,7 @@ func (r *AccountAuthRepository) Load(ctx context.Context, id string) (*accountAu
 	auth.LoginName = firstNonEmpty(email, username)
 	auth.SiteKind = siteKind.String
 	auth.LoginPath = pathFromMaybeURL(loginURL)
+	auth.BrowserLoginURL = browserLoginURLFromMetadata(loginURL, loginURLSource, loginURLConfidence, loginDiscoveryJSON)
 	auth.Password, _ = r.crypto.Decrypt(passwordEncrypted)
 	auth.Cookie, _ = r.crypto.Decrypt(cookieEncrypted)
 	auth.AccessToken, _ = r.crypto.Decrypt(accessEncrypted)
@@ -80,7 +86,8 @@ func (r *AccountAuthRepository) LoadBatch(ctx context.Context, ids []string) (ma
 	}
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT a.id, a.display_name, s.id, s.name, COALESCE(s.kind,''), COALESCE(s.channel_id,''), s.base_url,
-		       COALESCE(s.login_url,''), COALESCE(a.browser_profile_path,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
+		       COALESCE(s.login_url,''), COALESCE(s.login_url_source,''), COALESCE(s.login_url_confidence,0), COALESCE(s.login_discovery_json,''),
+		       COALESCE(a.browser_profile_path,''), COALESCE(a.user_agent,''), COALESCE(a.email,''), COALESCE(a.username,''),
 		       COALESCE(a.password_encrypted,''), COALESCE(a.cookie_encrypted,''),
 		       COALESCE(a.access_token_encrypted,''), COALESCE(a.api_key_encrypted,''),
 		       COALESCE(a.auth_user_id,''), s.supports_checkin, s.supports_balance,
@@ -96,15 +103,17 @@ func (r *AccountAuthRepository) LoadBatch(ctx context.Context, ids []string) (ma
 	auths := make(map[string]accountAuthContext, len(ids))
 	for rows.Next() {
 		var auth accountAuthContext
-		var email, username, cookieEncrypted, accessEncrypted, apiKeyEncrypted, passwordEncrypted, loginURL, checkinConfigJSON string
+		var email, username, cookieEncrypted, accessEncrypted, apiKeyEncrypted, passwordEncrypted, loginURL, loginURLSource, loginDiscoveryJSON, checkinConfigJSON string
+		var loginURLConfidence float64
 		var supportsCheckin, supportsBalance int
 		var siteKind sql.NullString
-		if err := rows.Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &auth.BrowserProfilePath, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON); err != nil {
+		if err := rows.Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &loginURLSource, &loginURLConfidence, &loginDiscoveryJSON, &auth.BrowserProfilePath, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON); err != nil {
 			return nil, err
 		}
 		auth.LoginName = firstNonEmpty(email, username)
 		auth.SiteKind = siteKind.String
 		auth.LoginPath = pathFromMaybeURL(loginURL)
+		auth.BrowserLoginURL = browserLoginURLFromMetadata(loginURL, loginURLSource, loginURLConfidence, loginDiscoveryJSON)
 		auth.Password, _ = r.crypto.Decrypt(passwordEncrypted)
 		auth.Cookie, _ = r.crypto.Decrypt(cookieEncrypted)
 		auth.AccessToken, _ = r.crypto.Decrypt(accessEncrypted)
@@ -121,4 +130,42 @@ func (r *AccountAuthRepository) LoadBatch(ctx context.Context, ids []string) (ma
 		return nil, err
 	}
 	return auths, nil
+}
+
+func browserLoginURLFromMetadata(loginURL string, source string, confidence float64, discoveryJSON string) string {
+	loginURL = strings.TrimSpace(loginURL)
+	source = strings.ToLower(strings.TrimSpace(source))
+	if source == "manual" && loginURL != "" {
+		return loginURL
+	}
+
+	discovery := parseAccountLoginDiscovery(discoveryJSON)
+	if discovery != nil && discovery.Confidence >= browserLoginConfidenceThreshold && strings.TrimSpace(discovery.URL) != "" {
+		return strings.TrimSpace(discovery.URL)
+	}
+	if loginURL != "" && confidence >= browserLoginConfidenceThreshold {
+		return loginURL
+	}
+	if discovery != nil {
+		for _, candidate := range discovery.Candidates {
+			if candidate = strings.TrimSpace(candidate); candidate != "" {
+				return candidate
+			}
+		}
+		if url := strings.TrimSpace(discovery.URL); url != "" {
+			return url
+		}
+	}
+	return loginURL
+}
+
+func parseAccountLoginDiscovery(raw string) *LoginDiscovery {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var discovery LoginDiscovery
+	if err := json.Unmarshal([]byte(raw), &discovery); err != nil {
+		return nil
+	}
+	return &discovery
 }

@@ -120,6 +120,7 @@ type accountAuthContext struct {
 	ChannelID          string
 	BaseURL            string
 	LoginPath          string
+	BrowserLoginURL    string
 	BrowserProfilePath string
 	UserAgent          string
 	LoginName          string

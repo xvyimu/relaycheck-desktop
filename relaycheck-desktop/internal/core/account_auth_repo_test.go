@@ -111,6 +111,65 @@ func TestAccountAuthRepository_LoadValidAccount(t *testing.T) {
 	}
 }
 
+func TestAccountAuthRepository_LoadKeepsManualBrowserLoginURL(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	siteID := newID()
+	accountID := newID()
+	loginURL := "https://console.relay.example/login?next=%2Fdashboard"
+	insertTestSite(t, app, siteID, "Manual Login Site", "https://api.relay.example", "newapi")
+	if _, err := app.db.Exec(`
+		UPDATE upstream_sites
+		SET login_url=?, login_url_source='manual', login_url_confidence=1, updated_at=?
+		WHERE id=?
+	`, loginURL, now(), siteID); err != nil {
+		t.Fatalf("update upstream_sites login metadata: %v", err)
+	}
+	insertTestAccount(t, app, accountID, siteID, "Manual Login Account", nil, nil)
+
+	auth, err := app.accountAuth.Load(context.Background(), accountID)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if auth.LoginPath != "/login?next=%2Fdashboard" {
+		t.Fatalf("LoginPath = %q, want API path extracted from login_url", auth.LoginPath)
+	}
+	if auth.BrowserLoginURL != loginURL {
+		t.Fatalf("BrowserLoginURL = %q, want %q", auth.BrowserLoginURL, loginURL)
+	}
+}
+
+func TestAccountAuthRepository_LoadUsesHighConfidenceDiscoveryForBrowserLogin(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	siteID := newID()
+	accountID := newID()
+	discoveryURL := "https://relay.example/console/login"
+	insertTestSite(t, app, siteID, "Discovery Login Site", "https://relay.example/api", "newapi")
+	if _, err := app.db.Exec(`
+		UPDATE upstream_sites
+		SET login_url='/legacy-login', login_url_source='path_probe', login_url_confidence=0.4,
+		    login_discovery_json=?, updated_at=?
+		WHERE id=?
+	`, `{"url":"`+discoveryURL+`","source":"html_link","confidence":0.85,"candidates":["/login","/signin"]}`, now(), siteID); err != nil {
+		t.Fatalf("update upstream_sites login discovery: %v", err)
+	}
+	insertTestAccount(t, app, accountID, siteID, "Discovery Login Account", nil, nil)
+
+	auth, err := app.accountAuth.Load(context.Background(), accountID)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if auth.LoginPath != "/legacy-login" {
+		t.Fatalf("LoginPath = %q, want legacy API login path", auth.LoginPath)
+	}
+	if auth.BrowserLoginURL != discoveryURL {
+		t.Fatalf("BrowserLoginURL = %q, want discovery URL %q", auth.BrowserLoginURL, discoveryURL)
+	}
+}
+
 func TestAccountAuthRepository_LoadDecryptsCredentials(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
@@ -266,6 +325,12 @@ func TestAccountAuthRepository_LoadBatchPreservesFields(t *testing.T) {
 	}
 	if batchAuth.BaseURL != single.BaseURL {
 		t.Errorf("BaseURL mismatch: batch=%q single=%q", batchAuth.BaseURL, single.BaseURL)
+	}
+	if batchAuth.LoginPath != single.LoginPath {
+		t.Errorf("LoginPath mismatch: batch=%q single=%q", batchAuth.LoginPath, single.LoginPath)
+	}
+	if batchAuth.BrowserLoginURL != single.BrowserLoginURL {
+		t.Errorf("BrowserLoginURL mismatch: batch=%q single=%q", batchAuth.BrowserLoginURL, single.BrowserLoginURL)
 	}
 	if batchAuth.LoginName != single.LoginName {
 		t.Errorf("LoginName mismatch: batch=%q single=%q", batchAuth.LoginName, single.LoginName)
