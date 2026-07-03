@@ -56,7 +56,8 @@ type NextRunItem struct {
 
 const (
 	// Virtual site ID for the global checkin schedule stored in channel_schedules.
-	globalScheduleSiteID = channels.GlobalScheduleSiteID
+	globalScheduleSiteID  = channels.GlobalScheduleSiteID
+	maxRandomDelayMinutes = 120
 )
 
 func (a *App) handleChannelSchedules(w http.ResponseWriter, r *http.Request) {
@@ -144,6 +145,10 @@ func (a *App) handleChannelSchedules(w http.ResponseWriter, r *http.Request) {
 	rdMax := 30
 	if body.RandomDelayMax != nil {
 		rdMax = *body.RandomDelayMax
+	}
+	if rdMin < 0 || rdMax < 0 || rdMin > rdMax || rdMax > maxRandomDelayMinutes {
+		writeError(w, http.StatusBadRequest, "随机延迟范围无效，应满足 0 <= 最小值 <= 最大值 <= 120")
+		return
 	}
 
 	nextRun := channels.ComputeNextRun(body.CheckinTime, body.CronExpr, body.SkipDates, rdMin, rdMax)

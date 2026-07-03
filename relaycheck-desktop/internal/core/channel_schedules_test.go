@@ -192,6 +192,41 @@ func TestHandleChannelSchedules_PUT_InvalidTime(t *testing.T) {
 	}
 }
 
+func TestHandleChannelSchedules_PUT_InvalidRandomDelay(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "negative minimum",
+			body: `{"upstreamSiteId":"site-1","checkinTime":"08:00","randomDelayMin":-1,"randomDelayMax":30}`,
+		},
+		{
+			name: "maximum above limit",
+			body: `{"upstreamSiteId":"site-1","checkinTime":"08:00","randomDelayMin":0,"randomDelayMax":121}`,
+		},
+		{
+			name: "minimum greater than maximum",
+			body: `{"upstreamSiteId":"site-1","checkinTime":"08:00","randomDelayMin":60,"randomDelayMax":30}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPut, "/api/scheduler/channel-schedules", strings.NewReader(tc.body))
+			w := httptest.NewRecorder()
+			app.handleChannelSchedules(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for invalid random delay, got %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
 func TestHandleNextRuns_ReturnsJobs(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()

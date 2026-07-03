@@ -3,25 +3,53 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-02
+**Last updated:** 2026-07-03
 
 ---
 
 ## Current state
 
-The project is stable. All verification gates pass:
+The project is stable. This session has uncommitted schedule UI/API hardening changes in:
+
+- `frontend/src/components/settings/SiteSchedules.tsx`
+- `frontend/src/styles.css`
+- `internal/core/channel_schedules.go`
+- `internal/core/channel_schedules_test.go`
+
+All verification gates pass:
 
 ```powershell
 go build -mod=vendor ./...
 go vet -mod=vendor ./...
-go test -mod=vendor -count=1 ./internal/...      # 861 tests pass
+go test -mod=vendor -count=1 ./...               # 888 tests pass
 cd frontend; npm run build                       # tsc + vite
 cd frontend; npx vitest run                      # 187 tests pass
+git diff --check
 ```
 
 ---
 
 ## What landed this session
+
+### Schedule UI/API hardening (pending commit)
+
+- `internal/core/channel_schedules.go`: added random delay validation for per-site schedules (`0 <= min <= max <= 120`) before DB writes, so bad payloads return HTTP 400 instead of leaking into persistence or surfacing as 500.
+- `internal/core/channel_schedules_test.go`: added table-driven regression coverage for negative delay, delay above 120, and `min > max`.
+- `frontend/src/components/settings/SiteSchedules.tsx`: surfaced calendar/next-run preview load failures with a non-blocking inline status, removed stale unused date helpers, and normalized delay inputs to stay within `0..120` while preserving `min <= max`.
+- `frontend/src/styles.css`: changed schedule preview rows to grid layouts with `minmax(0, 1fr)` content columns and a `max-width: 560px` responsive pass for long site names.
+- `frontend/scripts/verify-site-schedules-layout.mjs` + `frontend/package.json`: added `npm run smoke:schedules`, a focused Playwright smoke that mocks the required APIs and checks the Settings schedule preview at desktop and 390px mobile widths.
+
+Verification:
+
+- `cd frontend; npm run build`
+- `cd frontend; npm test` — 7 files / 187 tests
+- `cd frontend; npm run smoke:schedules` — 1440x900 and 390x900 pass, no body/row overflow, no console issues
+- `go build -mod=vendor ./...`
+- `go test -mod=vendor -count=1 ./...` — 888 tests
+- `go vet -mod=vendor ./...`
+- `git diff --check`
+
+Browser note: Vite was started on `127.0.0.1:5173` and shut down cleanly. The smoke used cached Playwright Chromium at `C:\Users\yuanjia\AppData\Local\ms-playwright\chromium_headless_shell-1228\...`.
 
 ### rootCtx lifecycle fix
 
@@ -56,6 +84,18 @@ cd frontend; npx vitest run                      # 187 tests pass
 
 ## Known blockers
 
+### Browser automation needs elevated launch in Codex sandbox
+
+Playwright package exists under `frontend/node_modules`. Direct browser launch from the regular Codex sandbox can fail with `spawn EPERM`; use an elevated shell/tool run for `npm run smoke:schedules`, or run it manually from a normal terminal:
+
+```powershell
+cd E:\zidqiandao\relaycheck-desktop\frontend
+npm run dev
+npm run smoke:schedules
+```
+
+The schedule-layout smoke does not need the Go backend because it mocks API responses in Playwright.
+
 ### Race detector unavailable
 
 Windows env has cgo disabled, so `go test -race` cannot run. Concurrency code in `notifications/hub.go` and `task_runner.go` is covered by targeted tests but not by the race detector.
@@ -67,6 +107,11 @@ All `context.Background()` calls in `scheduler.go` have been replaced with the c
 ---
 
 ## Suggested next steps (priority order)
+
+### 0. Commit the schedule hardening change
+
+- Current hardening changes are verified, including `npm run smoke:schedules`.
+- Commit with a message like `fix(scheduler): harden per-site schedule settings`.
 
 ### 1. Raise test coverage in core, accounts, channels, and notifications
 
