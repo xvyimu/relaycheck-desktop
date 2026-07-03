@@ -43,6 +43,24 @@ func TestLooksLikeModelID(t *testing.T) {
 	}
 }
 
+func TestLooksLikeModelIDExportedWrapper(t *testing.T) {
+	cases := []struct {
+		value string
+		want  bool
+	}{
+		{"gpt-4o-mini", true},
+		{"plain text", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.value, func(t *testing.T) {
+			if got := LooksLikeModelID(tc.value); got != tc.want {
+				t.Fatalf("LooksLikeModelID(%q) = %v, want %v", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestLooksLikeModelID_TooLong(t *testing.T) {
 	long := ""
 	for i := 0; i < 121; i++ {

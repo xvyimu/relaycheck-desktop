@@ -243,6 +243,70 @@ func TestDetectUpstreamRecognizesModifiedNewAPIByLoginAPI(t *testing.T) {
 	}
 }
 
+func TestHostLabel(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want string
+	}{
+		{"https://relay.example.com/path?x=1", "relay.example.com"},
+		{"https://relay.example.com:8443/path", "relay.example.com:8443"},
+		{"://bad-url", "://bad-url"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.raw, func(t *testing.T) {
+			if got := HostLabel(tc.raw); got != tc.want {
+				t.Fatalf("HostLabel(%q) = %q, want %q", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsManagedRelayKind(t *testing.T) {
+	cases := []struct {
+		kind string
+		want bool
+	}{
+		{"newapi", true},
+		{" OneAPI ", true},
+		{"sub2api", true},
+		{"modified_relay", true},
+		{"official_provider", false},
+		{"openai_compatible", false},
+		{"", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.kind, func(t *testing.T) {
+			if got := IsManagedRelayKind(tc.kind); got != tc.want {
+				t.Fatalf("IsManagedRelayKind(%q) = %v, want %v", tc.kind, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsExcludedRelaySite(t *testing.T) {
+	cases := []struct {
+		name    string
+		baseURL string
+		want    bool
+	}{
+		{"9Router mirror", "https://example.com", true},
+		{"Relay", "https://freemodel.example.com", true},
+		{"Token Router", "https://example.com", true},
+		{"Normal Relay", "https://relay.example.com", false},
+		{"", "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name+"/"+tc.baseURL, func(t *testing.T) {
+			if got := IsExcludedRelaySite(tc.name, tc.baseURL); got != tc.want {
+				t.Fatalf("IsExcludedRelaySite(%q, %q) = %v, want %v", tc.name, tc.baseURL, got, tc.want)
+			}
+		})
+	}
+}
+
 func containsString(values []string, wanted string) bool {
 	for _, value := range values {
 		if value == wanted {
