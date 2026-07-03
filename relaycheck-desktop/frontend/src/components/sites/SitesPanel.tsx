@@ -43,6 +43,8 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
   const [healthFilter, setHealthFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const detailRequestRef = useRef(0);
+  const detailCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const detailTriggerRef = useRef<HTMLButtonElement | null>(null);
   const task = useTaskProgress();
   const { nextRuns } = useNextRuns();
 
@@ -113,9 +115,12 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
     }
   }
 
-  async function openDetail(site: UpstreamSite) {
+  async function openDetail(site: UpstreamSite, trigger?: HTMLButtonElement) {
     const requestId = detailRequestRef.current + 1;
     detailRequestRef.current = requestId;
+    if (trigger) {
+      detailTriggerRef.current = trigger;
+    }
     setDetailBusyId(site.id);
     setMessage("");
     try {
@@ -136,8 +141,12 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
 
   const closeDetail = useCallback(() => {
     detailRequestRef.current += 1;
+    const trigger = detailTriggerRef.current;
     setDetail(null);
     setDetailBusyId("");
+    window.requestAnimationFrame(() => {
+      trigger?.focus();
+    });
   }, []);
 
   useEffect(() => {
@@ -148,6 +157,14 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [closeDetail, detail]);
+
+  useEffect(() => {
+    if (!detail) return;
+    const frame = window.requestAnimationFrame(() => {
+      detailCloseButtonRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [detail]);
 
   const detailDiscovery = detail ? siteLoginDiscovery(detail.site, detail.detection) : null;
   const detailCandidates = detailDiscovery?.candidates?.slice(0, 6) || [];
@@ -304,7 +321,7 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
                   type="button"
                   className="ghost"
                   disabled={detailBusyId === site.id}
-                  onClick={() => void openDetail(site)}
+                  onClick={(event) => void openDetail(site, event.currentTarget)}
                 >
                   {detailBusyId === site.id ? "加载中…" : "详情"}
                 </button>
@@ -344,7 +361,7 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
                 <h2 id="site-detail-title">{detail.site.name}</h2>
                 <p>{detail.site.kind || "unknown"} · {detail.site.healthStatus || "未知"}</p>
               </div>
-              <button type="button" className="ghost" onClick={closeDetail}>关闭</button>
+              <button type="button" className="ghost" ref={detailCloseButtonRef} onClick={closeDetail}>关闭</button>
             </div>
 
             <div className="detail-grid">

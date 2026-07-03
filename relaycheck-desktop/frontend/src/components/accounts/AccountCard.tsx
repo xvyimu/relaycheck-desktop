@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "@/api/client";
-import { formatBrowserLoginOpenMessage, formatBrowserLoginSaveMessage, formatLoginStatusTestMessage } from "@/lib/accountActions";
+import { accountActionButtonLabel, formatBrowserLoginOpenMessage, formatBrowserLoginSaveMessage, formatLoginStatusTestMessage } from "@/lib/accountActions";
 import { formatBalanceValue, formatTime } from "@/lib/format";
 import { apiKeyStatusLabel, formatAPIKeyTestMessage, loginStatusLabel, statusLabel, upstreamKindLabel } from "@/lib/labels";
 import type { Account, APIKeyTestResult, BrowserLoginOpenResponse, BrowserLoginSaveResponse, LoginStatusTestResponse } from "@/types";
@@ -35,6 +35,8 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
   const isProblem = isProblemAccount(account);
+  const isBusy = busy !== "";
+  const isMessageError = message.includes("失败") || message.includes("错误") || message.includes("失效");
 
   useEffect(() => {
     setDisplayName(account.displayName);
@@ -53,7 +55,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
   }, [account.id, account.displayName, account.upstreamSiteName, account.upstreamSiteBaseUrl, account.upstreamSiteLoginUrl, account.upstreamSiteKind, account.email, account.username, account.authType]);
 
   async function runAction<T>(label: string, action: () => Promise<T>, formatSuccess?: (result: T) => string) {
-    if (busy) return;
+    if (isBusy) return;
     setBusy(label);
     setMessage("");
     try {
@@ -86,7 +88,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
   }
 
   async function testAPIKey() {
-    if (busy) return;
+    if (isBusy) return;
     setBusy("检测密钥");
     setMessage("");
     try {
@@ -107,7 +109,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
   }
 
   return (
-    <article className={`account-card account-card-v4 ${isProblem ? "is-problem" : ""}`}>
+    <article className={`account-card account-card-v4 ${isProblem ? "is-problem" : ""}`} aria-busy={isBusy}>
       <div className="account-card-head">
         <div className="account-avatar-stack" aria-label={`${accountDomainLabel(account)}，${upstreamKindLabel(account.upstreamSiteKind || "unknown")}`}>
           <div className="account-avatar" aria-hidden="true">{accountAvatarLabel(account)}</div>
@@ -240,18 +242,19 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
             </label>
           ) : null}
           <div className="toolbar">
-            <button type="button" disabled={busy !== ""} onClick={() => void saveAccount()}>{busy === "保存账号" ? "保存中…" : "保存账号"}</button>
-            <button type="button" className="ghost" disabled={busy !== ""} onClick={() => setEditing(false)}>取消</button>
+            <button type="button" disabled={isBusy} onClick={() => void saveAccount()}>{accountActionButtonLabel("保存账号", busy, "保存中…")}</button>
+            <button type="button" className="ghost" disabled={isBusy} onClick={() => setEditing(false)}>取消</button>
           </div>
         </div>
       ) : null}
 
       <div className="account-card-actions">
         <div className="account-action-group primary">
-          <button type="button" aria-label={`为 ${account.displayName} 执行签到`} onClick={() => void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))}>签到</button>
-          <button type="button" aria-label={`刷新 ${account.displayName} 的余额`} onClick={() => void runAction("刷新余额", () => api(`/api/accounts/${account.id}/refresh-balance`, { method: "POST" }))}>刷新余额</button>
+          <button type="button" disabled={isBusy} aria-label={`为 ${account.displayName} 执行签到`} onClick={() => void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))}>{accountActionButtonLabel("签到", busy)}</button>
+          <button type="button" disabled={isBusy} aria-label={`刷新 ${account.displayName} 的余额`} onClick={() => void runAction("刷新余额", () => api(`/api/accounts/${account.id}/refresh-balance`, { method: "POST" }))}>{accountActionButtonLabel("刷新余额", busy)}</button>
           <button
             type="button"
+            disabled={isBusy}
             aria-label={`打开 ${account.displayName} 的网页登录`}
             onClick={() => void runAction(
               "网页登录",
@@ -259,49 +262,55 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
               formatBrowserLoginOpenMessage,
             )}
           >
-            网页登录
+            {accountActionButtonLabel("网页登录", busy)}
           </button>
-          <button type="button" className="ghost" onClick={onOpenDetail}>详情</button>
-          <button type="button" className={`ghost more-toggle ${moreOpen ? "active" : ""}`} aria-expanded={moreOpen} onClick={() => setMoreOpen((current) => !current)}>{moreOpen ? "收起" : "更多"}</button>
+          <button type="button" className="ghost" disabled={isBusy} onClick={onOpenDetail}>详情</button>
+          <button type="button" className={`ghost more-toggle ${moreOpen ? "active" : ""}`} disabled={isBusy} aria-expanded={moreOpen} onClick={() => setMoreOpen((current) => !current)}>{moreOpen ? "收起" : "更多"}</button>
         </div>
         {moreOpen ? (
           <div className="account-more-panel">
             <div className="account-action-label">维护操作</div>
             <div className="account-action-group secondary">
-              <button type="button" className="ghost" onClick={() => setEditing((current) => !current)}>{editing ? "收起编辑" : "编辑账号"}</button>
+              <button type="button" className="ghost" disabled={isBusy} onClick={() => setEditing((current) => !current)}>{editing ? "收起编辑" : "编辑账号"}</button>
               <button
                 type="button"
                 className="ghost"
+                disabled={isBusy}
                 onClick={() => void runAction(
                   "保存授权",
                   () => api<BrowserLoginSaveResponse>(`/api/accounts/${account.id}/finish-browser-login`, { method: "POST" }),
                   formatBrowserLoginSaveMessage,
                 )}
               >
-                保存授权
+                {accountActionButtonLabel("保存授权", busy)}
               </button>
               <button
                 type="button"
                 className="ghost"
+                disabled={isBusy}
                 onClick={() => void runAction(
                   "测试登录态",
                   () => api<LoginStatusTestResponse>(`/api/accounts/${account.id}/test-login`, { method: "POST" }),
                   formatLoginStatusTestMessage,
                 )}
               >
-                测试登录态
+                {accountActionButtonLabel("测试登录态", busy, "检测中…")}
               </button>
-              <button type="button" className="ghost" disabled={!account.apiKeyFingerprint || busy !== ""} onClick={() => void testAPIKey()}>{busy === "检测密钥" ? "检测中…" : "检测密钥"}</button>
-              <button type="button" className="ghost" onClick={() => setShowTwoFactorGuide(true)}>2FA 指引</button>
+              <button type="button" className="ghost" disabled={!account.apiKeyFingerprint || isBusy} onClick={() => void testAPIKey()}>{accountActionButtonLabel("检测密钥", busy, "检测中…")}</button>
+              <button type="button" className="ghost" disabled={isBusy} onClick={() => setShowTwoFactorGuide(true)}>2FA 指引</button>
             </div>
             <div className="account-action-label danger-label">危险操作</div>
             <div className="account-action-group danger-zone">
-              <button type="button" className="danger" onClick={() => void deleteAccount()}>删除账号</button>
+              <button type="button" className="danger" disabled={isBusy} onClick={() => void deleteAccount()}>{accountActionButtonLabel("删除账号", busy)}</button>
             </div>
           </div>
         ) : null}
       </div>
-      {message ? <div className={message.includes("失败") || message.includes("错误") ? "error" : "note"}>{message}</div> : null}
+      {message ? (
+        <div className={isMessageError ? "error" : "note"} role={isMessageError ? "alert" : "status"} aria-live={isMessageError ? "assertive" : "polite"}>
+          {message}
+        </div>
+      ) : null}
 
       {showTwoFactorGuide ? (
         <TwoFactorGuide

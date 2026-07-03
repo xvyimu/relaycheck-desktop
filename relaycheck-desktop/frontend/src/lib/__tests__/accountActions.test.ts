@@ -1,10 +1,25 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  accountActionButtonLabel,
   formatBrowserLoginOpenMessage,
   formatBrowserLoginSaveMessage,
   formatLoginStatusTestMessage,
 } from "../accountActions";
+
+describe("accountActionButtonLabel", () => {
+  it("uses the idle label when another action is running", () => {
+    expect(accountActionButtonLabel("网页登录", "刷新余额")).toBe("网页登录");
+  });
+
+  it("uses a running label for the active action", () => {
+    expect(accountActionButtonLabel("网页登录", "网页登录")).toBe("网页登录中…");
+  });
+
+  it("allows action-specific running copy", () => {
+    expect(accountActionButtonLabel("测试登录态", "测试登录态", "检测中…")).toBe("检测中…");
+  });
+});
 
 describe("formatBrowserLoginOpenMessage", () => {
   it("includes the opened URL and next save step", () => {

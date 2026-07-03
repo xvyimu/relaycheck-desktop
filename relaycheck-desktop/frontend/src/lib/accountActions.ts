@@ -4,6 +4,11 @@ function httpStatusText(httpStatus?: number) {
   return httpStatus ? `（HTTP ${httpStatus}）` : "";
 }
 
+export function accountActionButtonLabel(label: string, busy: string, runningLabel?: string): string {
+  if (busy !== label) return label;
+  return runningLabel || `${label}中…`;
+}
+
 export function formatBrowserLoginOpenMessage(result: BrowserLoginOpenResponse): string {
   const prefix = result.status === "already_open" ? "网页登录窗口已在运行" : "网页登录窗口已打开";
   const target = result.url ? `：${result.url}` : "";
