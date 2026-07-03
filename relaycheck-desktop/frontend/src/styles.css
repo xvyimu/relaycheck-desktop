@@ -8609,6 +8609,11 @@ body {
     min-width: 44px;
     min-height: 44px;
   }
+
+  .account-create-card input,
+  .account-create-card select {
+    min-height: 44px;
+  }
 }
 
 .cleanup-option {

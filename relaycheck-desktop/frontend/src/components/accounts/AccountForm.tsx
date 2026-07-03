@@ -20,6 +20,7 @@ export function AccountForm({ sites, onDone }: { sites: UpstreamSite[]; onDone: 
   const siteOptions = useMemo(() => sites, [sites]);
   const isCustomSite = siteMode === "custom";
   const canSubmit = isCustomSite ? baseUrl.trim() !== "" : upstreamSiteId !== "";
+  const isErrorMessage = message.includes("失败") || message.includes("未识别");
 
   useEffect(() => {
     if (siteMode === "existing" && !upstreamSiteId && siteOptions[0]) setUpstreamSiteId(siteOptions[0].id);
@@ -28,6 +29,7 @@ export function AccountForm({ sites, onDone }: { sites: UpstreamSite[]; onDone: 
   return (
     <form
       className="card account-create-card"
+      aria-busy={busy}
       onSubmit={async (event) => {
         event.preventDefault();
         if (!canSubmit || busy) return;
@@ -69,9 +71,23 @@ export function AccountForm({ sites, onDone }: { sites: UpstreamSite[]; onDone: 
           <strong>添加账号 / 自定义站点</strong>
           <span>同一个中转站可以绑定多个账号；填新网址时会先识别 NewAPI / OneAPI / Sub2API，再创建账号。</span>
         </div>
-        <div className="segmented">
-          <button type="button" className={siteMode === "existing" ? "active" : ""} onClick={() => setSiteMode("existing")}>已有站点</button>
-          <button type="button" className={siteMode === "custom" ? "active" : ""} onClick={() => setSiteMode("custom")}>自定义网址</button>
+        <div className="segmented" role="group" aria-label="站点来源">
+          <button
+            type="button"
+            className={siteMode === "existing" ? "active" : ""}
+            aria-pressed={siteMode === "existing"}
+            onClick={() => setSiteMode("existing")}
+          >
+            已有站点
+          </button>
+          <button
+            type="button"
+            className={siteMode === "custom" ? "active" : ""}
+            aria-pressed={siteMode === "custom"}
+            onClick={() => setSiteMode("custom")}
+          >
+            自定义网址
+          </button>
         </div>
       </div>
 
@@ -80,11 +96,20 @@ export function AccountForm({ sites, onDone }: { sites: UpstreamSite[]; onDone: 
           <>
             <label className="field span-2">
               <span>站点网址</span>
-              <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://example.com" />
+              <input
+                type="url"
+                inputMode="url"
+                autoComplete="url"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={baseUrl}
+                onChange={(event) => setBaseUrl(event.target.value)}
+                placeholder="https://example.com"
+              />
             </label>
             <label className="field">
               <span>站点名称</span>
-              <input value={siteName} onChange={(event) => setSiteName(event.target.value)} placeholder="可自动用域名" />
+              <input autoComplete="organization" value={siteName} onChange={(event) => setSiteName(event.target.value)} placeholder="可自动用域名" />
             </label>
             <label className="field">
               <span>后台类型</span>
@@ -98,7 +123,16 @@ export function AccountForm({ sites, onDone }: { sites: UpstreamSite[]; onDone: 
             </label>
             <label className="field span-2">
               <span>登录页，可选</span>
-              <input value={loginUrl} onChange={(event) => setLoginUrl(event.target.value)} placeholder="默认使用 /login" />
+              <input
+                type="url"
+                inputMode="url"
+                autoComplete="url"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={loginUrl}
+                onChange={(event) => setLoginUrl(event.target.value)}
+                placeholder="默认使用 /login"
+              />
             </label>
           </>
         ) : (
@@ -123,23 +157,53 @@ export function AccountForm({ sites, onDone }: { sites: UpstreamSite[]; onDone: 
         </label>
         <label className="field">
           <span>显示名称</span>
-          <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="可留空自动生成" />
+          <input autoComplete="nickname" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="可留空自动生成" />
         </label>
         <label className="field">
           <span>邮箱</span>
-          <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="邮箱账号" />
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="邮箱账号"
+          />
         </label>
         <label className="field">
           <span>用户名</span>
-          <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="非邮箱账号可填这里" />
+          <input
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="非邮箱账号可填这里"
+          />
         </label>
         <label className="field">
           <span>密码</span>
-          <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="账号密码，可选" type="password" />
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="账号密码，可选"
+          />
         </label>
         <label className="field span-2">
           <span>API Key，可选</span>
-          <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="用于区分同站点不同密钥账号，也可后续检测是否有效" type="password" />
+          <input
+            type="password"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={apiKey}
+            onChange={(event) => setApiKey(event.target.value)}
+            placeholder="用于区分同站点不同密钥账号，也可后续检测是否有效"
+          />
         </label>
       </div>
 
@@ -147,7 +211,11 @@ export function AccountForm({ sites, onDone }: { sites: UpstreamSite[]; onDone: 
         <button type="submit" disabled={!canSubmit || busy}>{busy ? "添加中…" : "添加账号"}</button>
         <span className="muted">{isCustomSite ? "只允许添加识别为 NewAPI / OneAPI / Sub2API 的面板型中转站。" : "已有站点会直接绑定新账号，不覆盖旧账号。"}</span>
       </div>
-      {message ? <div className={message.includes("失败") || message.includes("未识别") ? "error" : "note"}>{message}</div> : null}
+      {message ? (
+        <div className={isErrorMessage ? "error" : "note"} role={isErrorMessage ? "alert" : "status"} aria-live={isErrorMessage ? "assertive" : "polite"} aria-atomic="true">
+          {message}
+        </div>
+      ) : null}
     </form>
   );
 }
