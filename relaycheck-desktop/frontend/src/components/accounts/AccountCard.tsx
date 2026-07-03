@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "@/api/client";
+import { formatBrowserLoginOpenMessage, formatBrowserLoginSaveMessage, formatLoginStatusTestMessage } from "@/lib/accountActions";
 import { formatBalanceValue, formatTime } from "@/lib/format";
 import { apiKeyStatusLabel, formatAPIKeyTestMessage, loginStatusLabel, statusLabel, upstreamKindLabel } from "@/lib/labels";
-import type { Account, APIKeyTestResult } from "@/types";
+import type { Account, APIKeyTestResult, BrowserLoginOpenResponse, BrowserLoginSaveResponse, LoginStatusTestResponse } from "@/types";
 import { AccountKeySummary } from "@/components/accounts/AccountKeySummary";
 import { accountAvatarLabel, accountBackendShort, accountDomainLabel, defaultLoginUrl, isProblemAccount } from "@/components/accounts/helpers";
 import { StatusLabel } from "@/components/ui/status-label";
@@ -51,14 +52,14 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     setDismissedTwoFactor(false);
   }, [account.id, account.displayName, account.upstreamSiteName, account.upstreamSiteBaseUrl, account.upstreamSiteLoginUrl, account.upstreamSiteKind, account.email, account.username, account.authType]);
 
-  async function runAction(label: string, action: () => Promise<unknown>) {
+  async function runAction<T>(label: string, action: () => Promise<T>, formatSuccess?: (result: T) => string) {
     if (busy) return;
     setBusy(label);
     setMessage("");
     try {
-      await action();
+      const result = await action();
       await onDone();
-      setMessage(`${label}完成。`);
+      setMessage(formatSuccess ? formatSuccess(result) : `${label}完成。`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : `${label}失败`);
     } finally {
@@ -158,7 +159,11 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
           baseUrl={account.upstreamSiteBaseUrl}
           loginUrl={account.upstreamSiteLoginUrl || defaultLoginUrl(account.upstreamSiteBaseUrl || "")}
           onClose={() => setDismissedTwoFactor(true)}
-          onOpenBrowserLogin={() => void runAction("网页登录", () => api(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" }))}
+          onOpenBrowserLogin={() => void runAction(
+            "网页登录",
+            () => api<BrowserLoginOpenResponse>(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" }),
+            formatBrowserLoginOpenMessage,
+          )}
         />
       ) : null}
 
@@ -245,7 +250,17 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
         <div className="account-action-group primary">
           <button type="button" aria-label={`为 ${account.displayName} 执行签到`} onClick={() => void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))}>签到</button>
           <button type="button" aria-label={`刷新 ${account.displayName} 的余额`} onClick={() => void runAction("刷新余额", () => api(`/api/accounts/${account.id}/refresh-balance`, { method: "POST" }))}>刷新余额</button>
-          <button type="button" aria-label={`打开 ${account.displayName} 的网页登录`} onClick={() => void runAction("网页登录", () => api(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" }))}>网页登录</button>
+          <button
+            type="button"
+            aria-label={`打开 ${account.displayName} 的网页登录`}
+            onClick={() => void runAction(
+              "网页登录",
+              () => api<BrowserLoginOpenResponse>(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" }),
+              formatBrowserLoginOpenMessage,
+            )}
+          >
+            网页登录
+          </button>
           <button type="button" className="ghost" onClick={onOpenDetail}>详情</button>
           <button type="button" className={`ghost more-toggle ${moreOpen ? "active" : ""}`} aria-expanded={moreOpen} onClick={() => setMoreOpen((current) => !current)}>{moreOpen ? "收起" : "更多"}</button>
         </div>
@@ -254,8 +269,28 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
             <div className="account-action-label">维护操作</div>
             <div className="account-action-group secondary">
               <button type="button" className="ghost" onClick={() => setEditing((current) => !current)}>{editing ? "收起编辑" : "编辑账号"}</button>
-              <button type="button" className="ghost" onClick={() => void runAction("保存授权", () => api(`/api/accounts/${account.id}/finish-browser-login`, { method: "POST" }))}>保存授权</button>
-              <button type="button" className="ghost" onClick={() => void runAction("测试登录态", () => api(`/api/accounts/${account.id}/test-login`, { method: "POST" }))}>测试登录态</button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => void runAction(
+                  "保存授权",
+                  () => api<BrowserLoginSaveResponse>(`/api/accounts/${account.id}/finish-browser-login`, { method: "POST" }),
+                  formatBrowserLoginSaveMessage,
+                )}
+              >
+                保存授权
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => void runAction(
+                  "测试登录态",
+                  () => api<LoginStatusTestResponse>(`/api/accounts/${account.id}/test-login`, { method: "POST" }),
+                  formatLoginStatusTestMessage,
+                )}
+              >
+                测试登录态
+              </button>
               <button type="button" className="ghost" disabled={!account.apiKeyFingerprint || busy !== ""} onClick={() => void testAPIKey()}>{busy === "检测密钥" ? "检测中…" : "检测密钥"}</button>
               <button type="button" className="ghost" onClick={() => setShowTwoFactorGuide(true)}>2FA 指引</button>
             </div>
@@ -277,7 +312,11 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
           onClose={() => setShowTwoFactorGuide(false)}
           onOpenBrowserLogin={() => {
             setShowTwoFactorGuide(false);
-            void runAction("网页登录", () => api(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" }));
+            void runAction(
+              "网页登录",
+              () => api<BrowserLoginOpenResponse>(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" }),
+              formatBrowserLoginOpenMessage,
+            );
           }}
         />
       ) : null}

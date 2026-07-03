@@ -830,10 +830,36 @@ export type BulkBrowserOpenResponse = {
   failed: number;
 };
 
+export type BrowserLoginOpenResponse = {
+  accountId: string;
+  accountName?: string;
+  siteName?: string;
+  status: string;
+  message?: string;
+  url?: string;
+  debugPort?: number;
+  profilePath?: string;
+};
+
 export type BulkBrowserSaveResponse = {
   processed: number;
   saved: number;
   failed: number;
+};
+
+export type BrowserLoginSaveResponse = {
+  accountId: string;
+  accountName?: string;
+  siteName?: string;
+  status: string;
+  message?: string;
+  cookieCount?: number;
+  cookiePreview?: string;
+};
+
+export type LoginStatusTestResponse = {
+  status: string;
+  httpStatus?: number;
 };
 
 export type BulkDetectSitesResponse = {
