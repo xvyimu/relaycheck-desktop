@@ -101,9 +101,6 @@ func (a *App) createUpstreamSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "该地址未识别为 NewAPI/OneAPI/Sub2API/魔改中转面板型中转站，已跳过。")
 		return
 	}
-	if strings.TrimSpace(input.LoginURL) != "" {
-		detection.LoginURL = strings.TrimSpace(input.LoginURL)
-	}
 
 	siteID, err := a.sitesService.CreateUpstreamSite(r.Context(), sites.CreateSiteInput{
 		Name:     input.Name,

@@ -30,6 +30,91 @@ func parseDetectionJSON(raw string) (UpstreamDetection, bool) {
 	return detection, true
 }
 
+func parseLoginDiscoveryJSON(raw string) *LoginDiscovery {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var discovery LoginDiscovery
+	if err := json.Unmarshal([]byte(raw), &discovery); err != nil {
+		return nil
+	}
+	return &discovery
+}
+
+func marshalLoginDiscovery(discovery *LoginDiscovery) string {
+	if discovery == nil {
+		return ""
+	}
+	payload, err := json.Marshal(discovery)
+	if err != nil {
+		return ""
+	}
+	return string(payload)
+}
+
+func manualLoginDiscoveryForURL(loginURL string, auto *LoginDiscovery) *LoginDiscovery {
+	candidates := make([]string, 0, 4)
+	seen := map[string]bool{}
+	add := func(candidate string) {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" || seen[candidate] {
+			return
+		}
+		seen[candidate] = true
+		candidates = append(candidates, candidate)
+	}
+	add(loginURL)
+	if auto != nil {
+		for _, candidate := range auto.Candidates {
+			add(candidate)
+		}
+		add(auto.URL)
+	}
+	return &LoginDiscovery{
+		URL:        strings.TrimSpace(loginURL),
+		Source:     "manual",
+		Confidence: 1,
+		Candidates: candidates,
+	}
+}
+
+func (a *App) reloadSiteDetectionFields(ctx context.Context, detail *SiteDetail) error {
+	var checkin, balance, models, pricing int
+	err := a.db.QueryRowContext(ctx, `
+		SELECT COALESCE(homepage_url,''), COALESCE(login_url,''), COALESCE(login_url_source,''), COALESCE(login_url_confidence,0), COALESCE(login_discovery_json,''),
+		       kind, detection_confidence, health_status,
+		       supports_checkin, supports_balance, supports_models, supports_pricing,
+		       COALESCE(detection_json,''), COALESCE(last_health_check_at,''), updated_at
+		FROM upstream_sites
+		WHERE id=?
+	`, detail.Site.ID).Scan(
+		&detail.Site.HomepageURL,
+		&detail.Site.LoginURL,
+		&detail.Site.LoginURLSource,
+		&detail.Site.LoginURLConfidence,
+		&detail.Site.LoginDiscoveryJSON,
+		&detail.Site.Kind,
+		&detail.Site.DetectionConfidence,
+		&detail.Site.HealthStatus,
+		&checkin,
+		&balance,
+		&models,
+		&pricing,
+		&detail.Site.DetectionJSON,
+		&detail.Site.LastHealthCheckAt,
+		&detail.Site.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	detail.Site.SupportsCheckin = checkin == 1
+	detail.Site.SupportsBalance = balance == 1
+	detail.Site.SupportsModels = models == 1
+	detail.Site.SupportsPricing = pricing == 1
+	detail.Site.LoginDiscovery = parseLoginDiscoveryJSON(detail.Site.LoginDiscoveryJSON)
+	return nil
+}
+
 func sourceTypeFromChannel(channel ImportedChannel) string {
 	raw := strings.ToLower(channel.RawJSON)
 	sourceID := strings.ToLower(channel.SourceChannelID)
@@ -163,31 +248,23 @@ func (a *App) loadSiteDetail(ctx context.Context, id string) (SiteDetail, error)
 	detail.Site.SupportsBalance = balance == 1
 	detail.Site.SupportsModels = models == 1
 	detail.Site.SupportsPricing = pricing == 1
+	detail.Site.LoginDiscovery = parseLoginDiscoveryJSON(detail.Site.LoginDiscoveryJSON)
 	normalizeOfficialProviderSite(&detail.Site)
 
 	if detection, ok := parseDetectionJSON(detail.Site.DetectionJSON); ok {
 		detail.Detection = detection
 	} else {
-		detection := a.detectUpstream(ctx, detail.Site.BaseURL)
-		detail.Detection = detection
-		detail.Site.DetectionJSON = marshalDetection(&detection)
-		if _, execErr := a.db.ExecContext(ctx, `
-			UPDATE upstream_sites
-			SET detection_json=?, homepage_url=?, login_url=?, kind=?, detection_confidence=?, health_status=?,
-			    supports_checkin=?, supports_balance=?, supports_models=?, supports_pricing=?, last_health_check_at=?, updated_at=?
-			WHERE id=?
-		`, detail.Site.DetectionJSON, detection.HomepageURL, detection.LoginURL, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), now(), now(), id); execErr != nil {
+		siteDetection, execErr := a.sitesService.DetectUpstreamSite(ctx, id)
+		if execErr != nil {
 			log.Printf("[detection] site detail cache update failed for site %s: %v", id, execErr)
+		} else if reloadErr := a.reloadSiteDetectionFields(ctx, &detail); reloadErr != nil {
+			detail.Detection = upstreamDetectionFromSites(siteDetection)
+			log.Printf("[detection] site detail cache reload failed for site %s: %v", id, reloadErr)
+		} else if detection, ok := parseDetectionJSON(detail.Site.DetectionJSON); ok {
+			detail.Detection = detection
+		} else {
+			detail.Detection = upstreamDetectionFromSites(siteDetection)
 		}
-		detail.Site.Kind = detection.Kind
-		detail.Site.HealthStatus = detection.HealthStatus
-		detail.Site.SupportsCheckin = detection.SupportsCheckin
-		detail.Site.SupportsBalance = detection.SupportsBalance
-		detail.Site.SupportsModels = detection.SupportsModels
-		detail.Site.SupportsPricing = detection.SupportsPricing
-		detail.Site.HomepageURL = detection.HomepageURL
-		detail.Site.LoginURL = detection.LoginURL
-		detail.Site.DetectionConfidence = detection.DetectionConfidence
 		normalizeOfficialProviderSite(&detail.Site)
 	}
 	if detail.Site.Kind == "official_provider" {

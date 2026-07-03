@@ -3,6 +3,7 @@ package sites
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,9 +16,11 @@ import (
 // DetectUpstream only needs HTTP + URL validation.
 type testInfra struct {
 	client *http.Client
+	db     *sql.DB
+	nextID int
 }
 
-func (t *testInfra) DB() *sql.DB { return nil }
+func (t *testInfra) DB() *sql.DB { return t.db }
 
 func (t *testInfra) DoHTTP(req *http.Request) (*http.Response, error) {
 	return t.client.Do(req)
@@ -40,7 +43,10 @@ func (t *testInfra) Audit(action, level, userID, entityType, entityID, detail st
 
 func (t *testInfra) Now() string { return "now" }
 
-func (t *testInfra) NewID() string { return "id" }
+func (t *testInfra) NewID() string {
+	t.nextID++
+	return fmt.Sprintf("id-%d", t.nextID)
+}
 
 func newTestService(server *httptest.Server) *Service {
 	return NewService(&testInfra{client: server.Client()})

@@ -186,11 +186,12 @@ func (a *App) ensureManualAccountSite(ctx context.Context, name string, rawBaseU
 	err := a.db.QueryRowContext(ctx, `SELECT id FROM upstream_sites WHERE base_url=? ORDER BY updated_at DESC LIMIT 1`, baseURL).Scan(&existingID)
 	if err == nil {
 		if loginURL != "" {
+			manualDiscovery := manualLoginDiscoveryForURL(loginURL, nil)
 			_, err = a.db.ExecContext(ctx, `
 				UPDATE upstream_sites
-				SET login_url=?, updated_at=?
+				SET login_url=?, login_url_source='manual', login_url_confidence=1, login_discovery_json=?, updated_at=?
 				WHERE id=?
-			`, loginURL, now(), existingID)
+			`, loginURL, marshalLoginDiscovery(manualDiscovery), now(), existingID)
 			if err != nil {
 				return "", err
 			}
@@ -212,8 +213,22 @@ func (a *App) ensureManualAccountSite(ctx context.Context, name string, rawBaseU
 	if !isManagedRelayKind(detection.Kind) {
 		return "", errorsText("该地址未识别为 NewAPI/OneAPI/Sub2API/魔改中转面板型中转站。可先在上游站点页查看识别详情，或手动指定后台类型后再添加。")
 	}
+	storedLoginURL := detection.LoginURL
+	storedLoginSource := ""
+	storedLoginConfidence := 0.0
+	storedLoginDiscoveryJSON := ""
+	if detection.LoginDiscovery != nil {
+		storedLoginURL = detection.LoginDiscovery.URL
+		storedLoginSource = detection.LoginDiscovery.Source
+		storedLoginConfidence = detection.LoginDiscovery.Confidence
+		storedLoginDiscoveryJSON = marshalLoginDiscovery(detection.LoginDiscovery)
+	}
 	if loginURL != "" {
-		detection.LoginURL = loginURL
+		manualDiscovery := manualLoginDiscoveryForURL(loginURL, detection.LoginDiscovery)
+		storedLoginURL = manualDiscovery.URL
+		storedLoginSource = manualDiscovery.Source
+		storedLoginConfidence = manualDiscovery.Confidence
+		storedLoginDiscoveryJSON = marshalLoginDiscovery(manualDiscovery)
 	}
 
 	channelID := newID()
@@ -228,9 +243,9 @@ func (a *App) ensureManualAccountSite(ctx context.Context, name string, rawBaseU
 		return "", err
 	}
 	_, err = a.db.ExecContext(ctx, `
-		INSERT INTO upstream_sites (id, channel_id, name, homepage_url, base_url, login_url, kind, detection_confidence, health_status, supports_checkin, supports_balance, supports_models, supports_pricing, detection_json, last_health_check_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, siteID, channelID, name, detection.HomepageURL, detection.BaseURL, detection.LoginURL, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), detectionJSON, createdAt, createdAt, createdAt)
+		INSERT INTO upstream_sites (id, channel_id, name, homepage_url, base_url, login_url, login_url_source, login_url_confidence, login_discovery_json, kind, detection_confidence, health_status, supports_checkin, supports_balance, supports_models, supports_pricing, detection_json, last_health_check_at, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, siteID, channelID, name, detection.HomepageURL, detection.BaseURL, storedLoginURL, storedLoginSource, storedLoginConfidence, storedLoginDiscoveryJSON, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), detectionJSON, createdAt, createdAt, createdAt)
 	if err != nil {
 		return "", err
 	}
@@ -841,8 +856,8 @@ func (a *App) updateAccountSiteAddress(ctx context.Context, siteID string, siteN
 		args = append(args, siteName)
 	}
 	if loginURL != "" {
-		sets = append(sets, "login_url=?")
-		args = append(args, loginURL)
+		sets = append(sets, "login_url=?", "login_url_source=?", "login_url_confidence=?", "login_discovery_json=?")
+		args = append(args, loginURL, "manual", 1, marshalLoginDiscovery(manualLoginDiscoveryForURL(loginURL, nil)))
 	}
 	if isManagedRelayKind(kind) {
 		sets = append(sets, "kind=?")
@@ -883,8 +898,8 @@ func (a *App) updateAccountSiteMetadata(ctx context.Context, siteID string, site
 		args = append(args, siteName)
 	}
 	if loginURL != "" {
-		sets = append(sets, "login_url=?")
-		args = append(args, loginURL)
+		sets = append(sets, "login_url=?", "login_url_source=?", "login_url_confidence=?", "login_discovery_json=?")
+		args = append(args, loginURL, "manual", 1, marshalLoginDiscovery(manualLoginDiscoveryForURL(loginURL, nil)))
 	}
 	if isManagedRelayKind(kind) {
 		sets = append(sets, "kind=?")

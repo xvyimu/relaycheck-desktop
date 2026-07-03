@@ -102,7 +102,10 @@ func (a *App) probeLocal(ctx context.Context, raw string) ProbeResult {
 // Callers (channels.go, accounts.go, import_sqlite.go, import_admin_api.go,
 // sites.go, detection_detail.go) are unaware of the sites service.
 func (a *App) detectUpstream(ctx context.Context, raw string) UpstreamDetection {
-	d := a.sitesService.DetectUpstream(ctx, raw)
+	return upstreamDetectionFromSites(a.sitesService.DetectUpstream(ctx, raw))
+}
+
+func upstreamDetectionFromSites(d sites.Detection) UpstreamDetection {
 	return UpstreamDetection{
 		BaseURL:             d.BaseURL,
 		HomepageURL:         d.HomepageURL,

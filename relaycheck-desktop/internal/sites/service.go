@@ -116,6 +116,7 @@ func (s *Service) ListUpstreamSites(ctx context.Context) ([]Site, error) {
 		item.SupportsBalance = balance == 1
 		item.SupportsModels = models == 1
 		item.SupportsPricing = pricing == 1
+		item.LoginDiscovery = parseLoginDiscoveryJSON(item.LoginDiscoveryJSON)
 		normalizeOfficialProviderSite(&item)
 		items = append(items, item)
 	}
@@ -138,10 +139,11 @@ func (s *Service) CreateUpstreamSite(ctx context.Context, input CreateSiteInput,
 		return "", err
 	}
 
+	login := storedLoginForDetection(detection.BaseURL, &detection, input.LoginURL, existingLoginFields{})
 	_, err = s.infra.DB().ExecContext(ctx, `
-		INSERT INTO upstream_sites (id, channel_id, name, homepage_url, base_url, login_url, kind, detection_confidence, health_status, supports_checkin, supports_balance, supports_models, supports_pricing, detection_json, last_health_check_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, siteID, channelID, input.Name, detection.HomepageURL, detection.BaseURL, detection.LoginURL, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), detectionJSON, s.infra.Now(), s.infra.Now(), s.infra.Now())
+		INSERT INTO upstream_sites (id, channel_id, name, homepage_url, base_url, login_url, login_url_source, login_url_confidence, login_discovery_json, kind, detection_confidence, health_status, supports_checkin, supports_balance, supports_models, supports_pricing, detection_json, last_health_check_at, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, siteID, channelID, input.Name, detection.HomepageURL, detection.BaseURL, login.URL, login.Source, login.Confidence, login.DiscoveryJSON, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), detectionJSON, s.infra.Now(), s.infra.Now(), s.infra.Now())
 	if err != nil {
 		return "", err
 	}
@@ -153,7 +155,12 @@ func (s *Service) CreateUpstreamSite(ctx context.Context, input CreateSiteInput,
 // refreshed detection, and returns the new Detection.
 func (s *Service) DetectUpstreamSite(ctx context.Context, id string) (Detection, error) {
 	var baseURL string
-	err := s.infra.DB().QueryRowContext(ctx, `SELECT base_url FROM upstream_sites WHERE id = ?`, id).Scan(&baseURL)
+	var existing existingLoginFields
+	err := s.infra.DB().QueryRowContext(ctx, `
+		SELECT base_url, COALESCE(login_url,''), COALESCE(login_url_source,''), COALESCE(login_url_confidence,0)
+		FROM upstream_sites
+		WHERE id = ?
+	`, id).Scan(&baseURL, &existing.URL, &existing.Source, &existing.Confidence)
 	if err == sql.ErrNoRows {
 		return Detection{}, sql.ErrNoRows
 	}
@@ -161,14 +168,18 @@ func (s *Service) DetectUpstreamSite(ctx context.Context, id string) (Detection,
 		return Detection{}, err
 	}
 	detection := s.DetectUpstream(ctx, baseURL)
+	login := storedLoginForDetection(baseURL, &detection, "", existing)
 	_, err = s.infra.DB().ExecContext(ctx, `
 		UPDATE upstream_sites
-		SET homepage_url=?, base_url=?, kind=?, detection_confidence=?, health_status=?, supports_checkin=?, supports_balance=?, supports_models=?, supports_pricing=?, detection_json=?, last_health_check_at=?, updated_at=?
+		SET homepage_url=?, base_url=?, login_url=?, login_url_source=?, login_url_confidence=?, login_discovery_json=?,
+		    kind=?, detection_confidence=?, health_status=?, supports_checkin=?, supports_balance=?, supports_models=?, supports_pricing=?, detection_json=?, last_health_check_at=?, updated_at=?
 		WHERE id=?
-	`, detection.HomepageURL, detection.BaseURL, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), MarshalDetection(&detection), s.infra.Now(), s.infra.Now(), id)
+	`, detection.HomepageURL, detection.BaseURL, login.URL, login.Source, login.Confidence, login.DiscoveryJSON, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), MarshalDetection(&detection), s.infra.Now(), s.infra.Now(), id)
 	if err != nil {
 		return Detection{}, err
 	}
+	detection.LoginURL = login.URL
+	detection.LoginDiscovery = login.Discovery
 	return detection, nil
 }
 
@@ -187,11 +198,14 @@ func (s *Service) DeleteUpstreamSite(ctx context.Context, id string) error {
 func (s *Service) DetectAndSaveSite(ctx context.Context, id string, name string, baseURL string) BulkDetectResult {
 	result := BulkDetectResult{ID: id, Name: name, BaseURL: baseURL}
 	detection := s.DetectUpstream(ctx, baseURL)
+	existing := s.existingLoginFields(ctx, id)
+	login := storedLoginForDetection(baseURL, &detection, "", existing)
 	_, err := s.infra.DB().ExecContext(ctx, `
 		UPDATE upstream_sites
-		SET homepage_url=?, base_url=?, kind=?, detection_confidence=?, health_status=?, supports_checkin=?, supports_balance=?, supports_models=?, supports_pricing=?, detection_json=?, last_health_check_at=?, updated_at=?
+		SET homepage_url=?, base_url=?, login_url=?, login_url_source=?, login_url_confidence=?, login_discovery_json=?,
+		    kind=?, detection_confidence=?, health_status=?, supports_checkin=?, supports_balance=?, supports_models=?, supports_pricing=?, detection_json=?, last_health_check_at=?, updated_at=?
 		WHERE id=?
-	`, detection.HomepageURL, detection.BaseURL, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), MarshalDetection(&detection), s.infra.Now(), s.infra.Now(), id)
+	`, detection.HomepageURL, detection.BaseURL, login.URL, login.Source, login.Confidence, login.DiscoveryJSON, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), MarshalDetection(&detection), s.infra.Now(), s.infra.Now(), id)
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -215,7 +229,6 @@ func (s *Service) EnsureUpstreamSiteForChannel(ctx context.Context, input Ensure
 	}
 
 	homepageURL := baseURL
-	loginURL := strings.TrimRight(baseURL, "/") + "/login"
 	healthStatus := "unknown"
 	confidence := 0.0
 	supportsCheckin := false
@@ -228,7 +241,6 @@ func (s *Service) EnsureUpstreamSiteForChannel(ctx context.Context, input Ensure
 	}
 	if input.Detection != nil {
 		homepageURL = input.Detection.HomepageURL
-		loginURL = input.Detection.LoginURL
 		kind = input.Detection.Kind
 		healthStatus = input.Detection.HealthStatus
 		confidence = input.Detection.DetectionConfidence
@@ -241,16 +253,28 @@ func (s *Service) EnsureUpstreamSiteForChannel(ctx context.Context, input Ensure
 	if input.Detection != nil && !IsManagedRelayKind(kind) {
 		return "", false, nil
 	}
+	login := storedLoginForDetection(baseURL, input.Detection, "", existingLoginFields{})
 
 	var siteID string
-	err := s.infra.DB().QueryRowContext(ctx, `SELECT id FROM upstream_sites WHERE base_url=? ORDER BY updated_at DESC LIMIT 1`, baseURL).Scan(&siteID)
+	var existing existingLoginFields
+	err := s.infra.DB().QueryRowContext(ctx, `
+		SELECT id, COALESCE(login_url,''), COALESCE(login_url_source,''), COALESCE(login_url_confidence,0)
+		FROM upstream_sites
+		WHERE base_url=?
+		ORDER BY updated_at DESC
+		LIMIT 1
+	`, baseURL).Scan(&siteID, &existing.URL, &existing.Source, &existing.Confidence)
 	if err == nil {
+		login = storedLoginForDetection(baseURL, input.Detection, "", existing)
 		_, err = s.infra.DB().ExecContext(ctx, `
 			UPDATE upstream_sites
 			SET channel_id=CASE WHEN COALESCE(channel_id,'')='' THEN ? ELSE channel_id END,
 			    name=CASE WHEN name='' THEN ? ELSE name END,
 			    homepage_url=?,
-			    login_url=CASE WHEN COALESCE(login_url,'')='' THEN ? ELSE login_url END,
+			    login_url=?,
+			    login_url_source=?,
+			    login_url_confidence=?,
+			    login_discovery_json=?,
 			    kind=CASE WHEN kind='unknown' THEN ? ELSE kind END,
 			    detection_confidence=MAX(detection_confidence, ?),
 			    detection_json=CASE WHEN ?='' THEN detection_json ELSE ? END,
@@ -262,7 +286,7 @@ func (s *Service) EnsureUpstreamSiteForChannel(ctx context.Context, input Ensure
 			    last_health_check_at=?,
 			    updated_at=?
 			WHERE id=?
-		`, input.ChannelID, input.Name, homepageURL, loginURL, kind, confidence, detectionJSON, detectionJSON, healthStatus, healthStatus, boolInt(supportsCheckin), boolInt(supportsBalance), boolInt(supportsModels), boolInt(supportsPricing), s.infra.Now(), s.infra.Now(), siteID)
+		`, input.ChannelID, input.Name, homepageURL, login.URL, login.Source, login.Confidence, login.DiscoveryJSON, kind, confidence, detectionJSON, detectionJSON, healthStatus, healthStatus, boolInt(supportsCheckin), boolInt(supportsBalance), boolInt(supportsModels), boolInt(supportsPricing), s.infra.Now(), s.infra.Now(), siteID)
 		return siteID, false, err
 	}
 	if err != sql.ErrNoRows {
@@ -271,9 +295,9 @@ func (s *Service) EnsureUpstreamSiteForChannel(ctx context.Context, input Ensure
 
 	siteID = s.infra.NewID()
 	_, err = s.infra.DB().ExecContext(ctx, `
-		INSERT INTO upstream_sites (id, channel_id, name, homepage_url, base_url, login_url, kind, detection_confidence, health_status, supports_checkin, supports_balance, supports_models, supports_pricing, detection_json, last_health_check_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, siteID, input.ChannelID, input.Name, homepageURL, baseURL, loginURL, kind, confidence, healthStatus, boolInt(supportsCheckin), boolInt(supportsBalance), boolInt(supportsModels), boolInt(supportsPricing), detectionJSON, s.infra.Now(), s.infra.Now(), s.infra.Now())
+		INSERT INTO upstream_sites (id, channel_id, name, homepage_url, base_url, login_url, login_url_source, login_url_confidence, login_discovery_json, kind, detection_confidence, health_status, supports_checkin, supports_balance, supports_models, supports_pricing, detection_json, last_health_check_at, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, siteID, input.ChannelID, input.Name, homepageURL, baseURL, login.URL, login.Source, login.Confidence, login.DiscoveryJSON, kind, confidence, healthStatus, boolInt(supportsCheckin), boolInt(supportsBalance), boolInt(supportsModels), boolInt(supportsPricing), detectionJSON, s.infra.Now(), s.infra.Now(), s.infra.Now())
 	return siteID, true, err
 }
 
@@ -288,6 +312,172 @@ func MarshalDetection(detection *Detection) string {
 		return ""
 	}
 	return string(payload)
+}
+
+type existingLoginFields struct {
+	URL        string
+	Source     string
+	Confidence float64
+}
+
+type storedLoginFields struct {
+	URL           string
+	Source        string
+	Confidence    float64
+	Discovery     *LoginDiscovery
+	DiscoveryJSON string
+}
+
+func (s *Service) existingLoginFields(ctx context.Context, id string) existingLoginFields {
+	var existing existingLoginFields
+	_ = s.infra.DB().QueryRowContext(ctx, `
+		SELECT COALESCE(login_url,''), COALESCE(login_url_source,''), COALESCE(login_url_confidence,0)
+		FROM upstream_sites
+		WHERE id=?
+	`, id).Scan(&existing.URL, &existing.Source, &existing.Confidence)
+	return existing
+}
+
+func storedLoginForDetection(baseURL string, detection *Detection, manualLoginURL string, existing existingLoginFields) storedLoginFields {
+	auto := autoLoginDiscovery(baseURL, detection)
+	manualLoginURL = strings.TrimSpace(manualLoginURL)
+	if manualLoginURL != "" {
+		return storedLoginFromDiscovery(manualLoginDiscovery(manualLoginURL, 1, auto))
+	}
+	if detection == nil && strings.TrimSpace(existing.URL) != "" {
+		return storedLoginFromDiscovery(existingLoginDiscovery(existing))
+	}
+	if shouldPreserveExistingLogin(baseURL, existing) {
+		source := strings.TrimSpace(existing.Source)
+		if source == "" {
+			source = "manual"
+		}
+		confidence := existing.Confidence
+		if confidence <= 0 {
+			confidence = 1
+		}
+		return storedLoginFromDiscovery(manualLoginDiscovery(existing.URL, confidence, auto))
+	}
+	return storedLoginFromDiscovery(auto)
+}
+
+func existingLoginDiscovery(existing existingLoginFields) *LoginDiscovery {
+	loginURL := strings.TrimSpace(existing.URL)
+	source := strings.TrimSpace(existing.Source)
+	if source == "" {
+		source = "manual"
+	}
+	confidence := existing.Confidence
+	if confidence <= 0 {
+		confidence = 1
+	}
+	return &LoginDiscovery{
+		URL:        loginURL,
+		Source:     source,
+		Confidence: confidence,
+		Candidates: []string{loginURL},
+	}
+}
+
+func autoLoginDiscovery(baseURL string, detection *Detection) *LoginDiscovery {
+	if detection != nil && detection.LoginDiscovery != nil {
+		return cloneLoginDiscovery(detection.LoginDiscovery)
+	}
+	loginURL := ""
+	if detection != nil {
+		loginURL = strings.TrimSpace(detection.LoginURL)
+	}
+	if loginURL == "" {
+		loginURL = defaultLoginURL(baseURL)
+	}
+	return &LoginDiscovery{
+		URL:        loginURL,
+		Source:     "fallback",
+		Confidence: 0.40,
+		Candidates: []string{loginURL},
+	}
+}
+
+func manualLoginDiscovery(loginURL string, confidence float64, auto *LoginDiscovery) *LoginDiscovery {
+	candidates := newLoginCandidateSet()
+	candidates.add(loginURL)
+	if auto != nil {
+		for _, candidate := range auto.Candidates {
+			candidates.add(candidate)
+		}
+		if auto.URL != "" {
+			candidates.add(auto.URL)
+		}
+	}
+	return &LoginDiscovery{
+		URL:        loginURL,
+		Source:     "manual",
+		Confidence: confidence,
+		Candidates: candidates.values(),
+	}
+}
+
+func storedLoginFromDiscovery(discovery *LoginDiscovery) storedLoginFields {
+	if discovery == nil {
+		discovery = &LoginDiscovery{}
+	}
+	return storedLoginFields{
+		URL:           discovery.URL,
+		Source:        discovery.Source,
+		Confidence:    discovery.Confidence,
+		Discovery:     cloneLoginDiscovery(discovery),
+		DiscoveryJSON: marshalLoginDiscovery(discovery),
+	}
+}
+
+func cloneLoginDiscovery(input *LoginDiscovery) *LoginDiscovery {
+	if input == nil {
+		return nil
+	}
+	return &LoginDiscovery{
+		URL:        input.URL,
+		Source:     input.Source,
+		Confidence: input.Confidence,
+		Candidates: append([]string{}, input.Candidates...),
+	}
+}
+
+func marshalLoginDiscovery(discovery *LoginDiscovery) string {
+	if discovery == nil {
+		return ""
+	}
+	payload, err := json.Marshal(discovery)
+	if err != nil {
+		return ""
+	}
+	return string(payload)
+}
+
+func parseLoginDiscoveryJSON(raw string) *LoginDiscovery {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var discovery LoginDiscovery
+	if err := json.Unmarshal([]byte(raw), &discovery); err != nil {
+		return nil
+	}
+	return &discovery
+}
+
+func shouldPreserveExistingLogin(baseURL string, existing existingLoginFields) bool {
+	loginURL := strings.TrimSpace(existing.URL)
+	if loginURL == "" {
+		return false
+	}
+	source := strings.ToLower(strings.TrimSpace(existing.Source))
+	if source == "manual" {
+		return true
+	}
+	return source == "" && loginURL != defaultLoginURL(baseURL)
+}
+
+func defaultLoginURL(baseURL string) string {
+	return strings.TrimRight(baseURL, "/") + "/login"
 }
 
 // NormalizeOfficialProviderSite forces official-provider sites to a canonical
