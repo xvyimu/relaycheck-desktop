@@ -10705,6 +10705,42 @@ input[type="checkbox"] {
   padding: 10px;
 }
 
+.site-login-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.site-login-candidates {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.site-login-candidates > span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.site-login-candidates > div,
+.site-suggestions {
+  display: grid;
+  gap: 6px;
+}
+
+.site-login-candidates code,
+.site-suggestions span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(71, 85, 105, 0.1);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #172033;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .site-actions {
   flex-wrap: wrap;
   justify-content: flex-end;

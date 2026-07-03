@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
 import { formatConfidence, formatDuration, formatTime } from "@/lib/format";
-import type { NextRunItem, NavigationIntent, UpstreamSite } from "@/types";
+import type { LoginDiscovery, NextRunItem, NavigationIntent, SiteDetail, UpstreamSite } from "@/types";
 import { useNextRuns } from "@/hooks/useNextRuns";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
@@ -25,8 +25,42 @@ function capabilityLabel(enabled?: boolean) {
   return enabled ? "支持" : "未知/否";
 }
 
+function loginDiscoverySourceLabel(source?: string) {
+  switch ((source || "").toLowerCase()) {
+    case "manual":
+      return "手动指定";
+    case "html_form":
+      return "登录表单";
+    case "html_link":
+      return "页面链接";
+    case "path_probe":
+      return "路径探测";
+    case "spa_fallback":
+      return "SPA 回退";
+    case "fallback":
+      return "默认回退";
+    default:
+      return source || "未知";
+  }
+}
+
+function parseLoginDiscovery(raw?: string): LoginDiscovery | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as LoginDiscovery;
+  } catch {
+    return null;
+  }
+}
+
+function siteLoginDiscovery(site: UpstreamSite, detection?: SiteDetail["detection"]): LoginDiscovery | null {
+  return site.loginDiscovery || parseLoginDiscovery(site.loginDiscoveryJson) || detection?.loginDiscovery || null;
+}
+
 function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
   const [busyId, setBusyId] = useState("");
+  const [detailBusyId, setDetailBusyId] = useState("");
+  const [detail, setDetail] = useState<SiteDetail | null>(null);
   const [message, setMessage] = useState("");
   const [healthFilter, setHealthFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
@@ -99,6 +133,30 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
       setBusyId("");
     }
   }
+
+  async function openDetail(site: UpstreamSite) {
+    setDetailBusyId(site.id);
+    setMessage("");
+    try {
+      setDetail(await api<SiteDetail>(`/api/upstream-sites/${site.id}`));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "加载站点详情失败。");
+    } finally {
+      setDetailBusyId("");
+    }
+  }
+
+  useEffect(() => {
+    if (!detail) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setDetail(null);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [detail]);
+
+  const detailDiscovery = detail ? siteLoginDiscovery(detail.site, detail.detection) : null;
+  const detailCandidates = detailDiscovery?.candidates?.filter(Boolean).slice(0, 6) || [];
 
   return (
     <section className="sites-panel">
@@ -249,6 +307,14 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
 
               <div className="site-actions">
                 <button
+                  type="button"
+                  className="ghost"
+                  disabled={detailBusyId === site.id}
+                  onClick={() => void openDetail(site)}
+                >
+                  {detailBusyId === site.id ? "加载中…" : "详情"}
+                </button>
+                <button
                   disabled={busyId === site.id}
                   onClick={() => void detect(site)}
                   type="button"
@@ -268,6 +334,96 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
           </div>
         ) : null}
       </div>
+
+      {detail ? (
+        <div className="drawer-backdrop" role="presentation" onClick={() => setDetail(null)}>
+          <aside
+            className="detail-drawer detail-drawer-wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="site-detail-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="detail-header">
+              <div>
+                <span className="eyebrow">站点详情</span>
+                <h2 id="site-detail-title">{detail.site.name}</h2>
+                <p>{detail.site.kind || "unknown"} · {detail.site.healthStatus || "未知"}</p>
+              </div>
+              <button type="button" className="ghost" onClick={() => setDetail(null)}>关闭</button>
+            </div>
+
+            <div className="detail-grid">
+              <section className="detail-card">
+                <h3>入口</h3>
+                <div className="detail-list">
+                  <div><span>基础网址</span><strong>{detail.site.baseUrl || "-"}</strong></div>
+                  <div><span>主页</span><strong>{detail.site.homepageUrl || detail.detection.homepageUrl || "-"}</strong></div>
+                  <div><span>登录网址</span><strong>{detail.site.loginUrl || detail.detection.loginUrl || "-"}</strong></div>
+                </div>
+              </section>
+
+              <section className="detail-card">
+                <h3>登录识别</h3>
+                <div className="detail-metrics site-login-metrics">
+                  <div>
+                    <span>来源</span>
+                    <strong>{loginDiscoverySourceLabel(detailDiscovery?.source || detail.site.loginUrlSource)}</strong>
+                  </div>
+                  <div>
+                    <span>置信度</span>
+                    <strong>{formatConfidence(detailDiscovery?.confidence ?? detail.site.loginUrlConfidence)}</strong>
+                  </div>
+                </div>
+                {detailDiscovery && detailDiscovery.confidence < 0.6 ? (
+                  <div className="problem-hint detail-hint">登录入口置信度偏低，建议打开站点确认一次。</div>
+                ) : null}
+                {detailCandidates.length ? (
+                  <div className="site-login-candidates">
+                    <span>候选入口</span>
+                    <div>
+                      {detailCandidates.map((candidate) => (
+                        <code key={candidate}>{candidate}</code>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="detail-card">
+                <h3>能力</h3>
+                <div className="chips">
+                  <span>签到 {capabilityLabel(detail.site.supportsCheckin)}</span>
+                  <span>余额 {capabilityLabel(detail.site.supportsBalance)}</span>
+                  <span>模型 {capabilityLabel(detail.site.supportsModels)}</span>
+                  <span>价格 {capabilityLabel(detail.site.supportsPricing)}</span>
+                </div>
+              </section>
+
+              <section className="detail-card">
+                <h3>探测</h3>
+                <div className="detail-list">
+                  <div><span>后台类型</span><strong>{detail.detection.kind || detail.site.kind || "未知"}</strong></div>
+                  <div><span>健康状态</span><strong>{detail.detection.healthStatus || detail.site.healthStatus || "未知"}</strong></div>
+                  <div><span>识别置信度</span><strong>{formatConfidence(detail.detection.detectionConfidence)}</strong></div>
+                  <div><span>最近检查</span><strong>{formatTime(detail.site.lastHealthCheckAt || "")}</strong></div>
+                </div>
+              </section>
+
+              {detail.suggestions.length ? (
+                <section className="detail-card">
+                  <h3>建议</h3>
+                  <div className="site-suggestions">
+                    {detail.suggestions.map((suggestion) => (
+                      <span key={suggestion}>{suggestion}</span>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          </aside>
+        </div>
+      ) : null}
     </section>
   );
 }
