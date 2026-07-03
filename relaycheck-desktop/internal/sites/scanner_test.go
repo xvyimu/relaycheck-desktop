@@ -243,6 +243,174 @@ func TestDetectUpstreamRecognizesModifiedNewAPIByLoginAPI(t *testing.T) {
 	}
 }
 
+func TestDetectUpstreamDiscoversHomepageLoginLink(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			_, _ = w.Write([]byte(`<html><body><a href="/console/login">登录</a></body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	svc := newTestService(server)
+	detection := svc.DetectUpstream(context.Background(), server.URL)
+
+	want := server.URL + "/console/login"
+	if detection.LoginURL != want {
+		t.Fatalf("expected login URL %q, got %q", want, detection.LoginURL)
+	}
+	assertLoginDiscovery(t, detection.LoginDiscovery, want, "html_link", 0.85)
+}
+
+func TestDetectUpstreamDiscoversLoginLinkByText(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			_, _ = w.Write([]byte(`<html><body><a href="/console">登录</a></body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	svc := newTestService(server)
+	detection := svc.DetectUpstream(context.Background(), server.URL)
+
+	want := server.URL + "/console"
+	if detection.LoginURL != want {
+		t.Fatalf("expected login URL %q, got %q", want, detection.LoginURL)
+	}
+	assertLoginDiscovery(t, detection.LoginDiscovery, want, "html_link", 0.85)
+}
+
+func TestDetectUpstreamPreservesSameOriginLoginFragment(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			_, _ = w.Write([]byte(`<html><body><a href="/#/login">Login</a></body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	svc := newTestService(server)
+	detection := svc.DetectUpstream(context.Background(), server.URL)
+
+	want := server.URL + "/#/login"
+	if detection.LoginURL != want {
+		t.Fatalf("expected login URL %q, got %q", want, detection.LoginURL)
+	}
+	assertLoginDiscovery(t, detection.LoginDiscovery, want, "html_link", 0.85)
+}
+
+func TestDetectUpstreamDiscoversPasswordFormOnCandidatePage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/console/login":
+			_, _ = w.Write([]byte(`<html><body><form action="/api/user/login"><input name="password" type="password"></form></body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	svc := newTestService(server)
+	detection := svc.DetectUpstream(context.Background(), server.URL)
+
+	want := server.URL + "/console/login"
+	if detection.LoginURL != want {
+		t.Fatalf("expected login URL %q, got %q", want, detection.LoginURL)
+	}
+	assertLoginDiscovery(t, detection.LoginDiscovery, want, "html_form", 0.95)
+}
+
+func TestDetectUpstreamDiscoversFixedLoginCandidate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/panel/login":
+			_, _ = w.Write([]byte(`<html><title>Sign in</title><body>用户登录 令牌 渠道 额度</body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	svc := newTestService(server)
+	detection := svc.DetectUpstream(context.Background(), server.URL)
+
+	want := server.URL + "/panel/login"
+	if detection.LoginURL != want {
+		t.Fatalf("expected login URL %q, got %q", want, detection.LoginURL)
+	}
+	assertLoginDiscovery(t, detection.LoginDiscovery, want, "path_probe", 0.75)
+}
+
+func TestDetectUpstreamUsesSPAFallbackForLoginShell(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/", "/login":
+			_, _ = w.Write([]byte(`<html><body><div id="root"></div><script src="/assets/app.js"></script><script>window.route="login-panel"</script></body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	svc := newTestService(server)
+	detection := svc.DetectUpstream(context.Background(), server.URL)
+
+	want := server.URL + "/login"
+	if detection.LoginURL != want {
+		t.Fatalf("expected login URL %q, got %q", want, detection.LoginURL)
+	}
+	assertLoginDiscovery(t, detection.LoginDiscovery, want, "spa_fallback", 0.60)
+}
+
+func TestDetectUpstreamFallsBackToLoginPathWhenNoCandidateMatches(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	svc := newTestService(server)
+	detection := svc.DetectUpstream(context.Background(), server.URL)
+
+	want := server.URL + "/login"
+	if detection.LoginURL != want {
+		t.Fatalf("expected fallback login URL %q, got %q", want, detection.LoginURL)
+	}
+	assertLoginDiscovery(t, detection.LoginDiscovery, want, "fallback", 0.40)
+}
+
+func TestDetectUpstreamKeepsLoginCandidatesSameOriginAndDeduplicated(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			_, _ = w.Write([]byte(`<html><body>
+				<a href="/login">Login</a>
+				<a href="/login">登录</a>
+				<a href="https://evil.example/login">Login</a>
+			</body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	svc := newTestService(server)
+	detection := svc.DetectUpstream(context.Background(), server.URL)
+
+	want := server.URL + "/login"
+	assertLoginDiscovery(t, detection.LoginDiscovery, want, "html_link", 0.85)
+	if got := countString(detection.LoginDiscovery.Candidates, want); got != 1 {
+		t.Fatalf("expected %q once in candidates, got %d in %v", want, got, detection.LoginDiscovery.Candidates)
+	}
+	if containsString(detection.LoginDiscovery.Candidates, "https://evil.example/login") {
+		t.Fatalf("expected cross-origin candidate to be ignored, got %v", detection.LoginDiscovery.Candidates)
+	}
+}
+
 func TestHostLabel(t *testing.T) {
 	cases := []struct {
 		raw  string
@@ -314,4 +482,33 @@ func containsString(values []string, wanted string) bool {
 		}
 	}
 	return false
+}
+
+func countString(values []string, wanted string) int {
+	count := 0
+	for _, value := range values {
+		if value == wanted {
+			count++
+		}
+	}
+	return count
+}
+
+func assertLoginDiscovery(t *testing.T, discovery *LoginDiscovery, url string, source string, confidence float64) {
+	t.Helper()
+	if discovery == nil {
+		t.Fatal("expected login discovery to be present")
+	}
+	if discovery.URL != url {
+		t.Fatalf("expected discovery URL %q, got %q", url, discovery.URL)
+	}
+	if discovery.Source != source {
+		t.Fatalf("expected discovery source %q, got %q", source, discovery.Source)
+	}
+	if discovery.Confidence != confidence {
+		t.Fatalf("expected discovery confidence %.2f, got %.2f", confidence, discovery.Confidence)
+	}
+	if !containsString(discovery.Candidates, url) {
+		t.Fatalf("expected candidates to include %q, got %v", url, discovery.Candidates)
+	}
 }

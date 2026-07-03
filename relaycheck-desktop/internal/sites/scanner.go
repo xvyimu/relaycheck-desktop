@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -42,6 +43,21 @@ var upstreamProbePaths = []string{
 	"/api/v1/keys", "/api/v1/tokens", "/api/v1/accounts", "/api/v1/groups/available",
 	"/api/v1/channels/available", "/api/v1/subscriptions/active", "/api/v1/user/platform-quotas",
 }
+
+var loginProbePaths = []string{
+	"/login",
+	"/console/login",
+	"/panel/login",
+	"/admin/login",
+	"/user/login",
+	"/auth/login",
+	"/signin",
+	"/sign-in",
+}
+
+var loginAnchorPattern = regexp.MustCompile(`(?is)<a\b([^>]*)>(.*?)</a>`)
+var loginHrefPattern = regexp.MustCompile(`(?is)\bhref\s*=\s*["']([^"']+)["']`)
+var loginAttributePattern = regexp.MustCompile(`(?is)\b(?:href|action)\s*=\s*["']([^"']+)["']`)
 
 // checkinCandidate mirrors the host's apiCandidate for probe-path assembly.
 // It is duplicated here so the sites package does not import core.
@@ -159,9 +175,14 @@ func (s *Service) DetectUpstream(ctx context.Context, raw string) Detection {
 	signals := map[string]bool{}
 	reachable := false
 	statusByPath := map[string]int{}
-	specs := make([]probeSpec, 0, len(upstreamProbePaths)+len(checkinCandidates))
+	specs := make([]probeSpec, 0, len(upstreamProbePaths)+len(loginProbePaths)+len(checkinCandidates))
 	for _, path := range upstreamProbePaths {
 		specs = append(specs, probeSpec{Method: http.MethodGet, Path: path, StatusKey: path})
+	}
+	for _, path := range loginProbePaths {
+		if !hasProbeSpecPath(specs, http.MethodGet, path) {
+			specs = append(specs, probeSpec{Method: http.MethodGet, Path: path, StatusKey: path})
+		}
 	}
 	specs = append(specs,
 		probeSpec{Method: http.MethodPost, Path: "/api/v1/auth/login", StatusKey: "POST /api/v1/auth/login"},
@@ -172,7 +193,8 @@ func (s *Service) DetectUpstream(ctx context.Context, raw string) Detection {
 		specs = append(specs, probeSpec{Method: candidate.Method, Path: candidate.Path, StatusKey: candidate.Method + " " + candidate.Path, Checkin: true})
 	}
 	checkin := false
-	for _, result := range s.fetchProbeBatch(ctx, baseURL, specs, 8) {
+	probeResults := s.fetchProbeBatch(ctx, baseURL, specs, 8)
+	for _, result := range probeResults {
 		statusByPath[result.Spec.StatusKey] = result.Status
 		if result.Status > 0 {
 			reachable = true
@@ -232,9 +254,10 @@ func (s *Service) DetectUpstream(ctx context.Context, raw string) Detection {
 	pricing := endpointLooksPresent(statusByPath["/api/pricing"]) || signals["pricing-json"]
 	balance := endpointLooksPresent(statusByPath["/v1/usage"]) || endpointLooksPresent(statusByPath["/api/user/self"]) || endpointLooksPresent(statusByPath["/api/user/quota"]) || endpointLooksPresent(statusByPath["/api/v1/subscriptions/active"]) || endpointLooksPresent(statusByPath["/api/v1/user/platform-quotas"])
 	confidence := detectionConfidence(kind, signals, panelSignals, sub2apiSignals)
+	loginDiscovery := discoverLogin(baseURL, probeResults)
 
 	return Detection{
-		BaseURL: baseURL, HomepageURL: baseURL, LoginURL: baseURL + "/login",
+		BaseURL: baseURL, HomepageURL: baseURL, LoginURL: loginDiscovery.URL, LoginDiscovery: loginDiscovery,
 		Kind: kind, HealthStatus: health, DetectionConfidence: confidence,
 		SupportsCheckin: checkin, SupportsBalance: balance, SupportsModels: models, SupportsPricing: pricing,
 		MatchedSignals: signalList(signals),
@@ -296,6 +319,252 @@ func (s *Service) fetchTextWithMethod(ctx context.Context, method string, target
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
 	return resp.StatusCode, string(body)
+}
+
+func hasProbeSpecPath(specs []probeSpec, method string, path string) bool {
+	for _, spec := range specs {
+		if spec.Method == method && spec.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+func discoverLogin(baseURL string, results []probeFetchResult) *LoginDiscovery {
+	candidates := newLoginCandidateSet()
+	var best *LoginDiscovery
+
+	for _, result := range results {
+		if result.Spec.Method != http.MethodGet || result.Status == 0 || result.Status == http.StatusNotFound {
+			continue
+		}
+		if !looksLikeHTMLPayload(result.Body) {
+			continue
+		}
+		if looksLikeExplicitLoginForm(result.Body) {
+			candidate := resolveSameOriginURL(baseURL, result.Spec.Path, "/login")
+			candidates.add(candidate)
+			best = betterLoginDiscovery(best, &LoginDiscovery{URL: candidate, Source: "html_form", Confidence: 0.95})
+			continue
+		}
+		for _, candidate := range extractLoginCandidatesFromHTML(baseURL, result.Body) {
+			candidates.add(candidate)
+			best = betterLoginDiscovery(best, &LoginDiscovery{
+				URL:        candidate,
+				Source:     loginHTMLSource(result.Body),
+				Confidence: loginHTMLConfidence(result.Body),
+			})
+		}
+	}
+
+	for _, result := range results {
+		if result.Spec.Method != http.MethodGet || !isLoginProbePath(result.Spec.Path) {
+			continue
+		}
+		if result.Status == 0 || result.Status == http.StatusNotFound {
+			continue
+		}
+		candidate := resolveSameOriginURL(baseURL, result.Spec.Path, "/login")
+		if looksLikeExplicitLoginForm(result.Body) {
+			candidates.add(candidate)
+			best = betterLoginDiscovery(best, &LoginDiscovery{URL: candidate, Source: "html_form", Confidence: 0.95})
+			continue
+		}
+		if result.Spec.Path != "/login" && looksLikeLoginPage(result.Status, result.Body) {
+			candidates.add(candidate)
+			best = betterLoginDiscovery(best, &LoginDiscovery{URL: candidate, Source: "path_probe", Confidence: 0.75})
+			continue
+		}
+		if result.Spec.Path == "/login" && looksLikeSPALoginFallback(result.Status, result.Body) {
+			candidates.add(candidate)
+			best = betterLoginDiscovery(best, &LoginDiscovery{URL: candidate, Source: "spa_fallback", Confidence: 0.60})
+		}
+	}
+
+	if best == nil {
+		best = &LoginDiscovery{URL: resolveSameOriginURL(baseURL, "/login", "/login"), Source: "fallback", Confidence: 0.40}
+		candidates.add(best.URL)
+	}
+	best.Candidates = candidates.values()
+	return best
+}
+
+type loginCandidateSet struct {
+	seen  map[string]bool
+	items []string
+}
+
+func newLoginCandidateSet() *loginCandidateSet {
+	return &loginCandidateSet{seen: map[string]bool{}}
+}
+
+func (s *loginCandidateSet) add(candidate string) {
+	if candidate == "" || s.seen[candidate] {
+		return
+	}
+	s.seen[candidate] = true
+	s.items = append(s.items, candidate)
+}
+
+func (s *loginCandidateSet) values() []string {
+	out := make([]string, len(s.items))
+	copy(out, s.items)
+	return out
+}
+
+func betterLoginDiscovery(current *LoginDiscovery, candidate *LoginDiscovery) *LoginDiscovery {
+	if candidate == nil || candidate.URL == "" {
+		return current
+	}
+	if current == nil || candidate.Confidence > current.Confidence {
+		return candidate
+	}
+	return current
+}
+
+func extractLoginCandidatesFromHTML(baseURL string, body string) []string {
+	if body == "" {
+		return nil
+	}
+	candidates := newLoginCandidateSet()
+	for _, match := range loginAnchorPattern.FindAllStringSubmatch(body, -1) {
+		if len(match) < 3 {
+			continue
+		}
+		hrefMatch := loginHrefPattern.FindStringSubmatch(match[1])
+		if len(hrefMatch) < 2 {
+			continue
+		}
+		if looksLikeLoginReference(hrefMatch[1]) || looksLikeLoginText(match[2]) {
+			candidates.add(resolveSameOriginURL(baseURL, hrefMatch[1], ""))
+		}
+	}
+	matches := loginAttributePattern.FindAllStringSubmatch(body, -1)
+	for _, match := range matches {
+		if len(match) < 2 || !looksLikeLoginReference(match[1]) {
+			continue
+		}
+		candidates.add(resolveSameOriginURL(baseURL, match[1], ""))
+	}
+	return candidates.values()
+}
+
+func loginHTMLSource(body string) string {
+	if looksLikeExplicitLoginForm(body) {
+		return "html_form"
+	}
+	return "html_link"
+}
+
+func loginHTMLConfidence(body string) float64 {
+	if looksLikeExplicitLoginForm(body) {
+		return 0.95
+	}
+	return 0.85
+}
+
+func resolveSameOriginURL(baseURL string, raw string, fallbackPath string) string {
+	base, err := url.Parse(strings.TrimRight(baseURL, "/") + "/")
+	if err != nil || base.Scheme == "" || base.Host == "" {
+		return strings.TrimRight(baseURL, "/") + "/" + strings.TrimLeft(raw, "/")
+	}
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		if fallbackPath == "" {
+			return ""
+		}
+		return base.ResolveReference(&url.URL{Path: fallbackPath}).String()
+	}
+	resolved := base.ResolveReference(parsed)
+	if resolved.Scheme != "http" && resolved.Scheme != "https" {
+		if fallbackPath == "" {
+			return ""
+		}
+		return base.ResolveReference(&url.URL{Path: fallbackPath}).String()
+	}
+	if !strings.EqualFold(resolved.Host, base.Host) {
+		if fallbackPath == "" {
+			return ""
+		}
+		return base.ResolveReference(&url.URL{Path: fallbackPath}).String()
+	}
+	return resolved.String()
+}
+
+func looksLikeLoginReference(raw string) bool {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	if value == "" || strings.HasPrefix(value, "#") || strings.HasPrefix(value, "javascript:") || strings.HasPrefix(value, "mailto:") {
+		return false
+	}
+	return strings.Contains(value, "login") ||
+		strings.Contains(value, "signin") ||
+		strings.Contains(value, "sign-in") ||
+		strings.Contains(value, "auth")
+}
+
+func looksLikeLoginText(raw string) bool {
+	text := strings.ToLower(raw)
+	return strings.Contains(text, "login") ||
+		strings.Contains(text, "sign in") ||
+		strings.Contains(text, "signin") ||
+		strings.Contains(text, "sign-in") ||
+		strings.Contains(raw, "登录") ||
+		strings.Contains(raw, "登入")
+}
+
+func looksLikeHTMLPayload(body string) bool {
+	text := strings.ToLower(body)
+	return strings.Contains(text, "<html") ||
+		strings.Contains(text, "<body") ||
+		strings.Contains(text, "<a ") ||
+		strings.Contains(text, "<form") ||
+		strings.Contains(text, "<script") ||
+		strings.Contains(text, `id="root"`) ||
+		strings.Contains(text, `id="app"`)
+}
+
+func isLoginProbePath(path string) bool {
+	for _, candidate := range loginProbePaths {
+		if path == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func looksLikeExplicitLoginForm(body string) bool {
+	text := strings.ToLower(body)
+	return strings.Contains(text, "<form") && strings.Contains(text, "password")
+}
+
+func looksLikeLoginPage(status int, body string) bool {
+	if status != http.StatusOK {
+		return false
+	}
+	text := strings.ToLower(body)
+	return looksLikeExplicitLoginForm(body) ||
+		strings.Contains(text, "login") ||
+		strings.Contains(text, "sign in") ||
+		strings.Contains(text, "signin") ||
+		strings.Contains(body, "登录") ||
+		containsAny(body, "用户登录", "后台登录", "管理员登录")
+}
+
+func looksLikeSPALoginFallback(status int, body string) bool {
+	if status != http.StatusOK {
+		return false
+	}
+	text := strings.ToLower(body)
+	hasShell := strings.Contains(text, "<script") || strings.Contains(text, `id="root"`) || strings.Contains(text, `id="app"`)
+	hasLoginSignal := strings.Contains(text, "login") ||
+		strings.Contains(text, "signin") ||
+		strings.Contains(text, "sign-in") ||
+		strings.Contains(body, "登录")
+	hasPanelSignal := strings.Contains(text, "panel") ||
+		strings.Contains(text, "dashboard") ||
+		strings.Contains(text, "admin") ||
+		strings.Contains(body, "后台")
+	return hasShell && hasLoginSignal && hasPanelSignal
 }
 
 func inspectSignals(path string, status int, body string, signals map[string]bool) {
