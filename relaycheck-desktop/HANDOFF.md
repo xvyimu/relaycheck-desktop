@@ -9,7 +9,12 @@ Read this first, then `CLAUDE.md` for architecture.
 
 ## Current state
 
-The project is stable. This session has uncommitted schedule UI/API hardening changes in:
+The project is stable. The schedule UI/API hardening work is committed and pushed:
+
+- Commit: `09969ad` — `fix(scheduler): harden per-site schedule settings`
+- Pushed to `origin/main`
+
+Files changed by that commit:
 
 - `frontend/src/components/settings/SiteSchedules.tsx`
 - `frontend/src/styles.css`
@@ -31,7 +36,7 @@ git diff --check
 
 ## What landed this session
 
-### Schedule UI/API hardening (pending commit)
+### Schedule UI/API hardening
 
 - `internal/core/channel_schedules.go`: added random delay validation for per-site schedules (`0 <= min <= max <= 120`) before DB writes, so bad payloads return HTTP 400 instead of leaking into persistence or surfacing as 500.
 - `internal/core/channel_schedules_test.go`: added table-driven regression coverage for negative delay, delay above 120, and `min > max`.
@@ -108,11 +113,6 @@ All `context.Background()` calls in `scheduler.go` have been replaced with the c
 
 ## Suggested next steps (priority order)
 
-### 0. Commit the schedule hardening change
-
-- Current hardening changes are verified, including `npm run smoke:schedules`.
-- Commit with a message like `fix(scheduler): harden per-site schedule settings`.
-
 ### 1. Raise test coverage in core, accounts, channels, and notifications
 
 - `internal/core`: Create `Infra` mock to test handler paths (current pure-function tests only moved coverage 0.3%)
@@ -153,6 +153,7 @@ All `context.Background()` calls in `scheduler.go` have been replaced with the c
 
 | Date | Session | Outcome |
 |------|---------|---------|
+| 2026-07-03 | Schedule UI/API hardening | `09969ad`: per-site schedule random-delay validation, non-silent preview failures, responsive schedule preview rows, `npm run smoke:schedules`. Verification passed and pushed to `origin/main`. |
 | 2026-07-02 | rootCtx lifecycle + cleanup | `9fb28d4`: StartSchedulers derives from a.rootCtx. `ac8687e`: all remaining context.Background() in scheduler.go replaced with ctx. 861 tests pass. |
 | 2026-07-02 | Coverage sprint G0–G2 | G0: 8 commits pushed. G1: weighted avg 61.4% (beat 55%). G2: 187 frontend tests. New: crypto_util_test, filters_test, helpers_test, versioncheck extended, backup service_test. |
 | 2026-07-02 | Domain coverage batch | +2035 lines across 7 test files + 1 extraction. channels 14%→60.7%, accounts 19.6%→25.4%, versioncheck 27.3%→32.8% |
