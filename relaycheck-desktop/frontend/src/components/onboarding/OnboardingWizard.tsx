@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/api/client";
+import { LineIcon } from "@/components/ui/line-icon";
+import type { LineIconName } from "@/types";
 
 const ONBOARDING_FLAG = "relaycheck_onboarding_done";
 const REOPEN_EVENT = "relaycheck:reopen-onboarding";
@@ -9,7 +11,7 @@ type StepKey = "connect" | "channels" | "credentials" | "checkin";
 interface StepMeta {
   key: StepKey;
   index: number;
-  icon: string;
+  icon: LineIconName;
   title: string;
   description: string;
 }
@@ -18,32 +20,46 @@ const STEPS: StepMeta[] = [
   {
     key: "connect",
     index: 1,
-    icon: "🔗",
+    icon: "sites",
     title: "连接 NewAPI",
     description: "填入 NewAPI 后台地址和访问令牌，工具会自动导入渠道结构。",
   },
   {
     key: "channels",
     index: 2,
-    icon: "📡",
+    icon: "channels",
     title: "导入渠道",
     description: "去渠道页操作导入，或直接在这里触发一次模型同步。",
   },
   {
     key: "credentials",
     index: 3,
-    icon: "🔑",
+    icon: "accounts",
     title: "配置凭据",
     description: "去账号页为每个站点补充登录凭据或 API Key。",
   },
   {
     key: "checkin",
     index: 4,
-    icon: "✅",
+    icon: "checkins",
     title: "试签到一次",
     description: "触发一次签到任务，验证整条链路是否畅通。",
   },
 ];
+
+export function OnboardingStepIcon({ name }: { name: LineIconName }) {
+  return (
+    <div className="onboarding-step-icon" aria-hidden="true">
+      <LineIcon name={name} />
+    </div>
+  );
+}
+
+export function onboardingStatusProps(kind: "success" | "danger") {
+  return kind === "danger"
+    ? ({ role: "alert", "aria-live": "assertive", "aria-atomic": true } as const)
+    : ({ role: "status", "aria-live": "polite", "aria-atomic": true } as const);
+}
 
 interface ImportFromAdminResult {
   instanceId?: string;
@@ -100,6 +116,8 @@ export function OnboardingWizard() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const baseUrlInputRef = useRef<HTMLInputElement>(null);
 
   // Step 1 form state
   const [baseUrl, setBaseUrl] = useState("");
@@ -132,6 +150,15 @@ export function OnboardingWizard() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (stepIndex === 0) {
+      baseUrlInputRef.current?.focus();
+      return;
+    }
+    dialogRef.current?.focus();
+  }, [open, stepIndex]);
 
   function close() {
     markOnboardingDone();
@@ -213,16 +240,19 @@ export function OnboardingWizard() {
 
   return (
     <div className="onboarding-overlay" role="presentation">
-      <div className="onboarding-card" role="dialog" aria-modal="true" aria-label="首次启动引导">
+      <div className="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" tabIndex={-1} ref={dialogRef}>
         <header className="onboarding-header">
           <div className="onboarding-title">
             <span className="onboarding-brand">RelayCheck</span>
             <span className="onboarding-eyebrow">首次启动引导</span>
           </div>
-          <div className="onboarding-steps" aria-label="步骤指示器">
+          <div className="onboarding-steps" role="list" aria-label="步骤指示器">
             {STEPS.map((item, idx) => (
               <span
                 key={item.key}
+                role="listitem"
+                aria-current={idx === stepIndex ? "step" : undefined}
+                aria-label={`步骤 ${item.index}/${STEPS.length}：${item.title}${idx < stepIndex ? "，已完成" : ""}`}
                 className={
                   "onboarding-step-dot" +
                   (idx === stepIndex ? " active" : "") +
@@ -238,14 +268,12 @@ export function OnboardingWizard() {
 
         <div className="onboarding-body">
           <div className="onboarding-step">
-            <div className="onboarding-step-icon" aria-hidden="true">
-              {step.icon}
-            </div>
+            <OnboardingStepIcon name={step.icon} />
             <div className="onboarding-step-text">
               <div className="onboarding-step-meta">
                 步骤 {step.index}/{STEPS.length}
               </div>
-              <h3 className="onboarding-step-title">{step.title}</h3>
+              <h3 className="onboarding-step-title" id="onboarding-title">{step.title}</h3>
               <p className="onboarding-step-desc">{step.description}</p>
             </div>
           </div>
@@ -267,11 +295,15 @@ export function OnboardingWizard() {
               <label className="onboarding-field">
                 <span>NewAPI 后台地址</span>
                 <input
-                  type="text"
+                  ref={baseUrlInputRef}
+                  type="url"
+                  inputMode="url"
                   value={baseUrl}
                   onChange={(event) => setBaseUrl(event.target.value)}
                   placeholder="https://your-newapi.example.com"
-                  autoComplete="off"
+                  autoComplete="url"
+                  autoCapitalize="none"
+                  spellCheck={false}
                 />
               </label>
               <label className="onboarding-field">
@@ -281,7 +313,9 @@ export function OnboardingWizard() {
                   value={accessToken}
                   onChange={(event) => setAccessToken(event.target.value)}
                   placeholder="NewAPI 后台 -> 个人设置 -> 访问令牌"
-                  autoComplete="off"
+                  autoComplete="new-password"
+                  autoCapitalize="none"
+                  spellCheck={false}
                 />
               </label>
               <label className="onboarding-check">
@@ -319,8 +353,8 @@ export function OnboardingWizard() {
             </div>
           ) : null}
 
-          {message ? <div className="onboarding-status success">{message}</div> : null}
-          {error ? <div className="onboarding-status danger">{error}</div> : null}
+          {message ? <div className="onboarding-status success" {...onboardingStatusProps("success")}>{message}</div> : null}
+          {error ? <div className="onboarding-status danger" {...onboardingStatusProps("danger")}>{error}</div> : null}
         </div>
 
         <footer className="onboarding-footer">
