@@ -35,6 +35,7 @@ type App struct {
 	key                 []byte
 	crypto              *CryptoService
 	accountAuth         *AccountAuthRepository
+	browserLogin        *BrowserLoginService
 	schedulerRepo       *SchedulerRepo
 	browserSessions     *BrowserSessionStore
 	mu                  sync.RWMutex
@@ -145,6 +146,7 @@ func NewApp(root string) (*App, error) {
 		localSyncRun:     NewSyncJobRunStore(),
 		channelHealthRun: NewSyncJobRunStore(),
 	}
+	app.browserLogin = NewBrowserLoginService(app)
 	app.rootCtx, app.rootCancel = context.WithCancel(context.Background())
 	app.taskRunner.setRootCtx(app.rootCtx)
 
