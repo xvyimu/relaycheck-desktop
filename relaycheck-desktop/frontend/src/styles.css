@@ -8836,6 +8836,13 @@ html.dark .detail-drawer {
   border-color: var(--v4-border);
 }
 
+html.dark .site-login-candidates code,
+html.dark .site-suggestions span {
+  border-color: var(--v4-border);
+  background: var(--v4-card-soft);
+  color: var(--v4-text);
+}
+
 /* ===== Onboarding Wizard ===== */
 .onboarding-overlay {
   position: fixed;

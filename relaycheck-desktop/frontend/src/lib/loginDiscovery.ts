@@ -19,13 +19,17 @@ export function normalizeLoginDiscovery(value: unknown): LoginDiscovery | null {
 
   const record = value as Record<string, unknown>;
   if (typeof record.url !== "string") return null;
+  const url = record.url.trim();
+  if (!url) return null;
 
   const candidates = Array.isArray(record.candidates)
-    ? record.candidates.filter((candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0)
+    ? record.candidates
+        .filter((candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0)
+        .map((candidate) => candidate.trim())
     : [];
 
   return {
-    url: record.url,
+    url,
     source: typeof record.source === "string" ? record.source : "",
     confidence: typeof record.confidence === "number" && Number.isFinite(record.confidence) ? record.confidence : 0,
     ...(candidates.length ? { candidates } : {}),

@@ -22,7 +22,7 @@ describe("parseLoginDiscovery", () => {
   it("keeps only non-empty string candidates", () => {
     expect(
       parseLoginDiscovery(
-        '{"url":"/login","source":"path_probe","confidence":0.8,"candidates":["/login",42,"","/signin",false]}',
+        '{"url":"/login","source":"path_probe","confidence":0.8,"candidates":[" /login ",42,"","/signin",false]}',
       ),
     ).toEqual({
       url: "/login",
@@ -39,11 +39,32 @@ describe("normalizeLoginDiscovery", () => {
     expect(normalizeLoginDiscovery(null)).toBeNull();
   });
 
+  it("returns null for blank or non-string urls", () => {
+    expect(normalizeLoginDiscovery({ url: "   ", source: "html_link" })).toBeNull();
+    expect(normalizeLoginDiscovery({ url: 42, source: "html_link" })).toBeNull();
+  });
+
   it("fills safe defaults for partial objects", () => {
-    expect(normalizeLoginDiscovery({ url: "/login" })).toEqual({
+    expect(normalizeLoginDiscovery({ url: " /login " })).toEqual({
       url: "/login",
       source: "",
       confidence: 0,
+    });
+  });
+
+  it("ignores malformed source, confidence, and candidates fields", () => {
+    expect(
+      normalizeLoginDiscovery({
+        url: "/login",
+        source: { label: "html_link" },
+        confidence: Number.POSITIVE_INFINITY,
+        candidates: [{ url: "/login" }, null, " /panel/login "],
+      }),
+    ).toEqual({
+      url: "/login",
+      source: "",
+      confidence: 0,
+      candidates: ["/panel/login"],
     });
   });
 });
