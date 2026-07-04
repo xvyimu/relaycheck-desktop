@@ -24,7 +24,7 @@ Current local state:
 
 - Branch `main` is ahead of `origin/main`; run `rtk git status --branch --short` for the exact count.
 - The `CheckinTaskService` slice is committed locally.
-- The `AccountTaskService` slice is committed locally as `3658672`.
+- The `AccountTaskService` slice is committed locally as `fcd7ef5`.
 
 Remote sync note:
 
@@ -53,6 +53,21 @@ cd frontend; npm test                            # 213 tests pass
 cd frontend; npm run smoke:schedules
 git diff --check
 ```
+
+Launch readiness check (2026-07-04 local):
+
+- `rtk git diff --check` — clean
+- `rtk go test -mod=vendor -count=1 ./...` — 969 passed / 12 packages
+- `rtk go vet -mod=vendor ./...` — clean
+- `rtk go build -mod=vendor ./...` — success
+- `cd frontend; rtk npm test` — 213 passed
+- `cd frontend; rtk npm run build` — success
+- `cd frontend; rtk npm run smoke:schedules` — 1440x900 and 390x900 passed, no overflow, no console issues
+- `cd frontend; rtk npm audit --audit-level=high` — 0 vulnerabilities
+- Debug residual scan: `console.log` only in smoke scripts; no production `debugger` findings.
+- Secret pattern scan: findings are field names and test fixtures only; no real credential found.
+- `govulncheck` is not installed in this environment, so Go vulnerability DB scanning was not run.
+- No push or deploy was performed; release remains local-only until the ahead commits are pushed.
 
 ---
 
