@@ -2,13 +2,19 @@
 
 **关联设计：** [2026-07-04-checkin-login-execution-seam-design.md](2026-07-04-checkin-login-execution-seam-design.md)
 **日期：** 2026-07-04
-**状态：** 待批准
+**状态：** 实施中；核心执行服务已落地，任务服务收尾切片待提交
 
 ---
 
 ## Overview
 
 本计划把签到、余额、密码登录、账号 API 调用和浏览器授权链路从 `checkin_balance.go` / `accounts.go` 的大块逻辑中抽成三个 `internal/core` 内部服务：`BrowserLoginService`、`AccountAPIClient`、`AccountSessionService`。本阶段不拆新包、不改 DB schema、不改公开 API，只缩小执行边界并补足关键回归测试。
+
+2026-07-04 进度备注：
+
+- 已落地 `BrowserLoginService`、`AccountAPIClient`、`AccountSessionService`、`CheckinExecutor`、`BalanceRefresher`、`CheckinBatchOrchestrator`。
+- 当前收尾切片新增 `CheckinTaskService`，将 `task_runner.go` 中 `checkin` / `refresh_balances` 两个 SSE 任务业务体迁出，只保留通用任务引擎和 HTTP/SSE 生命周期。
+- 本切片不改数据库、HTTP API 或前端行为；验证通过 `go test ./...`、`go vet ./...`、`go build ./...`、前端 `npm test` 和 `npm run build`。
 
 ## Dependency Graph
 

@@ -11,8 +11,16 @@ Read this first, then `CLAUDE.md` for architecture.
 
 The project is stable. The latest backend slice is:
 
+- `internal/core/checkin_task_service.go` — new `CheckinTaskService` owns SSE task-facing checkin and balance refresh orchestration
+- `internal/core/task_runner.go` — `checkin` and `refresh_balances` task handlers now delegate to `CheckinTaskService`
+- `internal/core/checkin_task_service_test.go` — regression tests cover task progress and DB side effects for checkin and balance refresh
 - `internal/core/accounts.go` — `listAccounts` now honors `?upstreamSiteId=`
 - `internal/core/accounts_list_test.go` — regression test for filtered reads after the unfiltered cache is populated
+
+Current local state:
+
+- Branch `main` is ahead of `origin/main` by 13 commits.
+- The `CheckinTaskService` slice is validated locally; push remains pending after the local commit.
 
 Remote sync note:
 
@@ -27,16 +35,17 @@ Latest Go verification gates pass:
 
 ```powershell
 go vet -mod=vendor ./...
-go test -mod=vendor -count=1 ./...               # 928 tests pass
+go test -mod=vendor -count=1 ./...               # 968 tests pass
+go build -mod=vendor ./...
 go test -mod=vendor -cover -count=1 ./internal/core ./internal/accounts ./internal/channels ./internal/notifications ./internal/autostart ./internal/backup ./internal/versioncheck
 git diff --check
 ```
 
-Recent frontend gates from the schedule hardening slice also passed:
+Recent frontend gates also passed:
 
 ```powershell
 cd frontend; npm run build                       # tsc + vite
-cd frontend; npm test                            # 187 tests pass
+cd frontend; npm test                            # 213 tests pass
 cd frontend; npm run smoke:schedules
 git diff --check
 ```
@@ -44,6 +53,28 @@ git diff --check
 ---
 
 ## What landed this session
+
+### Checkin task service extraction
+
+- Added `CheckinTaskService` in `internal/core/checkin_task_service.go`.
+- Moved the `checkin` and `refresh_balances` task bodies out of `task_runner.go`; `task_runner.go` now keeps task start/cancel/stream mechanics and delegates those two business task bodies.
+- Wired `App.checkinTasks` in `NewApp` after `rootCtx` and `TaskRunner` are initialized.
+- Updated `internal/core/PACKAGE_INDEX.md` with the new service and test file.
+- Added two focused tests:
+  - `TestCheckinTaskServiceStartCheckinPublishesProgress`
+  - `TestCheckinTaskServiceStartRefreshBalancesPublishesProgress`
+
+Verification:
+
+- `rtk go test -mod=vendor -count=1 ./internal/core -run "CheckinTaskService" -v` — 2 passed
+- `rtk go test -mod=vendor -count=1 ./internal/core -run "CheckinTask|TaskRunner|RefreshBalance|Checkin" -v` — 41 passed
+- `rtk go test -mod=vendor -count=1 ./internal/core` — 377 passed
+- `rtk go test -mod=vendor -count=1 ./...` — 968 passed / 12 packages
+- `rtk go vet -mod=vendor ./...` — clean
+- `rtk go build -mod=vendor ./...` — success
+- `cd frontend; rtk npm test` — 213 passed
+- `cd frontend; rtk npm run build` — success
+- `rtk git diff --check` — clean
 
 ### Maintenance coverage cleanup
 

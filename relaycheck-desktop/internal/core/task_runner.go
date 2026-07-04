@@ -407,51 +407,7 @@ func writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, payload interfac
 // --- Task handlers ---
 
 func (a *App) startCheckinTask(taskID string, _ map[string]interface{}) {
-	go func() {
-		ctx := a.rootCtx
-		accounts, err := a.loadDueCheckinAccounts(ctx, "", 0)
-		if err != nil {
-			task, _ := a.taskRunner.start(taskID, TaskCheckin, 0)
-			task.finish(err)
-			return
-		}
-		total := len(accounts)
-		task, taskCtx := a.taskRunner.start(taskID, TaskCheckin, total)
-
-		if total == 0 {
-			task.finish(nil)
-			return
-		}
-
-		siteLimiter := newCheckinSiteLimiter(a.loadCheckinScheduleConfig(ctx))
-		accountIDs := make([]string, 0, len(accounts))
-		for _, account := range accounts {
-			accountIDs = append(accountIDs, account.ID)
-		}
-		auths, _ := a.loadAccountAuths(ctx, accountIDs)
-		for _, account := range accounts {
-			if taskCtx.Err() != nil {
-				task.finish(taskCtx.Err())
-				return
-			}
-			_ = siteLimiter.wait(taskCtx, account.UpstreamSiteID)
-			var auth *accountAuthContext
-			if loaded, ok := auths[account.ID]; ok {
-				auth = &loaded
-			}
-			result, err := a.runAccountCheckin(taskCtx, account.ID, auth)
-			item := ItemResult{ID: account.ID, Name: account.AccountName}
-			if err != nil {
-				item.Status = "failed"
-				item.Message = err.Error()
-			} else {
-				item.Status = result.Status
-				item.Message = result.Message
-			}
-			task.update(item)
-		}
-		task.finish(nil)
-	}()
+	a.checkinTasks.StartCheckin(taskID)
 }
 
 func (a *App) startTestKeysTask(taskID string, params map[string]interface{}) {
@@ -516,73 +472,7 @@ func (a *App) startTestKeysTask(taskID string, params map[string]interface{}) {
 }
 
 func (a *App) startRefreshBalancesTask(taskID string, params map[string]interface{}) {
-	go func() {
-		ctx := a.rootCtx
-		limit := 50
-		missingOnly := false
-		if l, ok := params["limit"].(float64); ok && l > 0 {
-			limit = int(l)
-		}
-		if m, ok := params["missingOnly"].(bool); ok {
-			missingOnly = m
-		}
-
-		query := `
-			SELECT a.id, COALESCE(a.display_name, a.username, a.id)
-			FROM channel_accounts a
-			JOIN upstream_sites s ON s.id = a.upstream_site_id
-			WHERE s.supports_balance = 1
-		`
-		if missingOnly {
-			query += ` AND a.balance IS NULL`
-		}
-		query += ` ORDER BY COALESCE(a.last_validated_at,''), a.updated_at DESC LIMIT ?`
-
-		rows, err := a.db.QueryContext(ctx, query, limit)
-		if err != nil {
-			task, _ := a.taskRunner.start(taskID, TaskRefreshBalances, 0)
-			task.finish(err)
-			return
-		}
-		type job struct{ ID, Name string }
-		jobs := []job{}
-		for rows.Next() {
-			var j job
-			if err := rows.Scan(&j.ID, &j.Name); err != nil {
-				log.Printf("[task:refresh-balances] scan failed: %v", err)
-				continue
-			}
-			jobs = append(jobs, j)
-		}
-		if err := rows.Err(); err != nil {
-			log.Printf("[task:refresh-balances] query iteration failed: %v", err)
-		}
-		_ = rows.Close()
-
-		task, taskCtx := a.taskRunner.start(taskID, TaskRefreshBalances, len(jobs))
-		jobIDs := make([]string, 0, len(jobs))
-		for _, j := range jobs {
-			jobIDs = append(jobIDs, j.ID)
-		}
-		auths, _ := a.loadAccountAuths(ctx, jobIDs)
-		for _, j := range jobs {
-			if taskCtx.Err() != nil {
-				task.finish(taskCtx.Err())
-				return
-			}
-			var auth *accountAuthContext
-			if loaded, ok := auths[j.ID]; ok {
-				auth = &loaded
-			}
-			item := a.refreshBalanceForBulk(taskCtx, j.ID, auth)
-			result := ItemResult{ID: j.ID, Name: j.Name, Status: item.Status}
-			if item.Status != "success" {
-				result.Message = item.Message
-			}
-			task.update(result)
-		}
-		task.finish(nil)
-	}()
+	a.checkinTasks.StartRefreshBalances(taskID, params)
 }
 
 func (a *App) startDetectSitesTask(taskID string, params map[string]interface{}) {

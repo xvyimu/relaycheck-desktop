@@ -46,6 +46,7 @@ Each owns its own mutex and is independently testable. `*App` retains thin forwa
 | `checkin_executor.go` | `CheckinExecutor`: single-account checkin execution, retry, result persistence, and notification dispatch. `checkin_balance.go` keeps thin compatibility wrappers. |
 | `balance_refresher.go` | `BalanceRefresher`: single-account balance refresh, result persistence, and notification dispatch. `checkin_balance.go` keeps thin compatibility wrappers. |
 | `checkin_batch_orchestrator.go` | `CheckinBatchOrchestrator`: due-account selection, per-site throttling, batch run progress, and multi-account checkin orchestration. |
+| `checkin_task_service.go` | `CheckinTaskService`: SSE task-facing checkin and balance refresh orchestration. `task_runner.go` delegates `checkin`/`refresh_balances` task bodies here. |
 | `checkin_run_state.go` | `CheckinRunStore`: checkin run state with independent `sync.RWMutex`; `Snapshot()` for reads. Replaces `a.checkinRun` + 5 mutators. |
 | `sync_job_run_store.go` | `SyncJobRunStore`: `TryStart()`/`Finish()` re-entrancy guard for scheduled jobs. Replaces `a.localSyncRun`/`channelHealthRun`. |
 | `scheduler_repo.go` | `SchedulerRepo`: pure db repository for `loadSettingJSON`/`loadSchedulerRun`/`upsertSchedulerPlan`. |
@@ -97,7 +98,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | File | Purpose |
 |------|---------|
 | `scheduler.go` | Global scheduler, job status, next-run computation. |
-| `task_runner.go` | Unified task engine with SSE streaming progress. |
+| `task_runner.go` | Unified task engine with SSE streaming progress and task start/cancel/stream HTTP handlers; checkin/balance task bodies delegate to `CheckinTaskService`. |
 | `dry_run.go` | Dry-run preview for batch operations (200 account limit). |
 
 ### Analytics & Diagnostics
@@ -148,6 +149,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | `checkin_execution_services_test.go` | `CheckinExecutor`, `BalanceRefresher`, and `CheckinBatchOrchestrator` service tests. |
 | `checkin_run_state_test.go` | `CheckinRunStore` unit tests. |
 | `checkin_status_test.go` | Checkin status tests. |
+| `checkin_task_service_test.go` | `CheckinTaskService` task-progress integration tests for checkin and balance refresh tasks. |
 | `crypto_service_test.go` | `CryptoService` unit tests. |
 | `db_ensure_column_test.go` | DB column-ensure tests. |
 | `db_performance_test.go` | Database performance tests. |
