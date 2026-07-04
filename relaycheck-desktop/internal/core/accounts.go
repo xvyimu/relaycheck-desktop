@@ -1013,7 +1013,11 @@ func (a *App) startBrowserLogin(ctx context.Context, id string, auth *accountAut
 	siteName := auth.UpstreamSite
 	baseURL := auth.BaseURL
 	profilePath := auth.BrowserProfilePath
-	targetURL := resolveLoginTargetURL(baseURL, firstNonEmpty(auth.BrowserLoginURL, auth.LoginPath))
+	loginTarget := firstNonEmpty(auth.BrowserLoginURL, auth.LoginPath)
+	targetURL := resolveLoginTargetURL(baseURL, loginTarget)
+	if strings.EqualFold(auth.BrowserLoginSource, "manual") {
+		targetURL = resolveManualLoginTargetURL(baseURL, loginTarget)
+	}
 	loginURLSource := auth.BrowserLoginSource
 	if loginURLSource == "" {
 		if auth.BrowserLoginURL != "" {
@@ -1124,9 +1128,6 @@ func resolveLoginTargetURL(baseURL string, loginURL string) string {
 	if loginURL == "" {
 		loginURL = "/login"
 	}
-	if strings.HasPrefix(loginURL, "http://") || strings.HasPrefix(loginURL, "https://") {
-		return loginURL
-	}
 	base, err := url.Parse(strings.TrimRight(baseURL, "/") + "/")
 	if err != nil || base.Scheme == "" || base.Host == "" {
 		return loginURL
@@ -1143,6 +1144,14 @@ func resolveLoginTargetURL(baseURL string, loginURL string) string {
 		return base.ResolveReference(&url.URL{Path: "/login"}).String()
 	}
 	return resolved.String()
+}
+
+func resolveManualLoginTargetURL(baseURL string, loginURL string) string {
+	loginURL = strings.TrimSpace(loginURL)
+	if strings.HasPrefix(loginURL, "http://") || strings.HasPrefix(loginURL, "https://") {
+		return loginURL
+	}
+	return resolveLoginTargetURL(baseURL, loginURL)
 }
 
 func (a *App) saveBrowserLoginSession(ctx context.Context, id string, auth *accountAuthContext) browserLoginSaveResult {

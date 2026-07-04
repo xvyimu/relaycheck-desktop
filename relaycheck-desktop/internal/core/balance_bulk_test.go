@@ -152,7 +152,7 @@ func TestResolveLoginTargetURLHandlesRelativeLoginURL(t *testing.T) {
 }
 
 func TestResolveLoginTargetURLRejectsUnsafeResolvedURL(t *testing.T) {
-	for _, loginURL := range []string{"//evil.example/login", "javascript:alert(1)"} {
+	for _, loginURL := range []string{"https://evil.example/login", "//evil.example/login", "javascript:alert(1)"} {
 		got := resolveLoginTargetURL("https://relay.example/base", loginURL)
 		want := "https://relay.example/login"
 		if got != want {
@@ -198,5 +198,37 @@ func TestStartBrowserLoginAlreadyOpenIncludesResolvedEntryMetadata(t *testing.T)
 	}
 	if !strings.Contains(result.LoginURLReason, "Low confidence") {
 		t.Fatalf("LoginURLReason = %q, want low-confidence reason", result.LoginURLReason)
+	}
+}
+
+func TestStartBrowserLoginAlreadyOpenPreservesManualAbsoluteLoginURL(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	accountID := "manual-browser-login-account"
+	app.browserSessions.Set(accountID, BrowserLoginSession{
+		AccountID: accountID,
+		Port:      9223,
+		StartedAt: time.Now(),
+		PID:       1,
+	})
+
+	manualURL := "https://console.relay.example/login?next=%2Fdashboard"
+	result := app.startBrowserLogin(context.Background(), accountID, &accountAuthContext{
+		AccountID:              accountID,
+		AccountName:            "Manual Browser Account",
+		UpstreamSite:           "Relay",
+		BaseURL:                "https://api.relay.example",
+		BrowserLoginURL:        manualURL,
+		BrowserLoginSource:     "manual",
+		BrowserLoginConfidence: 1,
+		BrowserLoginReason:     "Manual login URL configured",
+	})
+
+	if result.Status != "already_open" {
+		t.Fatalf("Status = %q, want already_open", result.Status)
+	}
+	if result.URL != manualURL {
+		t.Fatalf("URL = %q, want manual URL %q", result.URL, manualURL)
 	}
 }

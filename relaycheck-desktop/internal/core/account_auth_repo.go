@@ -152,7 +152,7 @@ func browserLoginEntryFromMetadata(baseURL string, loginURL string, source strin
 	source = strings.ToLower(strings.TrimSpace(source))
 	if source == "manual" && loginURL != "" {
 		return browserLoginEntry{
-			URL:        resolveLoginTargetURL(baseURL, loginURL),
+			URL:        resolveManualLoginTargetURL(baseURL, loginURL),
 			Source:     "manual",
 			Confidence: 1,
 			Reason:     "Manual login URL configured",
