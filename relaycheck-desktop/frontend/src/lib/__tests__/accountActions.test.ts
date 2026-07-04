@@ -37,6 +37,20 @@ describe("formatBrowserLoginOpenMessage", () => {
       "网页登录窗口已在运行。完成登录后点击“保存授权”。",
     );
   });
+  it("includes resolver source, confidence, and reason when present", () => {
+    const message = formatBrowserLoginOpenMessage({
+      accountId: "acc-1",
+      status: "opened",
+      url: "https://relay.example/panel/login",
+      loginUrlSource: "path_probe",
+      loginUrlConfidence: 0.45,
+      loginUrlReason: "Low confidence login candidate; verify manually",
+    });
+
+    expect(message).toContain("path_probe");
+    expect(message).toContain("45%");
+    expect(message).toContain("Low confidence login candidate");
+  });
 });
 
 describe("formatBrowserLoginSaveMessage", () => {

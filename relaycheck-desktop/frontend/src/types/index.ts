@@ -837,6 +837,9 @@ export type BrowserLoginOpenResponse = {
   status: string;
   message?: string;
   url?: string;
+  loginUrlSource?: string;
+  loginUrlConfidence?: number;
+  loginUrlReason?: string;
   debugPort?: number;
   profilePath?: string;
 };

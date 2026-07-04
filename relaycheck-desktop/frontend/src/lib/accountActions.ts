@@ -4,6 +4,20 @@ function httpStatusText(httpStatus?: number) {
   return httpStatus ? `（HTTP ${httpStatus}）` : "";
 }
 
+function formatLoginEntryMeta(result: BrowserLoginOpenResponse) {
+  const parts: string[] = [];
+  if (result.loginUrlSource) {
+    parts.push(`入口来源：${result.loginUrlSource}`);
+  }
+  if (typeof result.loginUrlConfidence === "number" && Number.isFinite(result.loginUrlConfidence)) {
+    parts.push(`置信度：${Math.round(result.loginUrlConfidence * 100)}%`);
+  }
+  if (result.loginUrlReason) {
+    parts.push(result.loginUrlReason);
+  }
+  return parts.length ? `（${parts.join("，")}）` : "";
+}
+
 export function accountActionButtonLabel(label: string, busy: string, runningLabel?: string): string {
   if (busy !== label) return label;
   return runningLabel || `${label}中…`;
@@ -12,7 +26,7 @@ export function accountActionButtonLabel(label: string, busy: string, runningLab
 export function formatBrowserLoginOpenMessage(result: BrowserLoginOpenResponse): string {
   const prefix = result.status === "already_open" ? "网页登录窗口已在运行" : "网页登录窗口已打开";
   const target = result.url ? `：${result.url}` : "";
-  return `${prefix}${target}。完成登录后点击“保存授权”。`;
+  return `${prefix}${target}${formatLoginEntryMeta(result)}。完成登录后点击“保存授权”。`;
 }
 
 export function formatBrowserLoginSaveMessage(result: BrowserLoginSaveResponse): string {
