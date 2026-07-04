@@ -310,14 +310,17 @@ type bulkPasswordLoginResult struct {
 }
 
 type browserLoginOpenResult struct {
-	AccountID   string `json:"accountId"`
-	AccountName string `json:"accountName,omitempty"`
-	SiteName    string `json:"siteName,omitempty"`
-	Status      string `json:"status"`
-	Message     string `json:"message,omitempty"`
-	URL         string `json:"url,omitempty"`
-	DebugPort   int    `json:"debugPort,omitempty"`
-	ProfilePath string `json:"profilePath,omitempty"`
+	AccountID          string  `json:"accountId"`
+	AccountName        string  `json:"accountName,omitempty"`
+	SiteName           string  `json:"siteName,omitempty"`
+	Status             string  `json:"status"`
+	Message            string  `json:"message,omitempty"`
+	URL                string  `json:"url,omitempty"`
+	LoginURLSource     string  `json:"loginUrlSource,omitempty"`
+	LoginURLConfidence float64 `json:"loginUrlConfidence,omitempty"`
+	LoginURLReason     string  `json:"loginUrlReason,omitempty"`
+	DebugPort          int     `json:"debugPort,omitempty"`
+	ProfilePath        string  `json:"profilePath,omitempty"`
 }
 
 type browserLoginSaveResult struct {
@@ -1010,7 +1013,29 @@ func (a *App) startBrowserLogin(ctx context.Context, id string, auth *accountAut
 	siteName := auth.UpstreamSite
 	baseURL := auth.BaseURL
 	profilePath := auth.BrowserProfilePath
-	result := browserLoginOpenResult{AccountID: id, AccountName: accountName, SiteName: siteName}
+	targetURL := resolveLoginTargetURL(baseURL, firstNonEmpty(auth.BrowserLoginURL, auth.LoginPath))
+	loginURLSource := auth.BrowserLoginSource
+	if loginURLSource == "" {
+		if auth.BrowserLoginURL != "" {
+			loginURLSource = "stored"
+		} else {
+			loginURLSource = "fallback"
+		}
+	}
+	loginURLConfidence := auth.BrowserLoginConfidence
+	if loginURLConfidence == 0 && loginURLSource == "fallback" {
+		loginURLConfidence = 0.4
+	}
+	loginURLReason := firstNonEmpty(auth.BrowserLoginReason, "Resolved browser login URL")
+	result := browserLoginOpenResult{
+		AccountID:          id,
+		AccountName:        accountName,
+		SiteName:           siteName,
+		URL:                targetURL,
+		LoginURLSource:     loginURLSource,
+		LoginURLConfidence: loginURLConfidence,
+		LoginURLReason:     loginURLReason,
+	}
 
 	if session, ok := a.browserSessions.Get(id); ok {
 		result.Status = "already_open"
@@ -1033,8 +1058,6 @@ func (a *App) startBrowserLogin(ctx context.Context, id string, auth *accountAut
 		return result
 	}
 
-	targetURL := firstNonEmpty(auth.BrowserLoginURL, auth.LoginPath)
-	targetURL = resolveLoginTargetURL(baseURL, targetURL)
 	port, err := freeDebugPort(usedPorts)
 	if err != nil {
 		result.Status = "failed"

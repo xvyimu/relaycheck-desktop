@@ -35,26 +35,29 @@ const (
 )
 
 type accountAuthContext struct {
-	AccountID          string
-	AccountName        string
-	UpstreamSiteID     string
-	UpstreamSite       string
-	SiteKind           string
-	ChannelID          string
-	BaseURL            string
-	LoginPath          string
-	BrowserLoginURL    string
-	BrowserProfilePath string
-	UserAgent          string
-	LoginName          string
-	Password           string
-	AuthUserID         string
-	Cookie             string
-	AccessToken        string
-	APIKey             string
-	SupportsCheckin    bool
-	SupportsBalance    bool
-	CheckinRules       []apiCandidate
+	AccountID              string
+	AccountName            string
+	UpstreamSiteID         string
+	UpstreamSite           string
+	SiteKind               string
+	ChannelID              string
+	BaseURL                string
+	LoginPath              string
+	BrowserLoginURL        string
+	BrowserLoginSource     string
+	BrowserLoginConfidence float64
+	BrowserLoginReason     string
+	BrowserProfilePath     string
+	UserAgent              string
+	LoginName              string
+	Password               string
+	AuthUserID             string
+	Cookie                 string
+	AccessToken            string
+	APIKey                 string
+	SupportsCheckin        bool
+	SupportsBalance        bool
+	CheckinRules           []apiCandidate
 }
 
 type checkinResult struct {

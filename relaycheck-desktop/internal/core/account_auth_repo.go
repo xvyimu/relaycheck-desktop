@@ -9,6 +9,13 @@ import (
 
 const browserLoginConfidenceThreshold = 0.6
 
+type browserLoginEntry struct {
+	URL        string
+	Source     string
+	Confidence float64
+	Reason     string
+}
+
 // AccountAuthRepository loads accountAuthContext records from the database.
 // It is extracted from *App.loadAccountAuth / *App.loadAccountAuths so that
 // the SQL and decryption logic can be reused without going through the App
@@ -56,7 +63,11 @@ func (r *AccountAuthRepository) Load(ctx context.Context, id string) (*accountAu
 	auth.LoginName = firstNonEmpty(email, username)
 	auth.SiteKind = siteKind.String
 	auth.LoginPath = pathFromMaybeURL(loginURL)
-	auth.BrowserLoginURL = browserLoginURLFromMetadata(loginURL, loginURLSource, loginURLConfidence, loginDiscoveryJSON)
+	entry := browserLoginEntryFromMetadata(auth.BaseURL, loginURL, loginURLSource, loginURLConfidence, loginDiscoveryJSON)
+	auth.BrowserLoginURL = entry.URL
+	auth.BrowserLoginSource = entry.Source
+	auth.BrowserLoginConfidence = entry.Confidence
+	auth.BrowserLoginReason = entry.Reason
 	auth.Password, _ = r.crypto.Decrypt(passwordEncrypted)
 	auth.Cookie, _ = r.crypto.Decrypt(cookieEncrypted)
 	auth.AccessToken, _ = r.crypto.Decrypt(accessEncrypted)
@@ -113,7 +124,11 @@ func (r *AccountAuthRepository) LoadBatch(ctx context.Context, ids []string) (ma
 		auth.LoginName = firstNonEmpty(email, username)
 		auth.SiteKind = siteKind.String
 		auth.LoginPath = pathFromMaybeURL(loginURL)
-		auth.BrowserLoginURL = browserLoginURLFromMetadata(loginURL, loginURLSource, loginURLConfidence, loginDiscoveryJSON)
+		entry := browserLoginEntryFromMetadata(auth.BaseURL, loginURL, loginURLSource, loginURLConfidence, loginDiscoveryJSON)
+		auth.BrowserLoginURL = entry.URL
+		auth.BrowserLoginSource = entry.Source
+		auth.BrowserLoginConfidence = entry.Confidence
+		auth.BrowserLoginReason = entry.Reason
 		auth.Password, _ = r.crypto.Decrypt(passwordEncrypted)
 		auth.Cookie, _ = r.crypto.Decrypt(cookieEncrypted)
 		auth.AccessToken, _ = r.crypto.Decrypt(accessEncrypted)
@@ -132,31 +147,69 @@ func (r *AccountAuthRepository) LoadBatch(ctx context.Context, ids []string) (ma
 	return auths, nil
 }
 
-func browserLoginURLFromMetadata(loginURL string, source string, confidence float64, discoveryJSON string) string {
+func browserLoginEntryFromMetadata(baseURL string, loginURL string, source string, confidence float64, discoveryJSON string) browserLoginEntry {
 	loginURL = strings.TrimSpace(loginURL)
 	source = strings.ToLower(strings.TrimSpace(source))
 	if source == "manual" && loginURL != "" {
-		return loginURL
+		return browserLoginEntry{
+			URL:        resolveLoginTargetURL(baseURL, loginURL),
+			Source:     "manual",
+			Confidence: 1,
+			Reason:     "Manual login URL configured",
+		}
 	}
 
 	discovery := parseAccountLoginDiscovery(discoveryJSON)
 	if discovery != nil && discovery.Confidence >= browserLoginConfidenceThreshold && strings.TrimSpace(discovery.URL) != "" {
-		return strings.TrimSpace(discovery.URL)
+		return browserLoginEntry{
+			URL:        resolveLoginTargetURL(baseURL, discovery.URL),
+			Source:     firstNonEmpty(strings.TrimSpace(discovery.Source), "discovery"),
+			Confidence: discovery.Confidence,
+			Reason:     "High-confidence login discovery",
+		}
 	}
 	if loginURL != "" && confidence >= browserLoginConfidenceThreshold {
-		return loginURL
+		return browserLoginEntry{
+			URL:        resolveLoginTargetURL(baseURL, loginURL),
+			Source:     firstNonEmpty(source, "stored"),
+			Confidence: confidence,
+			Reason:     "Stored login URL has sufficient confidence",
+		}
 	}
 	if discovery != nil {
 		for _, candidate := range discovery.Candidates {
 			if candidate = strings.TrimSpace(candidate); candidate != "" {
-				return candidate
+				return browserLoginEntry{
+					URL:        resolveLoginTargetURL(baseURL, candidate),
+					Source:     firstNonEmpty(strings.TrimSpace(discovery.Source), "candidate"),
+					Confidence: discovery.Confidence,
+					Reason:     "Low confidence login candidate; verify manually",
+				}
 			}
 		}
 		if url := strings.TrimSpace(discovery.URL); url != "" {
-			return url
+			return browserLoginEntry{
+				URL:        resolveLoginTargetURL(baseURL, url),
+				Source:     firstNonEmpty(strings.TrimSpace(discovery.Source), "discovery"),
+				Confidence: discovery.Confidence,
+				Reason:     "Low confidence login discovery; verify manually",
+			}
 		}
 	}
-	return loginURL
+	if loginURL != "" {
+		return browserLoginEntry{
+			URL:        resolveLoginTargetURL(baseURL, loginURL),
+			Source:     firstNonEmpty(source, "stored"),
+			Confidence: confidence,
+			Reason:     "Low confidence stored login URL; verify manually",
+		}
+	}
+	return browserLoginEntry{
+		URL:        resolveLoginTargetURL(baseURL, "/login"),
+		Source:     "fallback",
+		Confidence: 0.4,
+		Reason:     "No login metadata; using default /login",
+	}
 }
 
 func parseAccountLoginDiscovery(raw string) *LoginDiscovery {

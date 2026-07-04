@@ -138,6 +138,15 @@ func TestAccountAuthRepository_LoadKeepsManualBrowserLoginURL(t *testing.T) {
 	if auth.BrowserLoginURL != loginURL {
 		t.Fatalf("BrowserLoginURL = %q, want %q", auth.BrowserLoginURL, loginURL)
 	}
+	if auth.BrowserLoginSource != "manual" {
+		t.Fatalf("BrowserLoginSource = %q, want manual", auth.BrowserLoginSource)
+	}
+	if auth.BrowserLoginConfidence != 1 {
+		t.Fatalf("BrowserLoginConfidence = %.2f, want 1", auth.BrowserLoginConfidence)
+	}
+	if auth.BrowserLoginReason == "" {
+		t.Fatal("expected BrowserLoginReason")
+	}
 }
 
 func TestAccountAuthRepository_LoadUsesHighConfidenceDiscoveryForBrowserLogin(t *testing.T) {
@@ -167,6 +176,80 @@ func TestAccountAuthRepository_LoadUsesHighConfidenceDiscoveryForBrowserLogin(t 
 	}
 	if auth.BrowserLoginURL != discoveryURL {
 		t.Fatalf("BrowserLoginURL = %q, want discovery URL %q", auth.BrowserLoginURL, discoveryURL)
+	}
+	if auth.BrowserLoginSource != "html_link" {
+		t.Fatalf("BrowserLoginSource = %q, want html_link", auth.BrowserLoginSource)
+	}
+	if auth.BrowserLoginConfidence != 0.85 {
+		t.Fatalf("BrowserLoginConfidence = %.2f, want 0.85", auth.BrowserLoginConfidence)
+	}
+	if auth.BrowserLoginReason == "" {
+		t.Fatal("expected BrowserLoginReason")
+	}
+}
+
+func TestAccountAuthRepository_LoadUsesLowConfidenceCandidateForBrowserLogin(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	siteID := newID()
+	accountID := newID()
+	insertTestSite(t, app, siteID, "Low Confidence Login Site", "https://relay.example/base", "newapi")
+	if _, err := app.db.Exec(`
+		UPDATE upstream_sites
+		SET login_url='/legacy-login', login_url_source='path_probe', login_url_confidence=0.3,
+		    login_discovery_json=?, updated_at=?
+		WHERE id=?
+	`, `{"url":"/maybe-login","source":"path_probe","confidence":0.45,"candidates":["/panel/login"]}`, now(), siteID); err != nil {
+		t.Fatalf("update upstream_sites login discovery: %v", err)
+	}
+	insertTestAccount(t, app, accountID, siteID, "Low Confidence Login Account", nil, nil)
+
+	auth, err := app.accountAuth.Load(context.Background(), accountID)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if auth.LoginPath != "/legacy-login" {
+		t.Fatalf("LoginPath = %q, want legacy API login path", auth.LoginPath)
+	}
+	if auth.BrowserLoginURL != "https://relay.example/panel/login" {
+		t.Fatalf("BrowserLoginURL = %q, want candidate URL", auth.BrowserLoginURL)
+	}
+	if auth.BrowserLoginSource != "path_probe" {
+		t.Fatalf("BrowserLoginSource = %q, want path_probe", auth.BrowserLoginSource)
+	}
+	if auth.BrowserLoginConfidence != 0.45 {
+		t.Fatalf("BrowserLoginConfidence = %.2f, want 0.45", auth.BrowserLoginConfidence)
+	}
+	if !strings.Contains(auth.BrowserLoginReason, "Low confidence") {
+		t.Fatalf("BrowserLoginReason = %q, want low-confidence reason", auth.BrowserLoginReason)
+	}
+}
+
+func TestAccountAuthRepository_LoadFallsBackToDefaultBrowserLogin(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	siteID := newID()
+	accountID := newID()
+	insertTestSite(t, app, siteID, "Fallback Login Site", "https://relay.example/base", "newapi")
+	insertTestAccount(t, app, accountID, siteID, "Fallback Login Account", nil, nil)
+
+	auth, err := app.accountAuth.Load(context.Background(), accountID)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if auth.BrowserLoginURL != "https://relay.example/login" {
+		t.Fatalf("BrowserLoginURL = %q, want default /login", auth.BrowserLoginURL)
+	}
+	if auth.BrowserLoginSource != "fallback" {
+		t.Fatalf("BrowserLoginSource = %q, want fallback", auth.BrowserLoginSource)
+	}
+	if auth.BrowserLoginConfidence != 0.4 {
+		t.Fatalf("BrowserLoginConfidence = %.2f, want 0.4", auth.BrowserLoginConfidence)
+	}
+	if auth.BrowserLoginReason == "" {
+		t.Fatal("expected BrowserLoginReason")
 	}
 }
 
@@ -331,6 +414,15 @@ func TestAccountAuthRepository_LoadBatchPreservesFields(t *testing.T) {
 	}
 	if batchAuth.BrowserLoginURL != single.BrowserLoginURL {
 		t.Errorf("BrowserLoginURL mismatch: batch=%q single=%q", batchAuth.BrowserLoginURL, single.BrowserLoginURL)
+	}
+	if batchAuth.BrowserLoginSource != single.BrowserLoginSource {
+		t.Errorf("BrowserLoginSource mismatch: batch=%q single=%q", batchAuth.BrowserLoginSource, single.BrowserLoginSource)
+	}
+	if batchAuth.BrowserLoginConfidence != single.BrowserLoginConfidence {
+		t.Errorf("BrowserLoginConfidence mismatch: batch=%.2f single=%.2f", batchAuth.BrowserLoginConfidence, single.BrowserLoginConfidence)
+	}
+	if batchAuth.BrowserLoginReason != single.BrowserLoginReason {
+		t.Errorf("BrowserLoginReason mismatch: batch=%q single=%q", batchAuth.BrowserLoginReason, single.BrowserLoginReason)
 	}
 	if batchAuth.LoginName != single.LoginName {
 		t.Errorf("LoginName mismatch: batch=%q single=%q", batchAuth.LoginName, single.LoginName)
