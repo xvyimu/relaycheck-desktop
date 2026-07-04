@@ -411,64 +411,7 @@ func (a *App) startCheckinTask(taskID string, _ map[string]interface{}) {
 }
 
 func (a *App) startTestKeysTask(taskID string, params map[string]interface{}) {
-	go func() {
-		ctx := a.rootCtx
-		limit := 50
-		if l, ok := params["limit"].(float64); ok && l > 0 {
-			limit = int(l)
-		}
-
-		rows, err := a.db.QueryContext(ctx, `
-			SELECT id, COALESCE(display_name, username, id)
-			FROM channel_accounts
-			WHERE COALESCE(api_key_encrypted,'') <> ''
-			ORDER BY COALESCE(api_key_last_checked_at,''), updated_at DESC
-			LIMIT ?
-		`, limit)
-		if err != nil {
-			task, _ := a.taskRunner.start(taskID, TaskTestKeys, 0)
-			task.finish(err)
-			return
-		}
-		type job struct{ ID, Name string }
-		jobs := []job{}
-		for rows.Next() {
-			var j job
-			if err := rows.Scan(&j.ID, &j.Name); err != nil {
-				log.Printf("[task:test-keys] scan failed: %v", err)
-				continue
-			}
-			jobs = append(jobs, j)
-		}
-		if err := rows.Err(); err != nil {
-			log.Printf("[task:test-keys] query iteration failed: %v", err)
-		}
-		_ = rows.Close()
-
-		task, taskCtx := a.taskRunner.start(taskID, TaskTestKeys, len(jobs))
-		jobIDs := make([]string, 0, len(jobs))
-		for _, j := range jobs {
-			jobIDs = append(jobIDs, j.ID)
-		}
-		auths, _ := a.loadAccountAuths(ctx, jobIDs)
-		for _, j := range jobs {
-			if taskCtx.Err() != nil {
-				task.finish(taskCtx.Err())
-				return
-			}
-			var auth *accountAuthContext
-			if loaded, ok := auths[j.ID]; ok {
-				auth = &loaded
-			}
-			result := a.testAPIKeyForAccount(taskCtx, j.ID, auth)
-			item := ItemResult{ID: j.ID, Name: j.Name, Status: result.Status}
-			if result.Status != "valid" {
-				item.Message = result.Message
-			}
-			task.update(item)
-		}
-		task.finish(nil)
-	}()
+	a.accountTasks.StartTestKeys(taskID, params)
 }
 
 func (a *App) startRefreshBalancesTask(taskID string, params map[string]interface{}) {

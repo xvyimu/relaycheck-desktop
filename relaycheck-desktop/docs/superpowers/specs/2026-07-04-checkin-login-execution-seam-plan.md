@@ -13,7 +13,7 @@
 2026-07-04 进度备注：
 
 - 已落地 `BrowserLoginService`、`AccountAPIClient`、`AccountSessionService`、`CheckinExecutor`、`BalanceRefresher`、`CheckinBatchOrchestrator`。
-- 当前收尾切片新增 `CheckinTaskService`，将 `task_runner.go` 中 `checkin` / `refresh_balances` 两个 SSE 任务业务体迁出，只保留通用任务引擎和 HTTP/SSE 生命周期。
+- 当前收尾切片新增 `CheckinTaskService` 与 `AccountTaskService`，将 `task_runner.go` 中 `checkin` / `refresh_balances` / `test_keys` 三个 SSE 任务业务体迁出，只保留通用任务引擎和 HTTP/SSE 生命周期。
 - 本切片不改数据库、HTTP API 或前端行为；验证通过 `go test ./...`、`go vet ./...`、`go build ./...`、前端 `npm test` 和 `npm run build`。
 
 ## Dependency Graph

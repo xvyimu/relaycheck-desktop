@@ -37,6 +37,7 @@ type App struct {
 	accountAuth         *AccountAuthRepository
 	accountAPI          *AccountAPIClient
 	accountSession      *AccountSessionService
+	accountTasks        *AccountTaskService
 	browserLogin        *BrowserLoginService
 	checkinExecutor     *CheckinExecutor
 	balanceRefresher    *BalanceRefresher
@@ -161,6 +162,7 @@ func NewApp(root string) (*App, error) {
 	app.rootCtx, app.rootCancel = context.WithCancel(context.Background())
 	app.taskRunner.setRootCtx(app.rootCtx)
 	app.checkinTasks = NewCheckinTaskService(app)
+	app.accountTasks = NewAccountTaskService(app)
 
 	// Two-phase init: NotificationHTTPPort is satisfied by *App itself
 	// (externalURLPolicy + doHTTPWithTimeout), so the hub can only be wired

@@ -40,6 +40,7 @@ Each owns its own mutex and is independently testable. `*App` retains thin forwa
 |------|---------|
 | `crypto_service.go` | `CryptoService` type: AES-256-GCM encryption with `v1.<nonce>.<ciphertext>` format. Extracted from `crypto.go` bodies of `encryptText`/`decryptText`. |
 | `account_auth_repo.go` | `AccountAuthRepository`: `Load(ctx,id)` + `LoadBatch(ctx,ids)` for account authentication context. Injects `db`+`crypto`. |
+| `account_task_service.go` | `AccountTaskService`: SSE task-facing account maintenance orchestration. `task_runner.go` delegates the `test_keys` task body here. |
 | `browser_login_service.go` | `BrowserLoginService`: browser login open/save orchestration and login target URL resolution. `accounts.go` keeps thin compatibility wrappers. |
 | `account_api_client.go` | `AccountAPIClient`: account API request construction, auth headers, proxy-aware timeout handling, and bounded response reads. |
 | `account_session_service.go` | `AccountSessionService`: password login, session ensure/save, token/cookie persistence, and login response parsing. |
@@ -98,7 +99,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | File | Purpose |
 |------|---------|
 | `scheduler.go` | Global scheduler, job status, next-run computation. |
-| `task_runner.go` | Unified task engine with SSE streaming progress and task start/cancel/stream HTTP handlers; checkin/balance task bodies delegate to `CheckinTaskService`. |
+| `task_runner.go` | Unified task engine with SSE streaming progress and task start/cancel/stream HTTP handlers; checkin/balance task bodies delegate to `CheckinTaskService`, and API key test tasks delegate to `AccountTaskService`. |
 | `dry_run.go` | Dry-run preview for batch operations (200 account limit). |
 
 ### Analytics & Diagnostics
@@ -133,6 +134,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | File | Purpose |
 |------|---------|
 | `account_auth_repo_test.go` | `AccountAuthRepository` unit tests. |
+| `account_task_service_test.go` | `AccountTaskService` task-progress integration test for API key test tasks. |
 | `accounts_cleanup_test.go` | Account cleanup tests. |
 | `accounts_key_test.go` | API key management tests. |
 | `action_center_test.go` | Action Center tests. |

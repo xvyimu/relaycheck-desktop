@@ -11,6 +11,9 @@ Read this first, then `CLAUDE.md` for architecture.
 
 The project is stable. The latest backend slice is:
 
+- `internal/core/account_task_service.go` — new `AccountTaskService` owns SSE task-facing API key test orchestration
+- `internal/core/task_runner.go` — `test_keys` task handler now delegates to `AccountTaskService`
+- `internal/core/account_task_service_test.go` — regression test covers task progress and API key result persistence
 - `internal/core/checkin_task_service.go` — new `CheckinTaskService` owns SSE task-facing checkin and balance refresh orchestration
 - `internal/core/task_runner.go` — `checkin` and `refresh_balances` task handlers now delegate to `CheckinTaskService`
 - `internal/core/checkin_task_service_test.go` — regression tests cover task progress and DB side effects for checkin and balance refresh
@@ -19,8 +22,9 @@ The project is stable. The latest backend slice is:
 
 Current local state:
 
-- Branch `main` is ahead of `origin/main` by 13 commits.
-- The `CheckinTaskService` slice is validated locally; push remains pending after the local commit.
+- Branch `main` is ahead of `origin/main`; run `rtk git status --branch --short` for the exact count.
+- The `CheckinTaskService` slice is committed locally.
+- The `AccountTaskService` slice is committed locally as `3658672`.
 
 Remote sync note:
 
@@ -35,7 +39,7 @@ Latest Go verification gates pass:
 
 ```powershell
 go vet -mod=vendor ./...
-go test -mod=vendor -count=1 ./...               # 968 tests pass
+go test -mod=vendor -count=1 ./...               # 969 tests pass
 go build -mod=vendor ./...
 go test -mod=vendor -cover -count=1 ./internal/core ./internal/accounts ./internal/channels ./internal/notifications ./internal/autostart ./internal/backup ./internal/versioncheck
 git diff --check
@@ -53,6 +57,26 @@ git diff --check
 ---
 
 ## What landed this session
+
+### Account task service extraction
+
+- Added `AccountTaskService` in `internal/core/account_task_service.go`.
+- Moved the `test_keys` task body out of `task_runner.go`; `task_runner.go` delegates API key test task orchestration while preserving task/SSE mechanics.
+- Wired `App.accountTasks` in `NewApp`.
+- Updated `internal/core/PACKAGE_INDEX.md` with the new service and test file.
+- Added `TestAccountTaskServiceStartTestKeysPublishesProgress`.
+
+Verification:
+
+- `rtk go test -mod=vendor -count=1 ./internal/core -run "AccountTaskService" -v` — 1 passed
+- `rtk go test -mod=vendor -count=1 ./internal/core -run "AccountTaskService|TaskRunner|APIKey|BulkTestAPIKeys" -v` — 6 passed
+- `rtk go test -mod=vendor -count=1 ./internal/core` — 378 passed
+- `rtk go test -mod=vendor -count=1 ./...` — 969 passed / 12 packages
+- `rtk go vet -mod=vendor ./...` — clean
+- `rtk go build -mod=vendor ./...` — success
+- `cd frontend; rtk npm test` — 213 passed
+- `cd frontend; rtk npm run build` — success
+- `rtk git diff --check` — clean
 
 ### Checkin task service extraction
 
