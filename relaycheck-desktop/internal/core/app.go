@@ -36,6 +36,7 @@ type App struct {
 	crypto              *CryptoService
 	accountAuth         *AccountAuthRepository
 	accountAPI          *AccountAPIClient
+	accountSession      *AccountSessionService
 	browserLogin        *BrowserLoginService
 	schedulerRepo       *SchedulerRepo
 	browserSessions     *BrowserSessionStore
@@ -148,6 +149,7 @@ func NewApp(root string) (*App, error) {
 		channelHealthRun: NewSyncJobRunStore(),
 	}
 	app.accountAPI = NewAccountAPIClient(app)
+	app.accountSession = NewAccountSessionService(app)
 	app.browserLogin = NewBrowserLoginService(app)
 	app.rootCtx, app.rootCancel = context.WithCancel(context.Background())
 	app.taskRunner.setRootCtx(app.rootCtx)
