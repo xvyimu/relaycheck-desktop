@@ -1264,42 +1264,7 @@ func extractUserID(body string) string {
 }
 
 func (a *App) callAccountAPI(ctx context.Context, auth accountAuthContext, method string, path string, body []byte) (int, string, error) {
-	var reader io.Reader
-	if body != nil {
-		reader = bytes.NewReader(body)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, normalizeBaseURL(auth.BaseURL)+path, reader)
-	if err != nil {
-		return 0, "", err
-	}
-	req.Header.Set("user-agent", firstNonEmpty(auth.UserAgent, "RelayCheck-Desktop/0.1"))
-	req.Header.Set("accept", "application/json, text/plain, */*")
-	if body != nil {
-		req.Header.Set("content-type", "application/json")
-	}
-	if auth.Cookie != "" {
-		req.Header.Set("cookie", auth.Cookie)
-	}
-	if auth.AuthUserID != "" {
-		headerName := "New-Api-User"
-		if h, ok := capabilities.UserIDHeaderForKind(auth.SiteKind); ok {
-			headerName = h
-		}
-		req.Header.Set(headerName, auth.AuthUserID)
-	}
-	if token := firstNonEmpty(auth.AccessToken, auth.APIKey); token != "" {
-		if !strings.HasPrefix(strings.ToLower(token), "bearer ") {
-			token = "Bearer " + token
-		}
-		req.Header.Set("authorization", token)
-	}
-	resp, err := a.doHTTP(req)
-	if err != nil {
-		return 0, "", err
-	}
-	defer resp.Body.Close()
-	content, _ := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
-	return resp.StatusCode, string(content), nil
+	return a.accountAPI.Do(ctx, auth, method, path, body)
 }
 
 func parseBalance(body string) balanceResult {

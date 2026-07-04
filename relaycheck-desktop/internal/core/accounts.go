@@ -1312,39 +1312,7 @@ func (a *App) speedTestAPIKeyModel(ctx context.Context, auth *accountAuthContext
 }
 
 func (a *App) callAccountAPIWithTimeout(ctx context.Context, auth accountAuthContext, method string, path string, body []byte, timeout time.Duration) (int, string, error) {
-	requestCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	baseURL, err := safeNormalizeBaseURL(requestCtx, auth.BaseURL, a.externalURLPolicy())
-	if err != nil {
-		return 0, "", err
-	}
-	var reader io.Reader
-	if body != nil {
-		reader = strings.NewReader(string(body))
-	}
-	req, err := http.NewRequestWithContext(requestCtx, method, baseURL+path, reader)
-	if err != nil {
-		return 0, "", err
-	}
-	req.Header.Set("user-agent", firstNonEmpty(auth.UserAgent, "RelayCheck-Desktop/0.1"))
-	req.Header.Set("accept", "application/json, text/plain, */*")
-	if body != nil {
-		req.Header.Set("content-type", "application/json")
-	}
-	if auth.APIKey != "" {
-		token := auth.APIKey
-		if !strings.HasPrefix(strings.ToLower(token), "bearer ") {
-			token = "Bearer " + token
-		}
-		req.Header.Set("authorization", token)
-	}
-	resp, err := a.doHTTPWithTimeout(req, timeout+time.Second)
-	if err != nil {
-		return 0, "", err
-	}
-	defer resp.Body.Close()
-	content, _ := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
-	return resp.StatusCode, string(content), nil
+	return a.accountAPI.DoWithTimeout(ctx, auth, method, path, body, timeout)
 }
 
 func parseModelIDs(body string) []string {
