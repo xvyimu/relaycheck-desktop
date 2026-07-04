@@ -33,24 +33,45 @@ func (a *App) handleAccounts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) listAccounts(w http.ResponseWriter, r *http.Request) {
-	items, err := cachedRead(a, "accounts-list", shortReadCacheTTL, func() ([]ChannelAccount, error) {
-		rows, err := a.db.QueryContext(r.Context(), `
-		SELECT a.id, a.upstream_site_id, s.name, s.base_url, COALESCE(s.login_url,''), s.kind, a.display_name, COALESCE(a.email,''), COALESCE(a.username,''),
-		       a.auth_type, COALESCE(a.browser_profile_path,''), a.login_status,
-		       COALESCE(a.api_key_fingerprint,''), COALESCE(a.api_key_status,''), COALESCE(a.api_key_last_checked_at,''),
-		       COALESCE(a.api_key_model_count,0), COALESCE(a.api_key_sample_models_json,''), COALESCE(a.api_key_test_model,''),
-		       COALESCE(a.api_key_model_usable,0), COALESCE(a.api_key_latency_ms,0), COALESCE(a.api_key_test_http_status,0),
-		       COALESCE(a.api_key_test_message,''), COALESCE(a.api_key_test_path,''),
-		       COALESCE(a.balance_unit,'unknown'),
-		       a.balance, COALESCE(a.last_checkin_at,''), COALESCE(a.last_checkin_status,''),
-		       COALESCE((SELECT l.message FROM checkin_logs l WHERE l.account_id = a.id ORDER BY l.started_at DESC LIMIT 1), ''),
-		       COALESCE(a.last_login_at,''), COALESCE(a.last_validated_at,''),
-		       COALESCE(a.cookie_expiry_at,''), COALESCE(a.storage_state_expiry_at,''),
-		       a.created_at, a.updated_at
-		FROM channel_accounts a
-		JOIN upstream_sites s ON s.id = a.upstream_site_id
-		ORDER BY a.updated_at DESC
-	`)
+	// Honor the optional ?upstreamSiteId= filter. The previous implementation
+	// ignored the query parameter and always returned the full table, which
+	// made per-site account views impossible. Cache key is scoped by siteId so
+	// filtered and unfiltered reads do not poison each other.
+	siteID := strings.TrimSpace(r.URL.Query().Get("upstreamSiteId"))
+	cacheKey := "accounts-list"
+	if siteID != "" {
+		cacheKey = "accounts-list:" + siteID
+	}
+
+	items, err := cachedRead(a, cacheKey, shortReadCacheTTL, func() ([]ChannelAccount, error) {
+		const selectColumns = `
+			SELECT a.id, a.upstream_site_id, s.name, s.base_url, COALESCE(s.login_url,''), s.kind, a.display_name, COALESCE(a.email,''), COALESCE(a.username,''),
+			       a.auth_type, COALESCE(a.browser_profile_path,''), a.login_status,
+			       COALESCE(a.api_key_fingerprint,''), COALESCE(a.api_key_status,''), COALESCE(a.api_key_last_checked_at,''),
+			       COALESCE(a.api_key_model_count,0), COALESCE(a.api_key_sample_models_json,''), COALESCE(a.api_key_test_model,''),
+			       COALESCE(a.api_key_model_usable,0), COALESCE(a.api_key_latency_ms,0), COALESCE(a.api_key_test_http_status,0),
+			       COALESCE(a.api_key_test_message,''), COALESCE(a.api_key_test_path,''),
+			       COALESCE(a.balance_unit,'unknown'),
+			       a.balance, COALESCE(a.last_checkin_at,''), COALESCE(a.last_checkin_status,''),
+			       COALESCE((SELECT l.message FROM checkin_logs l WHERE l.account_id = a.id ORDER BY l.started_at DESC LIMIT 1), ''),
+			       COALESCE(a.last_login_at,''), COALESCE(a.last_validated_at,''),
+			       COALESCE(a.cookie_expiry_at,''), COALESCE(a.storage_state_expiry_at,''),
+			       a.created_at, a.updated_at
+			FROM channel_accounts a
+			JOIN upstream_sites s ON s.id = a.upstream_site_id
+		`
+		var rows *sql.Rows
+		var err error
+		if siteID != "" {
+			rows, err = a.db.QueryContext(r.Context(), selectColumns+`
+				WHERE a.upstream_site_id = ?
+				ORDER BY a.updated_at DESC
+			`, siteID)
+		} else {
+			rows, err = a.db.QueryContext(r.Context(), selectColumns+`
+				ORDER BY a.updated_at DESC
+			`)
+		}
 		if err != nil {
 			return nil, err
 		}

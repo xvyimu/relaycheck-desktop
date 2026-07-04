@@ -3,21 +3,25 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-03
+**Last updated:** 2026-07-04
 
 ---
 
 ## Current state
 
-The project is stable. The latest local code/test cleanup commit is:
+The project is stable. The latest backend slice is:
 
-- Commit: `2558a9b` — `test(core): cover account helper defaults`
+- `internal/core/accounts.go` — `listAccounts` now honors `?upstreamSiteId=`
+- `internal/core/accounts_list_test.go` — regression test for filtered reads after the unfiltered cache is populated
 
 Remote sync note:
 
-- `origin/main` currently points at `9aff466` (`test(autostart): cover windows startup helpers`) unless a later push has succeeded.
-- The local worktree is clean, but `main` may be ahead of `origin/main` because GitHub HTTPS connectivity failed with `Failed to connect to github.com port 443`.
-- When network recovers, run `rtk git push origin main`, then confirm `rtk git status --branch --short` no longer reports `ahead`.
+- `origin/main` includes the recent UI/UX commits through `08af812` (`fix(ui): improve scan panel feedback`).
+- If GitHub HTTPS is unreachable, push through the local proxy with:
+  ```powershell
+  rtk git -c http.proxy=http://127.0.0.1:7897 -c https.proxy=http://127.0.0.1:7897 -c http.version=HTTP/1.1 push origin main
+  ```
+- After push, confirm `rtk git status --branch --short` no longer reports `ahead` and the worktree is clean.
 
 Latest Go verification gates pass:
 
@@ -63,7 +67,36 @@ Latest package-level Go coverage snapshot:
 | `internal/backup` | **81.4%** |
 | `internal/versioncheck` | **92.5%** |
 
-### Schedule UI/API hardening
+### Accounts list filter bug fix + new-api sync exploration
+
+- `internal/core/accounts.go`: Fixed `listAccounts` ignoring `?upstreamSiteId=` query parameter. Added `r.URL.Query().Get("upstreamSiteId")` parsing, scoped cache key (`"accounts-list"` vs `"accounts-list:"+siteID`), and conditional `WHERE a.upstream_site_id = ?` in SQL.
+- `internal/core/accounts_list_test.go`: New regression test — fills unfiltered cache first, then verifies per-site filter returns exactly one row with correct ownership.
+- New‑API sync exploration: local new‑api fork (port 3000, PID 10232, `new-api-fixed`) — `one-api.db` at `C:\Users\yuanjia\one-api.db`. `channels` table is empty (0 rows). Admin login (user `xiejia`) requires 2FA. No data to import.
+- Temp access token written to new‑api DB for verification then cleaned up.
+- relaycheck.exe cannot be started from sandbox (EPERM uv_spawn on both PS/Bash).
+
+Verification gates passed:
+- `go test -mod=vendor -count=1 ./internal/core -run TestListAccountsHonorsUpstreamSiteIDFilter -v`
+- `go test -mod=vendor -count=1 ./internal/core` — 363 tests
+- `go test -mod=vendor -count=1 ./...` — 949 tests / 11 packages
+- `go build -mod=vendor ./...`
+- `go vet -mod=vendor ./...`
+
+| Package | Status |
+|---------|--------|
+| internal/core | 5.169s ✅ (includes new filter regression test) |
+| internal/accounts | 0.710s ✅ |
+| internal/notifications | 10.593s ✅ |
+| internal/backup | 4.705s ✅ |
+| internal/channels | 0.636s ✅ |
+
+### Suggested next steps (priority order)
+
+1. **Confirm a clean synced worktree** after this slice is committed:
+   ```powershell
+   cd E:\zidqiandao\relaycheck-desktop
+   rtk git status --branch --short
+   ```
 
 - `internal/core/channel_schedules.go`: added random delay validation for per-site schedules (`0 <= min <= max <= 120`) before DB writes, so bad payloads return HTTP 400 instead of leaking into persistence or surfacing as 500.
 - `internal/core/channel_schedules_test.go`: added table-driven regression coverage for negative delay, delay above 120, and `min > max`.
@@ -190,6 +223,7 @@ Expected final state: no `ahead` marker.
 
 | Date | Session | Outcome |
 |------|---------|---------|
+| 2026-07-04 | Accounts filter bug fix + new-api sync exploration | `listAccounts` now honors `?upstreamSiteId=` with scoped cache + regression test. New-API sync found 0 channels to import. 2FA blocks admin login. Go gates all green. |
 | 2026-07-03 | Maintenance coverage cleanup | `10def66`, `9aff466`, `2558a9b`: exported scanner helpers, Windows autostart helpers, core account helper defaults. 928 Go tests pass. Push of `2558a9b` is pending if GitHub 443 remains unreachable. |
 | 2026-07-03 | Schedule UI/API hardening | `09969ad`: per-site schedule random-delay validation, non-silent preview failures, responsive schedule preview rows, `npm run smoke:schedules`. Verification passed and pushed to `origin/main`. |
 | 2026-07-02 | rootCtx lifecycle + cleanup | `9fb28d4`: StartSchedulers derives from a.rootCtx. `ac8687e`: all remaining context.Background() in scheduler.go replaced with ctx. 861 tests pass. |
