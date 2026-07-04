@@ -40,6 +40,7 @@ type App struct {
 	browserLogin        *BrowserLoginService
 	checkinExecutor     *CheckinExecutor
 	balanceRefresher    *BalanceRefresher
+	checkinBatch        *CheckinBatchOrchestrator
 	schedulerRepo       *SchedulerRepo
 	browserSessions     *BrowserSessionStore
 	mu                  sync.RWMutex
@@ -155,6 +156,7 @@ func NewApp(root string) (*App, error) {
 	app.browserLogin = NewBrowserLoginService(app)
 	app.checkinExecutor = NewCheckinExecutor(app)
 	app.balanceRefresher = NewBalanceRefresher(app)
+	app.checkinBatch = NewCheckinBatchOrchestrator(app)
 	app.rootCtx, app.rootCancel = context.WithCancel(context.Background())
 	app.taskRunner.setRootCtx(app.rootCtx)
 

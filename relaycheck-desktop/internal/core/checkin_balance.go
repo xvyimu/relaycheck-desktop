@@ -291,149 +291,22 @@ func (a *App) handleRunAllCheckins(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) runDueCheckins(ctx context.Context, mode string) ([]map[string]interface{}, error) {
-	results, err := a.runDueCheckinsWithFilter(ctx, mode, "", "正在签到...", "今天没有待签到账号。")
-	if err == errCheckinRunBusy {
-		return nil, errorsText("已有签到任务正在运行，请等待当前任务完成。")
-	}
-	return results, err
+	return a.checkinBatch.Run(ctx, mode)
 }
 
 // runDueCheckinsForSite runs checkins only for accounts belonging to the given site.
 func (a *App) runDueCheckinsForSite(ctx context.Context, siteID string) ([]map[string]interface{}, error) {
-	return a.runDueCheckinsWithFilter(ctx, "channel."+siteID, siteID, "正在签到(独立排程)...", "")
+	return a.checkinBatch.RunForSite(ctx, siteID)
 }
 
 var errCheckinRunBusy = errorsText("checkin run already in progress")
 
 func (a *App) runDueCheckinsWithFilter(ctx context.Context, mode string, siteID string, currentMessage string, emptyMessage string) ([]map[string]interface{}, error) {
-	accounts, err := a.loadDueCheckinAccounts(ctx, siteID, 0)
-	if err != nil {
-		return nil, err
-	}
-	if siteID != "" && len(accounts) == 0 {
-		return nil, nil
-	}
-	if !a.beginCheckinRun(mode, len(accounts)) {
-		return nil, errCheckinRunBusy
-	}
-	defer a.finishCheckinRun()
-
-	results := make([]map[string]interface{}, 0, len(accounts))
-	if len(accounts) == 0 && emptyMessage != "" {
-		a.updateCheckinRunMessage(emptyMessage)
-	}
-	siteLimiter := newCheckinSiteLimiter(a.loadCheckinScheduleConfig(ctx))
-	accountIDs := make([]string, 0, len(accounts))
-	for _, account := range accounts {
-		accountIDs = append(accountIDs, account.ID)
-	}
-	auths, _ := a.loadAccountAuths(ctx, accountIDs)
-	for _, account := range accounts {
-		if ctx.Err() != nil {
-			break
-		}
-		if err := siteLimiter.wait(ctx, account.UpstreamSiteID); err != nil {
-			return results, err
-		}
-		a.updateCheckinRunCurrent(account.ID, account.AccountName, account.SiteName, currentMessage)
-		var auth *accountAuthContext
-		if loaded, ok := auths[account.ID]; ok {
-			auth = &loaded
-		}
-		result, err := a.runAccountCheckin(ctx, account.ID, auth)
-		entry := map[string]interface{}{
-			"accountId":   account.ID,
-			"accountName": account.AccountName,
-			"siteName":    account.SiteName,
-		}
-		if err != nil {
-			entry["status"] = "failed"
-			entry["message"] = err.Error()
-			a.recordCheckinRunResult("failed", err.Error())
-		} else {
-			entry["status"] = result.Status
-			entry["message"] = result.Message
-			entry["path"] = result.Path
-			a.recordCheckinRunResult(result.Status, result.Message)
-		}
-		results = append(results, entry)
-	}
-	return results, nil
+	return a.checkinBatch.runWithFilter(ctx, mode, siteID, currentMessage, emptyMessage)
 }
 
 func (a *App) loadDueCheckinAccounts(ctx context.Context, siteID string, limit int) ([]checkinRunAccount, error) {
-	query := `
-		SELECT a.id, a.display_name, s.id, s.name
-		FROM channel_accounts a
-		JOIN upstream_sites s ON s.id = a.upstream_site_id
-		WHERE (COALESCE(a.last_checkin_status,'') NOT IN ('success','already_checked')
-		   OR COALESCE(substr(a.last_checkin_at, 1, 10),'') <> ?)
-	`
-	args := []interface{}{todayCST()}
-	if siteID != "" {
-		query += ` AND a.upstream_site_id = ?`
-		args = append(args, siteID)
-	}
-	query += ` ORDER BY a.updated_at DESC`
-	if limit > 0 {
-		query += ` LIMIT ?`
-		args = append(args, limit)
-	}
-	rows, err := a.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	accounts := []checkinRunAccount{}
-	for rows.Next() {
-		var account checkinRunAccount
-		if err := rows.Scan(&account.ID, &account.AccountName, &account.UpstreamSiteID, &account.SiteName); err != nil {
-			return nil, err
-		}
-		accounts = append(accounts, account)
-	}
-	return accounts, rows.Err()
-}
-
-type checkinSiteLimiter struct {
-	minInterval time.Duration
-	lastStarted map[string]time.Time
-}
-
-func newCheckinSiteLimiter(config checkinScheduleConfig) *checkinSiteLimiter {
-	interval := time.Duration(config.SiteMinIntervalSeconds) * time.Second
-	if interval < 0 {
-		interval = 0
-	}
-	return &checkinSiteLimiter{
-		minInterval: interval,
-		lastStarted: map[string]time.Time{},
-	}
-}
-
-func (l *checkinSiteLimiter) wait(ctx context.Context, siteID string) error {
-	if l == nil || l.minInterval <= 0 || strings.TrimSpace(siteID) == "" {
-		return nil
-	}
-	nowTime := time.Now()
-	delay := l.delayFor(siteID, nowTime)
-	if delay > 0 && !sleepWithContext(ctx, delay) {
-		return ctx.Err()
-	}
-	l.lastStarted[siteID] = time.Now()
-	return nil
-}
-
-func (l *checkinSiteLimiter) delayFor(siteID string, nowTime time.Time) time.Duration {
-	lastStarted, exists := l.lastStarted[siteID]
-	if !exists {
-		return 0
-	}
-	elapsed := nowTime.Sub(lastStarted)
-	if elapsed >= l.minInterval {
-		return 0
-	}
-	return l.minInterval - elapsed
+	return a.checkinBatch.LoadDueAccounts(ctx, siteID, limit)
 }
 
 func (a *App) beginCheckinRun(mode string, total int) bool {
