@@ -1,6 +1,6 @@
 # internal/core Package Index
 
-Last updated: 2026-07-02 (commit `0bd8c13`, local)
+Last updated: 2026-07-04 (local)
 
 The `internal/core` package is the assembly root for RelayCheck Desktop's backend. It holds the `App` struct (`app.go`), HTTP handlers, cross-cutting concerns (audit/crypto/network/url_safety), and forwarding methods to 8 extracted domain packages under `internal/<domain>/`. See `CLAUDE.md` for the architecture overview.
 
@@ -40,6 +40,9 @@ Each owns its own mutex and is independently testable. `*App` retains thin forwa
 |------|---------|
 | `crypto_service.go` | `CryptoService` type: AES-256-GCM encryption with `v1.<nonce>.<ciphertext>` format. Extracted from `crypto.go` bodies of `encryptText`/`decryptText`. |
 | `account_auth_repo.go` | `AccountAuthRepository`: `Load(ctx,id)` + `LoadBatch(ctx,ids)` for account authentication context. Injects `db`+`crypto`. |
+| `browser_login_service.go` | `BrowserLoginService`: browser login open/save orchestration and login target URL resolution. `accounts.go` keeps thin compatibility wrappers. |
+| `account_api_client.go` | `AccountAPIClient`: account API request construction, auth headers, proxy-aware timeout handling, and bounded response reads. |
+| `account_session_service.go` | `AccountSessionService`: password login, session ensure/save, token/cookie persistence, and login response parsing. |
 | `checkin_run_state.go` | `CheckinRunStore`: checkin run state with independent `sync.RWMutex`; `Snapshot()` for reads. Replaces `a.checkinRun` + 5 mutators. |
 | `sync_job_run_store.go` | `SyncJobRunStore`: `TryStart()`/`Finish()` re-entrancy guard for scheduled jobs. Replaces `a.localSyncRun`/`channelHealthRun`. |
 | `scheduler_repo.go` | `SchedulerRepo`: pure db repository for `loadSettingJSON`/`loadSchedulerRun`/`upsertSchedulerPlan`. |
@@ -82,7 +85,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 
 | File | Purpose |
 |------|---------|
-| `checkin_balance.go` | Checkin execution, balance refresh, login flow, API key testing. Highly coupled to `*App` (db, notify, checkinRun, accountAuth, callAccountAPI, loginWithPassword, saveAccountSession, encryptText, currentNetworkProxyConfig). Evaluated for extraction in Phase 2 and intentionally kept in `core`. |
+| `checkin_balance.go` | Checkin execution and balance/API key orchestration. Browser login, account API calls, and account session login/persistence are delegated to extracted core services; database result writes and scheduler/task integration remain in `core`. |
 | `usage_overview.go` | Usage overview aggregation. |
 | `balance_bulk_test.go` | Tests for bulk balance refresh. |
 

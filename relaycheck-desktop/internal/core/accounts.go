@@ -420,7 +420,7 @@ func (a *App) retryPasswordLogin(ctx context.Context, id string, auth *accountAu
 	auth.Cookie = ""
 	auth.AccessToken = ""
 	auth.AuthUserID = ""
-	if err := a.loginWithPassword(ctx, auth); err != nil {
+	if err := a.accountSession.LoginWithPassword(ctx, auth); err != nil {
 		result.Status = "expired"
 		result.Message = err.Error()
 		if _, execErr := a.db.ExecContext(ctx, `UPDATE channel_accounts SET login_status='expired', last_validated_at=?, updated_at=? WHERE id=?`, now(), now(), id); execErr != nil {
@@ -480,7 +480,7 @@ func (a *App) handleBulkOpenBrowserLogin(w http.ResponseWriter, r *http.Request)
 		if loaded, ok := auths[id]; ok {
 			auth = &loaded
 		}
-		result := a.startBrowserLogin(r.Context(), id, auth)
+		result := a.browserLogin.Open(r.Context(), id, auth)
 		if result.Status == "opened" || result.Status == "already_open" {
 			opened++
 		}
@@ -519,7 +519,7 @@ func (a *App) handleBulkFinishBrowserLogin(w http.ResponseWriter, r *http.Reques
 		if loaded, ok := auths[id]; ok {
 			auth = &loaded
 		}
-		result := a.saveBrowserLoginSession(r.Context(), id, auth)
+		result := a.browserLogin.Save(r.Context(), id, auth)
 		if result.Status == "saved" {
 			saved++
 		}
@@ -975,7 +975,7 @@ func (a *App) openBrowserLogin(w http.ResponseWriter, r *http.Request, id string
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	result := a.startBrowserLogin(r.Context(), id, nil)
+	result := a.browserLogin.Open(r.Context(), id, nil)
 	if result.Status == "failed" {
 		writeError(w, http.StatusInternalServerError, result.Message)
 		return
@@ -987,7 +987,7 @@ func (a *App) finishBrowserLogin(w http.ResponseWriter, r *http.Request, id stri
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	result := a.saveBrowserLoginSession(r.Context(), id, nil)
+	result := a.browserLogin.Save(r.Context(), id, nil)
 	if result.Status == "failed" {
 		writeError(w, http.StatusBadRequest, result.Message)
 		return
@@ -1186,7 +1186,7 @@ func (a *App) testAPIKeyForAccount(ctx context.Context, id string, auth *account
 	auth.AccessToken = ""
 	auth.AuthUserID = ""
 
-	modelsStatus, modelsBody, modelsErr := a.callAccountAPI(ctx, *auth, http.MethodGet, "/v1/models", nil)
+	modelsStatus, modelsBody, modelsErr := a.accountAPI.Do(ctx, *auth, http.MethodGet, "/v1/models", nil)
 	result.HTTPStatus = modelsStatus
 	result.Path = "/v1/models"
 	if modelsErr != nil {
@@ -1218,7 +1218,7 @@ func (a *App) testAPIKeyForAccount(ctx context.Context, id string, auth *account
 	if result.Status == "unknown" {
 		probes := []string{"/api/user/self", "/api/token/"}
 		for _, path := range probes {
-			status, body, err := a.callAccountAPI(ctx, *auth, http.MethodGet, path, nil)
+			status, body, err := a.accountAPI.Do(ctx, *auth, http.MethodGet, path, nil)
 			if err != nil {
 				result.Path = path
 				result.Message = err.Error()
@@ -1286,7 +1286,7 @@ func (a *App) speedTestAPIKeyModel(ctx context.Context, auth *accountAuthContext
 	}
 	body, _ := json.Marshal(payload)
 	started := time.Now()
-	status, responseBody, err := a.callAccountAPIWithTimeout(ctx, *auth, http.MethodPost, "/v1/chat/completions", body, 12*time.Second)
+	status, responseBody, err := a.accountAPI.DoWithTimeout(ctx, *auth, http.MethodPost, "/v1/chat/completions", body, 12*time.Second)
 	result.ModelTestLatencyMs = time.Since(started).Milliseconds()
 	result.ModelTestHTTPStatus = status
 	result.ModelTestPath = "/v1/chat/completions"

@@ -600,7 +600,7 @@ func (a *App) runAccountCheckin(ctx context.Context, id string, auth *accountAut
 		}
 		return result, nil
 	}
-	if err := a.ensureAccountSession(ctx, auth); err != nil && auth.Cookie == "" && auth.AccessToken == "" && auth.APIKey == "" {
+	if err := a.accountSession.Ensure(ctx, auth); err != nil && auth.Cookie == "" && auth.AccessToken == "" && auth.APIKey == "" {
 		result := checkinResult{Status: "auth_expired", Message: "账号密码登录失败：" + err.Error()}
 		if err := a.saveCheckinResult(ctx, *auth, result, now(), now()); err != nil {
 			log.Printf("[checkin] save result failed for account %s: %v", id, err)
@@ -625,7 +625,7 @@ func (a *App) runAccountCheckin(ctx context.Context, id string, auth *accountAut
 			auth.Cookie = ""
 			auth.AccessToken = ""
 			auth.AuthUserID = ""
-			if loginErr := a.loginWithPassword(ctx, auth); loginErr != nil {
+			if loginErr := a.accountSession.LoginWithPassword(ctx, auth); loginErr != nil {
 				result.Message = "账号密码登录失败：" + loginErr.Error()
 				result.HTTPStatus = 0
 				result.Path = ""
@@ -679,7 +679,7 @@ func (a *App) callCheckinAPIWithRetry(ctx context.Context, auth accountAuthConte
 		postBody = []byte("{}")
 	}
 	for attempt := 1; attempt <= attempts; attempt++ {
-		status, body, err = a.callAccountAPI(ctx, auth, candidate.Method, candidate.Path, postBody)
+		status, body, err = a.accountAPI.Do(ctx, auth, candidate.Method, candidate.Path, postBody)
 		if !shouldRetryCheckinAttempt(status, err) || attempt == attempts {
 			return status, body, attempt - 1, err
 		}
@@ -902,13 +902,13 @@ func (a *App) refreshAccountBalance(ctx context.Context, id string, auth *accoun
 	if !auth.SupportsBalance {
 		return balanceResult{Unit: "unknown", HTTPStatus: 0, Path: "", RawResponseMasked: "", Balance: nil}, errorsText("该站点未探测到余额接口。")
 	}
-	if err := a.ensureAccountSession(ctx, auth); err != nil && auth.Cookie == "" && auth.AccessToken == "" && auth.APIKey == "" {
+	if err := a.accountSession.Ensure(ctx, auth); err != nil && auth.Cookie == "" && auth.AccessToken == "" && auth.APIKey == "" {
 		return balanceResult{Unit: "unknown"}, fmt.Errorf("账号密码登录失败：%w", err)
 	}
 
 	var lastErr error
 	for _, path := range balanceCandidates {
-		status, body, err := a.callAccountAPI(ctx, *auth, http.MethodGet, path, nil)
+		status, body, err := a.accountAPI.Do(ctx, *auth, http.MethodGet, path, nil)
 		if err != nil {
 			lastErr = err
 			continue
