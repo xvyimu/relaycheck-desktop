@@ -12,89 +12,12 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"relaycheck-desktop/internal/capabilities"
 	"strings"
 	"time"
 )
 
-type apiCandidate struct {
-	Method string
-	Path   string
-}
-
-var checkinCandidates = []apiCandidate{
-	{http.MethodPost, "/api/user/checkin"},
-	{http.MethodGet, "/api/user/checkin"},
-	{http.MethodPost, "/api/checkin"},
-	{http.MethodGet, "/api/checkin"},
-	{http.MethodPost, "/api/user/check_in"},
-	{http.MethodGet, "/api/user/check_in"},
-	{http.MethodPost, "/api/user/signin"},
-	{http.MethodGet, "/api/user/signin"},
-	{http.MethodPost, "/api/user/sign_in"},
-	{http.MethodGet, "/api/user/sign_in"},
-	{http.MethodPost, "/api/user/sign-in"},
-	{http.MethodGet, "/api/user/sign-in"},
-	{http.MethodPost, "/api/signin"},
-	{http.MethodGet, "/api/signin"},
-	{http.MethodPost, "/api/sign_in"},
-	{http.MethodGet, "/api/sign_in"},
-	{http.MethodPost, "/api/sign-in"},
-	{http.MethodGet, "/api/sign-in"},
-	{http.MethodPost, "/api/daily_checkin"},
-	{http.MethodGet, "/api/daily_checkin"},
-	{http.MethodPost, "/api/daily-checkin"},
-	{http.MethodGet, "/api/daily-checkin"},
-}
-
-// siteTypeCheckinPaths maps site kind to the preferred checkin endpoint.
-// Based on AI API Hub research: NewAPI family uses /api/user/checkin,
-// Veloera uses /api/user/check_in, etc.
-var siteTypeCheckinPaths = map[string][]apiCandidate{
-	"newapi": {
-		{http.MethodPost, "/api/user/checkin"},
-	},
-	"oneapi": {
-		{http.MethodPost, "/api/user/checkin"},
-	},
-	"modified_relay": {
-		{http.MethodPost, "/api/user/checkin"},
-		{http.MethodPost, "/api/user/check_in"},
-	},
-}
-
-// compatUserIDHeaders maps site kind to the custom user-ID header name.
-var compatUserIDHeaders = map[string]string{
-	"newapi":         "New-Api-User",
-	"oneapi":         "New-Api-User",
-	"modified_relay": "New-Api-User",
-}
-
-// checkinCandidatesForSite returns site-type-specific candidates first, then fallbacks.
-func checkinCandidatesForSite(siteKind string, customRules []apiCandidate) []apiCandidate {
-	var candidates []apiCandidate
-	// Custom rules always take top priority.
-	candidates = append(candidates, customRules...)
-	// Site-type-specific paths come next.
-	if preferred, ok := siteTypeCheckinPaths[siteKind]; ok {
-		candidates = append(candidates, preferred...)
-	}
-	// Global fallbacks last.
-	candidates = append(candidates, checkinCandidates...)
-	return dedupeCandidates(candidates)
-}
-
-func dedupeCandidates(candidates []apiCandidate) []apiCandidate {
-	seen := map[string]bool{}
-	result := []apiCandidate{}
-	for _, c := range candidates {
-		key := c.Method + " " + c.Path
-		if !seen[key] {
-			seen[key] = true
-			result = append(result, c)
-		}
-	}
-	return result
-}
+type apiCandidate = capabilities.APICandidate
 
 var balanceCandidates = []string{
 	"/v1/dashboard/billing/subscription",
@@ -686,7 +609,7 @@ func (a *App) runAccountCheckin(ctx context.Context, id string, auth *accountAut
 
 	startedAt := now()
 	lastUnsupported := checkinResult{Status: "unsupported", Message: "未找到可用签到接口。"}
-	candidates := checkinCandidatesForSite(auth.SiteKind, auth.CheckinRules)
+	candidates := capabilities.CheckinCandidatesForKind(auth.SiteKind, auth.CheckinRules)
 	for _, candidate := range candidates {
 		status, body, retries, err := a.callCheckinAPIWithRetry(ctx, *auth, candidate)
 		if err != nil {
@@ -1136,7 +1059,7 @@ func (a *App) loginWithPassword(ctx context.Context, auth *accountAuthContext) e
 		{"email": auth.LoginName, "password": auth.Password},
 		{"account": auth.LoginName, "password": auth.Password},
 	}
-	loginPaths := candidateLoginPaths(auth.LoginPath)
+	loginPaths := capabilities.LoginAPIPaths(auth.LoginPath)
 	var lastErr error
 	pathFailures := []string{}
 	for _, loginPath := range loginPaths {
@@ -1193,24 +1116,6 @@ func (a *App) loginWithPassword(ctx context.Context, auth *accountAuthContext) e
 		return lastErr
 	}
 	return errorsText("登录接口不可用。")
-}
-
-func candidateLoginPaths(customPath string) []string {
-	paths := []string{}
-	if strings.Contains(customPath, "/api/") {
-		paths = append(paths, customPath)
-	}
-	paths = append(paths, "/api/user/login", "/api/login", "/api/auth/login")
-	seen := map[string]bool{}
-	result := []string{}
-	for _, path := range paths {
-		if path == "" || seen[path] {
-			continue
-		}
-		seen[path] = true
-		result = append(result, path)
-	}
-	return result
 }
 
 func (a *App) doLoginHTTP(req *http.Request, jar *cookiejar.Jar) (*http.Response, error) {
@@ -1374,7 +1279,7 @@ func (a *App) callAccountAPI(ctx context.Context, auth accountAuthContext, metho
 	}
 	if auth.AuthUserID != "" {
 		headerName := "New-Api-User"
-		if h, ok := compatUserIDHeaders[auth.SiteKind]; ok {
+		if h, ok := capabilities.UserIDHeaderForKind(auth.SiteKind); ok {
 			headerName = h
 		}
 		req.Header.Set(headerName, auth.AuthUserID)

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"relaycheck-desktop/internal/capabilities"
 	"strings"
 	"sync"
 )
@@ -29,67 +30,9 @@ var localProbePaths = []string{
 	"/", "/login", "/api/status", "/api/user/self", "/api/user/token", "/api/user/models",
 	"/api/channel/", "/api/channel/models", "/api/token/",
 }
-var upstreamProbePaths = []string{
-	"/", "/login", "/v1/models", "/v1/usage", "/v1beta/models",
-	"/api/status", "/api/about", "/api/home_page_content",
-	"/api/user/self", "/api/user/self/groups", "/api/user/token", "/api/user/models",
-	"/api/user/available_models", "/api/user/dashboard", "/api/user/quota", "/api/user/topup/info",
-	"/api/user/login", "/api/auth/login", "/api/login", "/api/user/register",
-	"/api/user/checkin", "/api/checkin", "/api/user/check_in",
-	"/api/pricing", "/api/option", "/api/group", "/api/redemption",
-	"/api/channel/", "/api/channel/models", "/api/token/", "/api/log/token",
-	"/api/subscription/self",
-	"/api/v1/status", "/api/v1/settings/public", "/api/v1/auth/me", "/api/v1/user", "/api/v1/user/profile",
-	"/api/v1/keys", "/api/v1/tokens", "/api/v1/accounts", "/api/v1/groups/available",
-	"/api/v1/channels/available", "/api/v1/subscriptions/active", "/api/v1/user/platform-quotas",
-}
-
-var loginProbePaths = []string{
-	"/login",
-	"/console/login",
-	"/panel/login",
-	"/admin/login",
-	"/user/login",
-	"/auth/login",
-	"/signin",
-	"/sign-in",
-}
-
 var loginAnchorPattern = regexp.MustCompile(`(?is)<a\b([^>]*)>(.*?)</a>`)
 var loginHrefPattern = regexp.MustCompile(`(?is)\bhref\s*=\s*["']([^"']+)["']`)
 var loginAttributePattern = regexp.MustCompile(`(?is)\b(?:href|action)\s*=\s*["']([^"']+)["']`)
-
-// checkinCandidate mirrors the host's apiCandidate for probe-path assembly.
-// It is duplicated here so the sites package does not import core.
-type checkinCandidate struct {
-	Method string
-	Path   string
-}
-
-var checkinCandidates = []checkinCandidate{
-	{http.MethodPost, "/api/user/checkin"},
-	{http.MethodGet, "/api/user/checkin"},
-	{http.MethodPost, "/api/checkin"},
-	{http.MethodGet, "/api/checkin"},
-	{http.MethodPost, "/api/user/check_in"},
-	{http.MethodGet, "/api/user/check_in"},
-	{http.MethodPost, "/api/user/signin"},
-	{http.MethodGet, "/api/user/signin"},
-	{http.MethodPost, "/api/user/sign_in"},
-	{http.MethodGet, "/api/user/sign_in"},
-	{http.MethodPost, "/api/user/sign-in"},
-	{http.MethodGet, "/api/user/sign-in"},
-	{http.MethodPost, "/api/signin"},
-	{http.MethodGet, "/api/signin"},
-	{http.MethodPost, "/api/sign_in"},
-	{http.MethodGet, "/api/sign_in"},
-	{http.MethodPost, "/api/sign-in"},
-	{http.MethodGet, "/api/sign-in"},
-	{http.MethodPost, "/api/daily_checkin"},
-	{http.MethodGet, "/api/daily_checkin"},
-	{http.MethodPost, "/api/daily-checkin"},
-	{http.MethodGet, "/api/daily-checkin"},
-}
 
 type probeSpec struct {
 	Method    string
@@ -175,6 +118,9 @@ func (s *Service) DetectUpstream(ctx context.Context, raw string) Detection {
 	signals := map[string]bool{}
 	reachable := false
 	statusByPath := map[string]int{}
+	upstreamProbePaths := capabilities.UpstreamProbePaths()
+	loginProbePaths := capabilities.LoginProbePaths()
+	checkinCandidates := capabilities.CheckinCandidates()
 	specs := make([]probeSpec, 0, len(upstreamProbePaths)+len(loginProbePaths)+len(checkinCandidates))
 	for _, path := range upstreamProbePaths {
 		specs = append(specs, probeSpec{Method: http.MethodGet, Path: path, StatusKey: path})
@@ -358,7 +304,7 @@ func discoverLogin(baseURL string, results []probeFetchResult) *LoginDiscovery {
 	}
 
 	for _, result := range results {
-		if result.Spec.Method != http.MethodGet || !isLoginProbePath(result.Spec.Path) {
+		if result.Spec.Method != http.MethodGet || !capabilities.IsLoginProbePath(result.Spec.Path) {
 			continue
 		}
 		if result.Status == 0 || result.Status == http.StatusNotFound {
@@ -521,15 +467,6 @@ func looksLikeHTMLPayload(body string) bool {
 		strings.Contains(text, "<script") ||
 		strings.Contains(text, `id="root"`) ||
 		strings.Contains(text, `id="app"`)
-}
-
-func isLoginProbePath(path string) bool {
-	for _, candidate := range loginProbePaths {
-		if path == candidate {
-			return true
-		}
-	}
-	return false
 }
 
 func looksLikeExplicitLoginForm(body string) bool {
