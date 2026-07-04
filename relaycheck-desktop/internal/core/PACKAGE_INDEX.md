@@ -43,6 +43,8 @@ Each owns its own mutex and is independently testable. `*App` retains thin forwa
 | `browser_login_service.go` | `BrowserLoginService`: browser login open/save orchestration and login target URL resolution. `accounts.go` keeps thin compatibility wrappers. |
 | `account_api_client.go` | `AccountAPIClient`: account API request construction, auth headers, proxy-aware timeout handling, and bounded response reads. |
 | `account_session_service.go` | `AccountSessionService`: password login, session ensure/save, token/cookie persistence, and login response parsing. |
+| `checkin_executor.go` | `CheckinExecutor`: single-account checkin execution, retry, result persistence, and notification dispatch. `checkin_balance.go` keeps thin compatibility wrappers. |
+| `balance_refresher.go` | `BalanceRefresher`: single-account balance refresh, result persistence, and notification dispatch. `checkin_balance.go` keeps thin compatibility wrappers. |
 | `checkin_run_state.go` | `CheckinRunStore`: checkin run state with independent `sync.RWMutex`; `Snapshot()` for reads. Replaces `a.checkinRun` + 5 mutators. |
 | `sync_job_run_store.go` | `SyncJobRunStore`: `TryStart()`/`Finish()` re-entrancy guard for scheduled jobs. Replaces `a.localSyncRun`/`channelHealthRun`. |
 | `scheduler_repo.go` | `SchedulerRepo`: pure db repository for `loadSettingJSON`/`loadSchedulerRun`/`upsertSchedulerPlan`. |
@@ -85,7 +87,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 
 | File | Purpose |
 |------|---------|
-| `checkin_balance.go` | Checkin execution and balance/API key orchestration. Browser login, account API calls, and account session login/persistence are delegated to extracted core services; database result writes and scheduler/task integration remain in `core`. |
+| `checkin_balance.go` | Checkin/balance HTTP handlers, bulk orchestration, schedule/status summaries, parsing helpers, and thin compatibility wrappers to `CheckinExecutor`/`BalanceRefresher`. |
 | `usage_overview.go` | Usage overview aggregation. |
 | `balance_bulk_test.go` | Tests for bulk balance refresh. |
 
@@ -142,6 +144,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | `channel_health_test.go` | Channel health tests. |
 | `channel_models_test.go` | Channel model sync tests. |
 | `channel_schedules_test.go` | Channel schedule tests. |
+| `checkin_execution_services_test.go` | `CheckinExecutor` and `BalanceRefresher` service tests. |
 | `checkin_run_state_test.go` | `CheckinRunStore` unit tests. |
 | `checkin_status_test.go` | Checkin status tests. |
 | `crypto_service_test.go` | `CryptoService` unit tests. |

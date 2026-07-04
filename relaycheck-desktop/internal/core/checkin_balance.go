@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"net/http"
 	"net/http/cookiejar"
@@ -586,108 +585,11 @@ func computeCheckinScheduleStatus(enabled bool, scheduleTime string, randomDelay
 }
 
 func (a *App) runAccountCheckin(ctx context.Context, id string, auth *accountAuthContext) (checkinResult, error) {
-	if auth == nil {
-		loaded, err := a.loadAccountAuth(ctx, id)
-		if err != nil {
-			return checkinResult{}, err
-		}
-		auth = &loaded
-	}
-	if !auth.SupportsCheckin {
-		result := checkinResult{Status: "unsupported", Message: "该站点未探测到签到接口。"}
-		if err := a.saveCheckinResult(ctx, *auth, result, now(), now()); err != nil {
-			log.Printf("[checkin] save result failed for account %s: %v", id, err)
-		}
-		return result, nil
-	}
-	if err := a.accountSession.Ensure(ctx, auth); err != nil && auth.Cookie == "" && auth.AccessToken == "" && auth.APIKey == "" {
-		result := checkinResult{Status: "auth_expired", Message: "账号密码登录失败：" + err.Error()}
-		if err := a.saveCheckinResult(ctx, *auth, result, now(), now()); err != nil {
-			log.Printf("[checkin] save result failed for account %s: %v", id, err)
-		}
-		return result, nil
-	}
-
-	startedAt := now()
-	lastUnsupported := checkinResult{Status: "unsupported", Message: "未找到可用签到接口。"}
-	candidates := capabilities.CheckinCandidatesForKind(auth.SiteKind, auth.CheckinRules)
-	for _, candidate := range candidates {
-		status, body, retries, err := a.callCheckinAPIWithRetry(ctx, *auth, candidate)
-		if err != nil {
-			lastUnsupported = annotateCheckinRetry(checkinResult{Status: "failed", Message: err.Error(), Path: candidate.Path, RetryCount: retries})
-			continue
-		}
-		if status == http.StatusNotFound || status == http.StatusMethodNotAllowed {
-			continue
-		}
-		result := classifyCheckinResponse(status, body)
-		if result.Status == "auth_expired" && auth.Password != "" {
-			auth.Cookie = ""
-			auth.AccessToken = ""
-			auth.AuthUserID = ""
-			if loginErr := a.accountSession.LoginWithPassword(ctx, auth); loginErr != nil {
-				result.Message = "账号密码登录失败：" + loginErr.Error()
-				result.HTTPStatus = 0
-				result.Path = ""
-				result.RawResponseMasked = ""
-				result.RetryCount = retries
-				result = annotateCheckinRetry(result)
-				if err := a.saveCheckinResult(ctx, *auth, result, startedAt, now()); err != nil {
-					log.Printf("[checkin] save result failed for account %s: %v", id, err)
-				}
-				return result, nil
-			}
-			var retryAfterLogin int
-			status, body, retryAfterLogin, err = a.callCheckinAPIWithRetry(ctx, *auth, candidate)
-			retries += retryAfterLogin
-			if err != nil {
-				lastUnsupported = annotateCheckinRetry(checkinResult{Status: "failed", Message: err.Error(), Path: candidate.Path, RetryCount: retries})
-				continue
-			}
-			result = classifyCheckinResponse(status, body)
-		}
-		result.HTTPStatus = status
-		result.Path = candidate.Path
-		result.RawResponseMasked = maskResponse(body)
-		result.RetryCount = retries
-		if result.Message == "" {
-			result.Message = fmt.Sprintf("%s %s 返回 HTTP %d", candidate.Method, candidate.Path, status)
-		}
-		result = annotateCheckinRetry(result)
-		if err := a.saveCheckinResult(ctx, *auth, result, startedAt, now()); err != nil {
-			log.Printf("[checkin] save result failed for account %s: %v", id, err)
-		}
-		return result, nil
-	}
-	if err := a.saveCheckinResult(ctx, *auth, lastUnsupported, startedAt, now()); err != nil {
-		log.Printf("[checkin] save result failed for account %s: %v", id, err)
-	}
-	return lastUnsupported, nil
+	return a.checkinExecutor.Run(ctx, id, auth)
 }
 
 func (a *App) callCheckinAPIWithRetry(ctx context.Context, auth accountAuthContext, candidate apiCandidate) (int, string, int, error) {
-	var status int
-	var body string
-	var err error
-	attempts := checkinMaxNetworkAttempts
-	if attempts < 1 {
-		attempts = 1
-	}
-	// Send empty JSON body for POST requests (AI API Hub convention).
-	var postBody []byte
-	if candidate.Method == http.MethodPost {
-		postBody = []byte("{}")
-	}
-	for attempt := 1; attempt <= attempts; attempt++ {
-		status, body, err = a.accountAPI.Do(ctx, auth, candidate.Method, candidate.Path, postBody)
-		if !shouldRetryCheckinAttempt(status, err) || attempt == attempts {
-			return status, body, attempt - 1, err
-		}
-		if !sleepWithContext(ctx, checkinRetryDelay(attempt)) {
-			return status, body, attempt - 1, ctx.Err()
-		}
-	}
-	return status, body, attempts - 1, err
+	return a.checkinExecutor.callAPIWithRetry(ctx, auth, candidate)
 }
 
 func shouldRetryCheckinAttempt(status int, err error) bool {
@@ -823,33 +725,7 @@ func extractCheckinReward(body string) string {
 }
 
 func (a *App) saveCheckinResult(ctx context.Context, auth accountAuthContext, result checkinResult, startedAt string, finishedAt string) error {
-	_, err := a.db.ExecContext(ctx, `
-		INSERT INTO checkin_logs (id, account_id, upstream_site_id, channel_id, status, reward, message, raw_response_masked, started_at, finished_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, newID(), auth.AccountID, auth.UpstreamSiteID, auth.ChannelID, result.Status, result.Reward, result.Message, result.RawResponseMasked, startedAt, finishedAt)
-	if err != nil {
-		return err
-	}
-	_, err = a.db.ExecContext(ctx, `
-		UPDATE channel_accounts
-		SET last_checkin_at=?, last_checkin_status=?, updated_at=?
-		WHERE id=?
-	`, finishedAt, result.Status, now(), auth.AccountID)
-	if err == nil {
-		level := "info"
-		title := "签到完成"
-		if result.Status == "success" || result.Status == "already_checked" {
-			level = "success"
-		} else if result.Status == "auth_expired" || result.Status == "manual_required" {
-			level = "warning"
-			title = "需要重新登录"
-		} else if result.Status != "unsupported" {
-			level = "error"
-			title = "签到失败"
-		}
-		a.notify("checkin_"+result.Status, level, title, auth.AccountName+"： "+result.Message, "account", auth.AccountID)
-	}
-	return err
+	return a.checkinExecutor.SaveResult(ctx, auth, result, startedAt, finishedAt)
 }
 
 func (a *App) handleBalanceSnapshots(w http.ResponseWriter, r *http.Request) {
@@ -892,87 +768,11 @@ func (a *App) handleBalanceSnapshots(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) refreshAccountBalance(ctx context.Context, id string, auth *accountAuthContext) (balanceResult, error) {
-	if auth == nil {
-		loaded, err := a.loadAccountAuth(ctx, id)
-		if err != nil {
-			return balanceResult{}, err
-		}
-		auth = &loaded
-	}
-	if !auth.SupportsBalance {
-		return balanceResult{Unit: "unknown", HTTPStatus: 0, Path: "", RawResponseMasked: "", Balance: nil}, errorsText("该站点未探测到余额接口。")
-	}
-	if err := a.accountSession.Ensure(ctx, auth); err != nil && auth.Cookie == "" && auth.AccessToken == "" && auth.APIKey == "" {
-		return balanceResult{Unit: "unknown"}, fmt.Errorf("账号密码登录失败：%w", err)
-	}
-
-	var lastErr error
-	for _, path := range balanceCandidates {
-		status, body, err := a.accountAPI.Do(ctx, *auth, http.MethodGet, path, nil)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if status == http.StatusNotFound || status == http.StatusMethodNotAllowed {
-			continue
-		}
-		if status == http.StatusUnauthorized || status == http.StatusForbidden {
-			lastErr = fmt.Errorf("%s 登录态不可用：HTTP 状态码 %d", path, status)
-			continue
-		}
-		if status < 200 || status >= 300 {
-			lastErr = fmt.Errorf("%s 返回 HTTP 状态码 %d", path, status)
-			continue
-		}
-		result := parseBalance(body)
-		result.HTTPStatus = status
-		result.Path = path
-		result.RawResponseMasked = maskResponse(body)
-		if result.Balance == nil && result.UsedQuota == nil && result.TotalQuota == nil {
-			lastErr = fmt.Errorf("%s 未解析到余额字段", path)
-			continue
-		}
-		if err := a.saveBalanceResult(ctx, *auth, result); err != nil {
-			return result, err
-		}
-		return result, nil
-	}
-	if lastErr != nil {
-		return balanceResult{Unit: "unknown"}, lastErr
-	}
-	return balanceResult{Unit: "unknown"}, errorsText("未找到可用余额接口。")
+	return a.balanceRefresher.Run(ctx, id, auth)
 }
 
 func (a *App) saveBalanceResult(ctx context.Context, auth accountAuthContext, result balanceResult) error {
-	var balanceValue interface{}
-	if result.Balance != nil {
-		balanceValue = *result.Balance
-	}
-	var usedValue interface{}
-	if result.UsedQuota != nil {
-		usedValue = *result.UsedQuota
-	}
-	var totalValue interface{}
-	if result.TotalQuota != nil {
-		totalValue = *result.TotalQuota
-	}
-	createdAt := now()
-	_, err := a.db.ExecContext(ctx, `
-		INSERT INTO balance_snapshots (id, account_id, upstream_site_id, channel_id, balance, used_quota, total_quota, unit, raw_response_masked, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, newID(), auth.AccountID, auth.UpstreamSiteID, auth.ChannelID, balanceValue, usedValue, totalValue, result.Unit, result.RawResponseMasked, createdAt)
-	if err != nil {
-		return err
-	}
-	_, err = a.db.ExecContext(ctx, `
-		UPDATE channel_accounts
-		SET balance=?, balance_unit=?, last_validated_at=?, login_status='valid', updated_at=?
-		WHERE id=?
-	`, balanceValue, result.Unit, createdAt, now(), auth.AccountID)
-	if err == nil {
-		a.notify("balance_refreshed", "success", "余额已刷新", auth.AccountName+" 余额信息已更新。", "account", auth.AccountID)
-	}
-	return err
+	return a.balanceRefresher.SaveResult(ctx, auth, result)
 }
 
 func (a *App) loadAccountAuth(ctx context.Context, id string) (accountAuthContext, error) {

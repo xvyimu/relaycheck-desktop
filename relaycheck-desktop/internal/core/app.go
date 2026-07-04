@@ -38,6 +38,8 @@ type App struct {
 	accountAPI          *AccountAPIClient
 	accountSession      *AccountSessionService
 	browserLogin        *BrowserLoginService
+	checkinExecutor     *CheckinExecutor
+	balanceRefresher    *BalanceRefresher
 	schedulerRepo       *SchedulerRepo
 	browserSessions     *BrowserSessionStore
 	mu                  sync.RWMutex
@@ -151,6 +153,8 @@ func NewApp(root string) (*App, error) {
 	app.accountAPI = NewAccountAPIClient(app)
 	app.accountSession = NewAccountSessionService(app)
 	app.browserLogin = NewBrowserLoginService(app)
+	app.checkinExecutor = NewCheckinExecutor(app)
+	app.balanceRefresher = NewBalanceRefresher(app)
 	app.rootCtx, app.rootCancel = context.WithCancel(context.Background())
 	app.taskRunner.setRootCtx(app.rootCtx)
 
