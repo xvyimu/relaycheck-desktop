@@ -54,7 +54,7 @@ type NextRunItem struct {
 }
 
 const (
-	// Virtual site ID for the global checkin schedule stored in channel_schedules.
+	// Compatibility ID for the global checkin schedule projection.
 	globalScheduleSiteID  = channels.GlobalScheduleSiteID
 	maxRandomDelayMinutes = 120
 )

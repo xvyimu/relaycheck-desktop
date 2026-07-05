@@ -7,9 +7,8 @@ import (
 	"time"
 )
 
-// GlobalScheduleSiteID mirrors the host's virtual site ID used for the global
-// checkin schedule. It must stay in sync with core.channel_schedules and
-// sites.globalScheduleSiteID.
+// GlobalScheduleSiteID is the API compatibility ID used for the global
+// checkin schedule. It is not a real upstream_sites row.
 const GlobalScheduleSiteID = "__global__"
 
 // SchedulerJobSync mirrors core.schedulerJobSync. Used by NextSyncCalendarItem

@@ -189,7 +189,7 @@ export function SiteSchedules() {
     );
   }
 
-  // Determine scheduled real sites (exclude the synthetic global schedule row).
+  // Determine scheduled real sites (exclude the global schedule compatibility row).
   const visibleSiteIds = new Set(sites.map((site) => site.id));
   const scheduledSiteIds = new Set(
     schedules

@@ -28,19 +28,22 @@ func ValidateCronExpr(expr string) error {
 }
 
 // ListChannelSchedules returns every channel_schedules row joined with
-// upstream_sites for display. The __global__ virtual schedule (managed by
-// EnsureGlobalScheduleRecord) appears as a regular row. Mirrors the body of
-// core.listChannelSchedules (the HTTP handler stays in core).
+// upstream_sites for display. The global checkin schedule is stored with a
+// NULL upstream_site_id, but is projected with the __global__ compatibility ID
+// so callers and existing JSON contracts stay stable.
 func (s *Service) ListChannelSchedules(ctx context.Context) ([]ChannelSchedule, error) {
 	rows, err := s.infra.DB().QueryContext(ctx, `
-		SELECT cs.id, cs.upstream_site_id, COALESCE(s.name,''), cs.enabled, cs.checkin_time,
+		SELECT cs.id,
+		       CASE WHEN cs.id=? THEN ? ELSE COALESCE(cs.upstream_site_id,'') END,
+		       CASE WHEN cs.id=? THEN '全局签到' ELSE COALESCE(s.name,'') END,
+		       cs.enabled, cs.checkin_time,
 		       COALESCE(cs.cron_expr,''), COALESCE(cs.skip_dates_json,'[]'),
 		       cs.random_delay_min, cs.random_delay_max, COALESCE(cs.last_run_at,''),
 		       COALESCE(cs.next_run_at,''), cs.created_at, cs.updated_at
 		FROM channel_schedules cs
 		LEFT JOIN upstream_sites s ON s.id = cs.upstream_site_id
-		ORDER BY cs.checkin_time
-	`)
+		ORDER BY CASE WHEN cs.id=? THEN 0 ELSE 1 END, cs.checkin_time
+	`, GlobalScheduleSiteID, GlobalScheduleSiteID, GlobalScheduleSiteID, GlobalScheduleSiteID)
 	if err != nil {
 		return nil, err
 	}
@@ -93,28 +96,19 @@ func (s *Service) NextSyncCalendarItem(ctx context.Context, now time.Time, windo
 	}, true
 }
 
-// EnsureGlobalScheduleRecord creates or updates the __global__ channel_schedule
-// record so ListChannelSchedules returns it as a regular schedule entry. This
-// allows the global checkin schedule to appear in calendar views and next-run
-// lists without a separate code path. The record is a projection of
-// system_settings checkin.schedule. Mirrors the body of
-// core.ensureGlobalScheduleRecord.
+// EnsureGlobalScheduleRecord creates or updates the __global__
+// channel_schedule record. It no longer creates an upstream_sites row: the
+// global checkin schedule is not a real site, so it is stored with a NULL
+// upstream_site_id and only projected as __global__ for API compatibility.
 func (s *Service) EnsureGlobalScheduleRecord(ctx context.Context) error {
-	// Ensure __global__ upstream_site exists (FK constraint)
-	_, err := s.infra.DB().ExecContext(ctx, `
-		INSERT OR IGNORE INTO upstream_sites (id, name, base_url, kind, created_at, updated_at)
-		VALUES (?, ?, '', 'unknown', ?, ?)
-	`, GlobalScheduleSiteID, "全局签到", s.infra.Now(), s.infra.Now())
-	if err != nil {
-		return err
-	}
 	config := s.infra.LoadCheckinScheduleConfig(ctx)
 	delayMin, delayMax := normalizedRandomDelay(config.RandomDelayMinutes)
 	nextRun := ComputeNextRun(config.Time, "", nil, delayMin, delayMax)
-	_, err = s.infra.DB().ExecContext(ctx, `
+	if _, err := s.infra.DB().ExecContext(ctx, `
 		INSERT INTO channel_schedules (id, upstream_site_id, enabled, checkin_time, cron_expr, skip_dates_json, random_delay_min, random_delay_max, next_run_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, '', '[]', ?, ?, ?, ?, ?)
+		VALUES (?, NULL, ?, ?, '', '[]', ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
+			upstream_site_id=NULL,
 			enabled=excluded.enabled,
 			checkin_time=excluded.checkin_time,
 			cron_expr=excluded.cron_expr,
@@ -123,7 +117,10 @@ func (s *Service) EnsureGlobalScheduleRecord(ctx context.Context) error {
 			random_delay_max=excluded.random_delay_max,
 			next_run_at=excluded.next_run_at,
 			updated_at=excluded.updated_at
-	`, GlobalScheduleSiteID, GlobalScheduleSiteID, config.Enabled, config.Time, delayMin, delayMax, nextRun, s.infra.Now(), s.infra.Now())
+	`, GlobalScheduleSiteID, config.Enabled, config.Time, delayMin, delayMax, nextRun, s.infra.Now(), s.infra.Now()); err != nil {
+		return err
+	}
+	_, err := s.infra.DB().ExecContext(ctx, `DELETE FROM upstream_sites WHERE id=?`, GlobalScheduleSiteID)
 	return err
 }
 

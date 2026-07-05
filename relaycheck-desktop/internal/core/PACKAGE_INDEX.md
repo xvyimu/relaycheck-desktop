@@ -1,6 +1,6 @@
 # internal/core Package Index
 
-Last updated: 2026-07-04 (local)
+Last updated: 2026-07-05 (local)
 
 The `internal/core` package is the assembly root for RelayCheck Desktop's backend. It holds the `App` struct (`app.go`), HTTP handlers, cross-cutting concerns (audit/crypto/network/url_safety), and forwarding methods to 8 extracted domain packages under `internal/<domain>/`. See `CLAUDE.md` for the architecture overview.
 
@@ -26,7 +26,7 @@ Domain logic lives outside `core` in dedicated packages. Dependency direction: `
 | File | Purpose |
 |------|---------|
 | `app.go` | `App` struct, `NewApp()` constructor, configuration defaults, lifecycle, two-phase init for domain services. |
-| `db.go` | SQLite initialization, schema migrations, `channel_schedules` table. |
+| `db.go` | SQLite initialization, schema migrations, `channel_schedules` table, and the nullable global-schedule migration. |
 | `routes.go` | HTTP route registration, `RegisterRoutes()`. |
 | `http.go` | HTTP helpers: `writeJSON`, `writeError`, `method()`, session middleware. |
 | `models.go` | Core data structures: `SystemStatus`, `DashboardSummary`, `ChannelAccount`, `CheckinLog`, `BalanceSnapshot`, etc. |
@@ -76,7 +76,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | `channels_infra.go` | `*App` adapter methods implementing `channels.Infra` (14 methods). |
 | `channel_health.go` | Channel health probe task and scheduled probe orchestration (uses `channelsService`). |
 | `channel_models.go` | Channel model sync HTTP handlers (uses `channelsService`). |
-| `channel_schedules.go` | Per-site checkin scheduling, calendar preview, next-runs list (uses `channelsService`). |
+| `channel_schedules.go` | Per-site checkin scheduling plus global schedule compatibility projection, calendar preview, next-runs list (uses `channelsService`). |
 | `models_pricing.go` | Model overview, pricing sync, key export preview HTTP handlers. Pricing pure functions (`extractModelPricingSources`, etc.) remain here for test access. |
 | `accounts.go` | Forwarders to `*accounts.Service`: account CRUD HTTP handlers. |
 | `accounts_infra.go` | `*App` adapter methods implementing `accounts.Infra` (`EncryptText`, `DetectUpstreamForImport`, `EnsureChannelSiteForImport`). |

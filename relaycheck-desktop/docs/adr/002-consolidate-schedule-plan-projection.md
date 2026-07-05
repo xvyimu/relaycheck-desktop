@@ -4,6 +4,9 @@ Status: Accepted
 Date: 2026-07-04
 Deciders: RelayCheck Desktop maintainers
 
+Follow-up: ADR-004 removes the `__global__` upstream-site record by making
+`channel_schedules.upstream_site_id` nullable for the global checkin schedule.
+
 ## Context
 
 Scheduling data is projected through `internal/core/channel_schedules.go`, `internal/channels/schedules.go`, and `internal/core/scheduler.go`. Calendar preview, next-run lists, global checkin projection, and per-site schedule ticks all depend on the same conceptual module but are currently split across HTTP handlers, domain service methods, and scheduler ticks.
@@ -24,7 +27,8 @@ Do not change the schema in this slice. Introduce a deeper schedule projection m
 
 - Positive: future schedule changes get one interface for plan projection.
 - Positive: calendar and next-runs can share one source of truth.
-- Negative: the `__global__` record remains until a migration is explicitly planned.
+- Negative: superseded by ADR-004, which performs the nullable schedule
+  migration and removes the upstream-site ghost row.
 - Risk: planner abstraction can become shallow if it only forwards existing calls; the follow-up must move real behavior, not just names.
 
 ## Revisit triggers

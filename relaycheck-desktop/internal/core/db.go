@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS scheduler_runs (
 
 CREATE TABLE IF NOT EXISTS channel_schedules (
 		id TEXT PRIMARY KEY,
-		upstream_site_id TEXT NOT NULL,
+		upstream_site_id TEXT,
 		enabled INTEGER NOT NULL DEFAULT 1,
 		checkin_time TEXT NOT NULL DEFAULT '08:00',
 		cron_expr TEXT NOT NULL DEFAULT '',
@@ -260,9 +260,103 @@ CREATE INDEX IF NOT EXISTS idx_site_pricing_cache_synced ON site_pricing_cache(l
 			return err
 		}
 	}
+	if err := a.ensureChannelSchedulesNullableSiteID(ctx); err != nil {
+		return err
+	}
 	if err := a.ensurePerformanceIndexes(ctx); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (a *App) ensureChannelSchedulesNullableSiteID(ctx context.Context) error {
+	notNull, found, err := a.columnNotNull(ctx, "channel_schedules", "upstream_site_id")
+	if err != nil {
+		return err
+	}
+	if !found || !notNull {
+		return nil
+	}
+
+	conn, err := a.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys=OFF`); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.Background(), `PRAGMA foreign_keys=ON`)
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err := tx.ExecContext(ctx, `
+CREATE TABLE channel_schedules_new (
+	id TEXT PRIMARY KEY,
+	upstream_site_id TEXT,
+	enabled INTEGER NOT NULL DEFAULT 1,
+	checkin_time TEXT NOT NULL DEFAULT '08:00',
+	cron_expr TEXT NOT NULL DEFAULT '',
+	skip_dates_json TEXT NOT NULL DEFAULT '[]',
+	random_delay_min INTEGER NOT NULL DEFAULT 0,
+	random_delay_max INTEGER NOT NULL DEFAULT 30,
+	last_run_at TEXT,
+	next_run_at TEXT,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (upstream_site_id) REFERENCES upstream_sites(id) ON DELETE CASCADE
+);
+`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO channel_schedules_new (
+	id, upstream_site_id, enabled, checkin_time, cron_expr, skip_dates_json,
+	random_delay_min, random_delay_max, last_run_at, next_run_at, created_at, updated_at
+)
+SELECT
+	id,
+	CASE WHEN id=? OR upstream_site_id=? THEN NULL ELSE upstream_site_id END,
+	enabled,
+	checkin_time,
+	COALESCE(cron_expr,''),
+	COALESCE(skip_dates_json,'[]'),
+	random_delay_min,
+	random_delay_max,
+	last_run_at,
+	next_run_at,
+	created_at,
+	updated_at
+FROM channel_schedules;
+`, globalScheduleSiteID, globalScheduleSiteID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DROP TABLE channel_schedules`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE channel_schedules_new RENAME TO channel_schedules`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_channel_schedules_site ON channel_schedules(upstream_site_id)`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_channel_schedules_next ON channel_schedules(next_run_at)`); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
 	return nil
 }
 
@@ -336,4 +430,35 @@ func (a *App) ensureColumn(ctx context.Context, table string, column string, col
 	}
 	_, err = a.db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, columnType))
 	return err
+}
+
+func (a *App) columnNotNull(ctx context.Context, table string, column string) (bool, bool, error) {
+	if !identifierPattern.MatchString(table) {
+		return false, false, fmt.Errorf("columnNotNull: invalid table identifier %q", table)
+	}
+	if !identifierPattern.MatchString(column) {
+		return false, false, fmt.Errorf("columnNotNull: invalid column identifier %q", column)
+	}
+	rows, err := a.db.QueryContext(ctx, "PRAGMA table_info("+table+")")
+	if err != nil {
+		return false, false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notNull int
+		var defaultValue interface{}
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return false, false, err
+		}
+		if name == column {
+			return notNull != 0, true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, false, err
+	}
+	return false, false, nil
 }

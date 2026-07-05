@@ -1,6 +1,6 @@
 # RelayCheck Desktop Project Structure
 
-Last updated: 2026-06-30
+Last updated: 2026-07-05
 
 ## Active Source
 
@@ -31,7 +31,7 @@ Last updated: 2026-06-30
 - **Onboarding wizard:** 4-step first-run guide in `frontend/src/components/onboarding/`, controlled by localStorage flag.
 - **Analytics engine:** `internal/core/analytics.go` provides balance trend, checkin distribution, response times, site reliability, and balance deltas via `/api/analytics?days=N`. Frontend uses pure SVG charts (no chart library) with drilldown support.
 - **Encrypted export/import:** `internal/backup/` implements AES-256-GCM encrypted zip with PBKDF2-SHA256 key derivation (200,000 iterations + 32-byte salt). RCZIP2 format; RCZIP1 supported for backward-compatible decryption. Zip-bomb protection caps total decompressed at 256 MB. `internal/core/backup_zip.go` is a thin forwarder.
-- **Per-channel scheduling:** `internal/core/channel_schedules.go` allows per-site checkin time and random delay configuration. Calendar preview and next-runs list available via API. Uses `time.FixedZone("CST", 8*3600)` for timezone consistency.
+- **Per-channel scheduling:** `internal/core/channel_schedules.go` allows per-site checkin time and random delay configuration. Calendar preview and next-runs list are available via API. The global checkin schedule is stored as `channel_schedules.id='__global__'` with nullable `upstream_site_id`, so it no longer creates a fake upstream site. Uses `time.FixedZone("CST", 8*3600)` for timezone consistency.
 - **Notification channels:** `internal/notifications/` implements Webhook (with HMAC + exponential backoff retry), Telegram, Bark, ServerChan, Email (SMTP), and Desktop (in-app + browser Notification API push). `levelMatchesMode` supports `all`/`failure`/`success`/`warning+` modes. `internal/core/notification.go` is a thin forwarder.
 - **Detection engine:** `internal/sites/detection.go` identifies site kind (newapi/oneapi/sub2api) from HTTP headers, HTML content, and API responses with confidence scoring. `internal/core/detection_detail.go` does cross-domain aggregation.
 - **Dry-run preview:** `internal/core/dry_run.go` previews batch operations without executing them, with a 200-account limit and single batch query.

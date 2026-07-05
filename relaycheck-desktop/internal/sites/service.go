@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-// globalScheduleSiteID mirrors the host's virtual site ID used for the global
-// checkin schedule. It must stay in sync with core.channel_schedules.
+// globalScheduleSiteID filters legacy databases that may still contain the
+// old global schedule compatibility row in upstream_sites.
 const globalScheduleSiteID = "__global__"
 
 // Infra is the subset of the host application that the sites domain depends
@@ -62,10 +62,11 @@ func NewService(infra Infra) *Service {
 	return &Service{infra: infra}
 }
 
-// ListUpstreamSites returns all upstream sites ordered by updated_at desc,
-// excluding the virtual global-schedule record. Each site's account count is
-// populated via a correlated subquery. Official-provider sites are normalized
-// to kind=official_provider.
+// ListUpstreamSites returns all upstream sites ordered by updated_at desc.
+// It also excludes the legacy global-schedule compatibility row if an older
+// database still contains one. Each site's account count is populated via a
+// correlated subquery. Official-provider sites are normalized to
+// kind=official_provider.
 func (s *Service) ListUpstreamSites(ctx context.Context) ([]Site, error) {
 	rows, err := s.infra.DB().QueryContext(ctx, `
 		SELECT s.id, COALESCE(s.channel_id,''), s.name, COALESCE(s.homepage_url,''), s.base_url,

@@ -2,9 +2,12 @@ package core
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -41,9 +44,175 @@ func TestListChannelSchedules_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listChannelSchedules on empty DB: %v", err)
 	}
-	// __global__ schedule is created during NewApp startup
 	if len(items) != 1 {
-		t.Fatalf("expected 1 item (__global__), got %d items", len(items))
+		t.Fatalf("expected 1 global schedule item, got %d items", len(items))
+	}
+	if items[0].ID != globalScheduleSiteID || items[0].UpstreamSiteID != globalScheduleSiteID {
+		t.Fatalf("expected global schedule compatibility IDs, got %#v", items[0])
+	}
+	if countGlobalUpstreamSites(t, app) != 0 {
+		t.Fatal("expected fresh DB startup not to create __global__ upstream site")
+	}
+	if upstreamSiteIDNotNull(t, app) {
+		t.Fatal("expected channel_schedules.upstream_site_id to be nullable")
+	}
+	if !globalScheduleSiteIDIsNull(t, app) {
+		t.Fatal("expected fresh DB global schedule to store NULL upstream_site_id")
+	}
+}
+
+func TestNewAppMigratesLegacyGlobalScheduleWithoutGhostSite(t *testing.T) {
+	root := t.TempDir()
+	createLegacyGlobalScheduleDB(t, root)
+
+	app := newTestAppWithDir(t, root)
+	defer app.Close()
+
+	if countGlobalUpstreamSites(t, app) != 0 {
+		t.Fatal("expected legacy __global__ upstream site to be removed after migration")
+	}
+	if upstreamSiteIDNotNull(t, app) {
+		t.Fatal("expected migrated channel_schedules.upstream_site_id to be nullable")
+	}
+	if !globalScheduleSiteIDIsNull(t, app) {
+		t.Fatal("expected migrated global schedule to store NULL upstream_site_id")
+	}
+
+	items, err := app.listChannelSchedules(context.Background())
+	if err != nil {
+		t.Fatalf("list schedules: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected migrated global schedule to remain visible, got %#v", items)
+	}
+	if items[0].ID != globalScheduleSiteID || items[0].UpstreamSiteID != globalScheduleSiteID {
+		t.Fatalf("expected compatibility global IDs, got %#v", items[0])
+	}
+	if items[0].SiteName == "" {
+		t.Fatalf("expected global schedule display name, got %#v", items[0])
+	}
+	if items[1].UpstreamSiteID != "legacy-site" || items[1].SiteName != "Legacy Site" {
+		t.Fatalf("expected legacy site schedule to be preserved, got %#v", items[1])
+	}
+
+	if _, err := app.db.Exec(`DELETE FROM upstream_sites WHERE id='legacy-site'`); err != nil {
+		t.Fatalf("delete legacy site: %v", err)
+	}
+	var siteScheduleCount int
+	if err := app.db.QueryRow(`SELECT COUNT(*) FROM channel_schedules WHERE id='legacy-site'`).Scan(&siteScheduleCount); err != nil {
+		t.Fatalf("count legacy site schedule after delete: %v", err)
+	}
+	if siteScheduleCount != 0 {
+		t.Fatalf("expected legacy site schedule to cascade on upstream site delete, got %d rows", siteScheduleCount)
+	}
+}
+
+func countGlobalUpstreamSites(t *testing.T, app *App) int {
+	t.Helper()
+	var count int
+	if err := app.db.QueryRow(`SELECT COUNT(*) FROM upstream_sites WHERE id=?`, globalScheduleSiteID).Scan(&count); err != nil {
+		t.Fatalf("count global upstream site: %v", err)
+	}
+	return count
+}
+
+func upstreamSiteIDNotNull(t *testing.T, app *App) bool {
+	t.Helper()
+	rows, err := app.db.Query(`PRAGMA table_info(channel_schedules)`)
+	if err != nil {
+		t.Fatalf("table info channel_schedules: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notNull int
+		var defaultValue interface{}
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			t.Fatalf("scan table info: %v", err)
+		}
+		if name == "upstream_site_id" {
+			return notNull != 0
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate table info: %v", err)
+	}
+	t.Fatal("upstream_site_id column not found")
+	return true
+}
+
+func globalScheduleSiteIDIsNull(t *testing.T, app *App) bool {
+	t.Helper()
+	var isNull bool
+	if err := app.db.QueryRow(`SELECT upstream_site_id IS NULL FROM channel_schedules WHERE id=?`, globalScheduleSiteID).Scan(&isNull); err != nil {
+		t.Fatalf("query global schedule upstream_site_id nullness: %v", err)
+	}
+	return isNull
+}
+
+func createLegacyGlobalScheduleDB(t *testing.T, root string) {
+	t.Helper()
+	dataDir := filepath.Join(root, "data")
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		t.Fatalf("mkdir data dir: %v", err)
+	}
+	dbPath := filepath.Join(dataDir, "relaycheck.db")
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatalf("open legacy db: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`
+CREATE TABLE upstream_sites (
+	id TEXT PRIMARY KEY,
+	channel_id TEXT,
+	name TEXT NOT NULL,
+	homepage_url TEXT,
+	base_url TEXT NOT NULL,
+	login_url TEXT,
+	login_url_source TEXT,
+	login_url_confidence REAL NOT NULL DEFAULT 0,
+	login_discovery_json TEXT,
+	kind TEXT NOT NULL DEFAULT 'unknown',
+	detection_confidence REAL NOT NULL DEFAULT 0,
+	health_status TEXT NOT NULL DEFAULT 'unknown',
+	supports_checkin INTEGER NOT NULL DEFAULT 0,
+	supports_balance INTEGER NOT NULL DEFAULT 0,
+	supports_models INTEGER NOT NULL DEFAULT 0,
+	supports_pricing INTEGER NOT NULL DEFAULT 0,
+	checkin_config_json TEXT,
+	balance_config_json TEXT,
+	last_health_check_at TEXT,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL
+);
+CREATE TABLE channel_schedules (
+	id TEXT PRIMARY KEY,
+	upstream_site_id TEXT NOT NULL,
+	enabled INTEGER NOT NULL DEFAULT 1,
+	checkin_time TEXT NOT NULL DEFAULT '08:00',
+	cron_expr TEXT NOT NULL DEFAULT '',
+	skip_dates_json TEXT NOT NULL DEFAULT '[]',
+	random_delay_min INTEGER NOT NULL DEFAULT 0,
+	random_delay_max INTEGER NOT NULL DEFAULT 30,
+	last_run_at TEXT,
+	next_run_at TEXT,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (upstream_site_id) REFERENCES upstream_sites(id) ON DELETE CASCADE
+);
+INSERT INTO upstream_sites (id, name, base_url, kind, created_at, updated_at)
+VALUES ('__global__', '全局签到', '', 'unknown', '2026-07-04T00:00:00Z', '2026-07-04T00:00:00Z');
+INSERT INTO upstream_sites (id, name, base_url, kind, created_at, updated_at)
+VALUES ('legacy-site', 'Legacy Site', 'https://legacy.example', 'newapi', '2026-07-04T00:00:00Z', '2026-07-04T00:00:00Z');
+INSERT INTO channel_schedules (id, upstream_site_id, enabled, checkin_time, random_delay_min, random_delay_max, next_run_at, created_at, updated_at)
+VALUES ('__global__', '__global__', 1, '08:00', 0, 120, '2026-07-05T08:00:00+08:00', '2026-07-04T00:00:00Z', '2026-07-04T00:00:00Z');
+INSERT INTO channel_schedules (id, upstream_site_id, enabled, checkin_time, random_delay_min, random_delay_max, next_run_at, created_at, updated_at)
+VALUES ('legacy-site', 'legacy-site', 1, '09:30', 5, 15, '2026-07-05T09:30:00+08:00', '2026-07-04T00:00:00Z', '2026-07-04T00:00:00Z');
+`); err != nil {
+		t.Fatalf("seed legacy db: %v", err)
 	}
 }
 
