@@ -43,9 +43,10 @@ After the one-command gate passes on a clean Git tree, create the operator hando
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\package-release.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1
 ```
 
-The script builds `dist\relaycheck.exe`, copies the operator docs and acceptance-record template, writes `manifest.json`, writes `checksums.sha256`, creates a zip under `dist\releases`, and writes a sibling `.zip.sha256` file for handoff verification. Use `-SkipBuild` only when validating packaging around an already-built executable; use `-AllowDirty` only for development verification, not final handoff.
+The package script builds `dist\relaycheck.exe`, copies the operator docs, acceptance-record template, and package verifier, writes `manifest.json`, writes `checksums.sha256`, creates a zip under `dist\releases`, and writes a sibling `.zip.sha256` file for handoff verification. The verifier checks the latest zip, sidecar SHA256, manifest fields, required files, and internal checksums. Use `-SkipBuild` only when validating packaging around an already-built executable; use `-AllowDirty` only for development verification, not final handoff.
 
 ## Launch Notes
 
@@ -62,6 +63,7 @@ The script builds `dist\relaycheck.exe`, copies the operator docs and acceptance
 - Set `RELAYCHECK_BOOTSTRAP_PASSWORD` for first production launch if a deterministic initial password is required.
 - Back up existing `data\relaycheck.db` before replacing an already-running installation.
 - Extract the `scripts\package-release.ps1` zip package into the intended working directory and start package-root `relaycheck.exe`.
+- Run `scripts\verify-package.ps1 -PackageDir .` from the extracted package before first launch.
 - Open `http://127.0.0.1:3001` and verify `/api/health` reports all checks as `ok`.
 - Run `scripts\operator-acceptance.ps1` for read-only local health, status, and API-shape checks.
 - Run one manual critical flow with non-secret test data: open dashboard, inspect scheduler preview, create or view a site, and trigger a dry-run task.

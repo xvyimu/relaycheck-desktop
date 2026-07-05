@@ -31,9 +31,10 @@ Then create the handoff package from a clean Git tree:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\package-release.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1
 ```
 
-Before copying the package to the target machine, compare the zip SHA256 printed by the script and written to the sibling `.zip.sha256` file with the handoff record.
+Before copying the package to the target machine, `scripts\verify-package.ps1` should pass against the latest package zip. It checks the zip SHA256 sidecar, manifest, required files, and internal checksums.
 
 ## First Launch
 
@@ -42,9 +43,15 @@ Before copying the package to the target machine, compare the zip SHA256 printed
 3. If this is an upgrade, stop the previous `relaycheck.exe`, copy the previous executable aside, and back up `data\relaycheck.db`.
 4. Extract the release package into the intended working directory.
 5. Confirm `manifest.json` and `checksums.sha256` are present beside `relaycheck.exe`.
-6. Start `relaycheck.exe` from the intended working directory.
-7. Open `http://127.0.0.1:3001`.
-8. Run the read-only acceptance script from the extracted package:
+6. Run package-local verification from the extracted package root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1 -PackageDir .
+```
+
+7. Start `relaycheck.exe` from the intended working directory.
+8. Open `http://127.0.0.1:3001`.
+9. Run the read-only acceptance script from the extracted package:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-acceptance.ps1 -BaseUrl http://127.0.0.1:3001
