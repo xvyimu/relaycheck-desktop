@@ -99,177 +99,25 @@ func (a *App) listAccounts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) createAccount(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		UpstreamSiteID string `json:"upstreamSiteId"`
-		SiteName       string `json:"siteName"`
-		BaseURL        string `json:"baseUrl"`
-		LoginURL       string `json:"loginUrl"`
-		Kind           string `json:"kind"`
-		DisplayName    string `json:"displayName"`
-		Email          string `json:"email"`
-		Username       string `json:"username"`
-		AuthType       string `json:"authType"`
-		Password       string `json:"password"`
-		Cookie         string `json:"cookie"`
-		AccessToken    string `json:"accessToken"`
-		RefreshToken   string `json:"refreshToken"`
-		APIKey         string `json:"apiKey"`
-	}
+	var input accountCreationInput
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, "账号参数不完整。")
 		return
 	}
-	input.UpstreamSiteID = strings.TrimSpace(input.UpstreamSiteID)
-	if input.UpstreamSiteID == "" && strings.TrimSpace(input.BaseURL) != "" {
-		siteID, err := a.ensureManualAccountSite(r.Context(), input.SiteName, input.BaseURL, input.LoginURL, input.Kind)
-		if err != nil {
+	id, err := a.accountCreation.Create(r.Context(), input)
+	if err != nil {
+		if isAccountCreationBadRequest(err) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		input.UpstreamSiteID = siteID
-	}
-	if input.UpstreamSiteID == "" {
-		writeError(w, http.StatusBadRequest, "请选择已有站点，或填写自定义站点网址。")
-		return
-	}
-	input.DisplayName = strings.TrimSpace(input.DisplayName)
-	if input.DisplayName == "" {
-		input.DisplayName = defaultAccountDisplayName(input.Email, input.Username, input.APIKey)
-	}
-	if input.AuthType == "" {
-		input.AuthType = inferAccountAuthType(input.Password, input.Cookie, input.AccessToken, input.RefreshToken, input.APIKey)
-	}
-
-	password, err := a.encryptText(input.Password)
-	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	cookie, err := a.encryptText(input.Cookie)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	access, err := a.encryptText(input.AccessToken)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	refresh, err := a.encryptText(input.RefreshToken)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	apiKey, err := a.encryptText(input.APIKey)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	id := newID()
-	profilePath := ""
-	status := "unknown"
-	if input.AuthType == "browser_profile" || input.AuthType == "oauth_session" {
-		profilePath = filepath.Join(a.dataDir, "browser-profiles", id)
-		status = "manual_required"
-	}
-	apiKeyFingerprint := secretFingerprint(input.APIKey)
-	_, err = a.db.ExecContext(r.Context(), `
-		INSERT INTO channel_accounts (id, upstream_site_id, display_name, email, username, auth_type, password_encrypted, cookie_encrypted, access_token_encrypted, refresh_token_encrypted, api_key_encrypted, api_key_fingerprint, api_key_status, browser_profile_path, login_status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, input.UpstreamSiteID, input.DisplayName, input.Email, input.Username, input.AuthType, password, cookie, access, refresh, apiKey, apiKeyFingerprint, statusFromKey(apiKeyFingerprint), profilePath, status, now(), now())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	a.notify("account_created", "success", "账号已添加", input.DisplayName+" 已绑定。", "account", id)
-	a.audit("account.created", "info", "", "account", id, "账号已添加："+input.DisplayName, map[string]interface{}{"authType": input.AuthType, "siteId": input.UpstreamSiteID, "apiKeyFingerprint": apiKeyFingerprint})
 	writeJSON(w, http.StatusOK, map[string]string{"id": id})
 }
 
 func (a *App) ensureManualAccountSite(ctx context.Context, name string, rawBaseURL string, loginURL string, preferredKind string) (string, error) {
-	baseURL := normalizeBaseURL(rawBaseURL)
-	if baseURL == "" || (!strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://")) {
-		return "", errorsText("请填写完整站点网址，例如 https://example.com。")
-	}
-	name = strings.TrimSpace(name)
-	if name == "" {
-		name = firstNonEmpty(hostLabel(baseURL), baseURL)
-	}
-	if isExcludedRelaySite(name, baseURL) {
-		return "", errorsText("该站点已被排除，不再作为中转站导入。")
-	}
-
-	loginURL = strings.TrimSpace(loginURL)
-	var existingID string
-	err := a.db.QueryRowContext(ctx, `SELECT id FROM upstream_sites WHERE base_url=? ORDER BY updated_at DESC LIMIT 1`, baseURL).Scan(&existingID)
-	if err == nil {
-		if loginURL != "" {
-			manualDiscovery := manualLoginDiscoveryForURL(loginURL, nil)
-			_, err = a.db.ExecContext(ctx, `
-				UPDATE upstream_sites
-				SET login_url=?, login_url_source='manual', login_url_confidence=1, login_discovery_json=?, updated_at=?
-				WHERE id=?
-			`, loginURL, marshalLoginDiscovery(manualDiscovery), now(), existingID)
-			if err != nil {
-				return "", err
-			}
-		}
-		return existingID, nil
-	}
-	if err != sql.ErrNoRows {
-		return "", err
-	}
-
-	detection := a.detectUpstream(ctx, baseURL)
-	preferredKind = strings.ToLower(strings.TrimSpace(preferredKind))
-	if isManagedRelayKind(preferredKind) {
-		detection.Kind = preferredKind
-		if detection.DetectionConfidence < 0.3 {
-			detection.DetectionConfidence = 0.3
-		}
-	}
-	if !isManagedRelayKind(detection.Kind) {
-		return "", errorsText("该地址未识别为 NewAPI/OneAPI/Sub2API/魔改中转面板型中转站。可先在上游站点页查看识别详情，或手动指定后台类型后再添加。")
-	}
-	storedLoginURL := detection.LoginURL
-	storedLoginSource := ""
-	storedLoginConfidence := 0.0
-	storedLoginDiscoveryJSON := ""
-	if detection.LoginDiscovery != nil {
-		storedLoginURL = detection.LoginDiscovery.URL
-		storedLoginSource = detection.LoginDiscovery.Source
-		storedLoginConfidence = detection.LoginDiscovery.Confidence
-		storedLoginDiscoveryJSON = marshalLoginDiscovery(detection.LoginDiscovery)
-	}
-	if loginURL != "" {
-		manualDiscovery := manualLoginDiscoveryForURL(loginURL, detection.LoginDiscovery)
-		storedLoginURL = manualDiscovery.URL
-		storedLoginSource = manualDiscovery.Source
-		storedLoginConfidence = manualDiscovery.Confidence
-		storedLoginDiscoveryJSON = marshalLoginDiscovery(manualDiscovery)
-	}
-
-	channelID := newID()
-	siteID := newID()
-	detectionJSON := marshalDetection(&detection)
-	createdAt := now()
-	_, err = a.db.ExecContext(ctx, `
-		INSERT INTO imported_channels (id, source_channel_id, name, base_url, status, upstream_kind, supports_checkin, supports_balance, supports_models, supports_pricing, raw_json, detection_json, last_detected_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, channelID, "manual-"+channelID, name, detection.BaseURL, detection.Kind, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), `{"source":"manual-account"}`, detectionJSON, createdAt, createdAt, createdAt)
-	if err != nil {
-		return "", err
-	}
-	_, err = a.db.ExecContext(ctx, `
-		INSERT INTO upstream_sites (id, channel_id, name, homepage_url, base_url, login_url, login_url_source, login_url_confidence, login_discovery_json, kind, detection_confidence, health_status, supports_checkin, supports_balance, supports_models, supports_pricing, detection_json, last_health_check_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, siteID, channelID, name, detection.HomepageURL, detection.BaseURL, storedLoginURL, storedLoginSource, storedLoginConfidence, storedLoginDiscoveryJSON, detection.Kind, detection.DetectionConfidence, detection.HealthStatus, boolInt(detection.SupportsCheckin), boolInt(detection.SupportsBalance), boolInt(detection.SupportsModels), boolInt(detection.SupportsPricing), detectionJSON, createdAt, createdAt, createdAt)
-	if err != nil {
-		return "", err
-	}
-	a.notify("upstream_site_created", "success", "上游站点已添加", name+" 已通过账号表单加入站点列表。", "upstream_site", siteID)
-	return siteID, nil
+	return a.accountCreation.EnsureManualSite(ctx, name, rawBaseURL, loginURL, preferredKind)
 }
 
 func inferAccountAuthType(password string, cookie string, accessToken string, refreshToken string, apiKey string) string {

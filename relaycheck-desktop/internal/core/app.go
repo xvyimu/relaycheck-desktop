@@ -39,6 +39,7 @@ type App struct {
 	accountSession      *AccountSessionService
 	accountValidation   *AccountValidationService
 	accountCleanup      *AccountCleanupService
+	accountCreation     *AccountCreationService
 	accountSiteUpdates  *AccountSiteUpdateService
 	accountLoginBatch   *AccountLoginBatchService
 	accountTasks        *AccountTaskService
@@ -163,6 +164,7 @@ func NewApp(root string) (*App, error) {
 	app.accountSession = NewAccountSessionService(app)
 	app.accountValidation = NewAccountValidationService(app)
 	app.accountCleanup = NewAccountCleanupService(app)
+	app.accountCreation = NewAccountCreationService(app)
 	app.accountSiteUpdates = NewAccountSiteUpdateService(app)
 	app.browserLogin = NewBrowserLoginService(app)
 	app.accountLoginBatch = NewAccountLoginBatchService(app)
