@@ -14,3 +14,4 @@
 - Ran `scripts\operator-acceptance.ps1 -StartReleaseExe -ExpectedPort 3101 -TimeoutSeconds 30`; passed against a temporary fresh runtime.
 - Ran `rtk git diff --check`; passed.
 - Reviewed launch docs and script for secret handling; only placeholder/safety references to passwords, tokens, cookies, and API keys are present.
+- Committed and pushed `bdb74c6 Add operator launch runbook` to `origin/main`.

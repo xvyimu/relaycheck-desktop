@@ -11,7 +11,7 @@ This slice should not change product behavior or touch runtime data. The accepta
 - Phase 1: Planning - complete
 - Phase 2: Documentation and script update - complete
 - Phase 3: Verification - complete
-- Phase 4: Commit - pending
+- Phase 4: Commit - complete
 
 ## Task List
 
@@ -21,7 +21,7 @@ This slice should not change product behavior or touch runtime data. The accepta
 - [x] DOCS: Link the runbook and script from launch readiness and README.
 - [x] CHECK: Validate script syntax and run it against a temporary local desktop process.
 - [x] REVIEW: Check docs for launch-safety accuracy and no secret-handling drift.
-- [ ] COMMIT: Commit and push the runbook slice.
+- [x] COMMIT: Commit and push the runbook slice.
 
 ## Verification Target
 
