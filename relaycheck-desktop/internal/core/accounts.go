@@ -339,98 +339,16 @@ func (a *App) handleBulkPasswordLogin(w http.ResponseWriter, r *http.Request) {
 		Limit int `json:"limit"`
 	}
 	_ = decodeJSON(r, &input)
-	input.Limit = clampBatchLimit(input.Limit, 10)
-
-	rows, err := a.db.QueryContext(r.Context(), `
-		SELECT id FROM channel_accounts
-		WHERE COALESCE(password_encrypted,'') <> ''
-		  AND (
-		    login_status IN ('expired','manual_required','unknown')
-		    OR COALESCE(last_checkin_status,'') IN ('auth_expired','manual_required','failed')
-		  )
-		ORDER BY updated_at DESC
-		LIMIT ?
-	`, input.Limit)
+	result, err := a.accountLoginBatch.PasswordLogin(r.Context(), input.Limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	accountIDs := []string{}
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			log.Printf("[accounts] bulk open browser scan failed: %v", err)
-			continue
-		}
-		accountIDs = append(accountIDs, id)
-	}
-	if err := rows.Err(); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	_ = rows.Close()
-
-	results := []bulkPasswordLoginResult{}
-	auths, _ := a.loadAccountAuths(r.Context(), accountIDs)
-	for _, id := range accountIDs {
-		var auth *accountAuthContext
-		if loaded, ok := auths[id]; ok {
-			auth = &loaded
-		}
-		results = append(results, a.retryPasswordLogin(r.Context(), id, auth))
-	}
-	successCount := 0
-	for _, result := range results {
-		if result.Status == "valid" {
-			successCount++
-		}
-	}
-	if len(results) > 0 {
-		a.notify("bulk_password_login", "info", "批量密码重登完成", fmt.Sprintf("处理 %d 个账号，成功 %d 个。", len(results), successCount), "account", "")
-	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"processed": len(results),
-		"success":   successCount,
-		"failed":    len(results) - successCount,
-		"results":   results,
-	})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (a *App) retryPasswordLogin(ctx context.Context, id string, auth *accountAuthContext) bulkPasswordLoginResult {
-	if auth == nil {
-		loaded, err := a.loadAccountAuth(ctx, id)
-		if err != nil {
-			return bulkPasswordLoginResult{AccountID: id, Status: "failed", Message: err.Error()}
-		}
-		auth = &loaded
-	}
-	result := bulkPasswordLoginResult{
-		AccountID:   auth.AccountID,
-		AccountName: auth.AccountName,
-		SiteName:    auth.UpstreamSite,
-	}
-	if auth.LoginName == "" || auth.Password == "" {
-		result.Status = "manual_required"
-		result.Message = "没有可用账号密码，请网页登录授权。"
-		if _, execErr := a.db.ExecContext(ctx, `UPDATE channel_accounts SET login_status='manual_required', last_validated_at=?, updated_at=? WHERE id=?`, now(), now(), id); execErr != nil {
-			log.Printf("[accounts] password login status update to manual_required failed for account %s: %v", id, execErr)
-		}
-		return result
-	}
-	auth.Cookie = ""
-	auth.AccessToken = ""
-	auth.AuthUserID = ""
-	if err := a.accountSession.LoginWithPassword(ctx, auth); err != nil {
-		result.Status = "expired"
-		result.Message = err.Error()
-		if _, execErr := a.db.ExecContext(ctx, `UPDATE channel_accounts SET login_status='expired', last_validated_at=?, updated_at=? WHERE id=?`, now(), now(), id); execErr != nil {
-			log.Printf("[accounts] password login status update to expired failed for account %s: %v", id, execErr)
-		}
-		return result
-	}
-	result.Status = "valid"
-	result.Message = "密码登录成功，已保存新会话。"
-	return result
+	return a.accountLoginBatch.RetryPasswordLogin(ctx, id, auth)
 }
 
 func (a *App) handleBulkOpenBrowserLogin(w http.ResponseWriter, r *http.Request) {
@@ -442,56 +360,12 @@ func (a *App) handleBulkOpenBrowserLogin(w http.ResponseWriter, r *http.Request)
 		IDs   []string `json:"ids"`
 	}
 	_ = decodeJSON(r, &input)
-	input.Limit = clampBatchLimit(input.Limit, 5)
-	accountIDs := input.IDs
-	if len(accountIDs) > input.Limit {
-		accountIDs = accountIDs[:input.Limit]
+	result, err := a.accountLoginBatch.OpenBrowser(r.Context(), input.Limit, input.IDs)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	if len(accountIDs) == 0 {
-		rows, err := a.db.QueryContext(r.Context(), `
-			SELECT id FROM channel_accounts
-			WHERE login_status IN ('expired','manual_required','unknown')
-			   OR COALESCE(last_checkin_status,'') IN ('auth_expired','manual_required','failed')
-			ORDER BY updated_at DESC
-			LIMIT ?
-		`, input.Limit)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err == nil {
-				accountIDs = append(accountIDs, id)
-			}
-		}
-		if err := rows.Err(); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		_ = rows.Close()
-	}
-
-	results := []browserLoginOpenResult{}
-	opened := 0
-	auths, _ := a.loadAccountAuths(r.Context(), accountIDs)
-	for _, id := range accountIDs {
-		var auth *accountAuthContext
-		if loaded, ok := auths[id]; ok {
-			auth = &loaded
-		}
-		result := a.browserLogin.Open(r.Context(), id, auth)
-		if result.Status == "opened" || result.Status == "already_open" {
-			opened++
-		}
-		results = append(results, result)
-	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"processed": len(results),
-		"opened":    opened,
-		"failed":    len(results) - opened,
-		"results":   results,
-	})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (a *App) handleBulkFinishBrowserLogin(w http.ResponseWriter, r *http.Request) {
@@ -502,35 +376,12 @@ func (a *App) handleBulkFinishBrowserLogin(w http.ResponseWriter, r *http.Reques
 		IDs []string `json:"ids"`
 	}
 	_ = decodeJSON(r, &input)
-	accountIDs := input.IDs
-	if len(accountIDs) == 0 {
-		a.browserSessions.Range(func(id string, _ BrowserLoginSession) {
-			accountIDs = append(accountIDs, id)
-		})
+	result, err := a.accountLoginBatch.FinishBrowser(r.Context(), input.IDs)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	results := []browserLoginSaveResult{}
-	saved := 0
-	if len(accountIDs) > 10 {
-		accountIDs = accountIDs[:10]
-	}
-	auths, _ := a.loadAccountAuths(r.Context(), accountIDs)
-	for _, id := range accountIDs {
-		var auth *accountAuthContext
-		if loaded, ok := auths[id]; ok {
-			auth = &loaded
-		}
-		result := a.browserLogin.Save(r.Context(), id, auth)
-		if result.Status == "saved" {
-			saved++
-		}
-		results = append(results, result)
-	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"processed": len(results),
-		"saved":     saved,
-		"failed":    len(results) - saved,
-		"results":   results,
-	})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (a *App) handleAccountByID(w http.ResponseWriter, r *http.Request) {

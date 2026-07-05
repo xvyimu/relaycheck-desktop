@@ -40,6 +40,7 @@ type App struct {
 	accountValidation   *AccountValidationService
 	accountCleanup      *AccountCleanupService
 	accountSiteUpdates  *AccountSiteUpdateService
+	accountLoginBatch   *AccountLoginBatchService
 	accountTasks        *AccountTaskService
 	browserLogin        *BrowserLoginService
 	siteTasks           *SiteTaskService
@@ -164,6 +165,7 @@ func NewApp(root string) (*App, error) {
 	app.accountCleanup = NewAccountCleanupService(app)
 	app.accountSiteUpdates = NewAccountSiteUpdateService(app)
 	app.browserLogin = NewBrowserLoginService(app)
+	app.accountLoginBatch = NewAccountLoginBatchService(app)
 	app.checkinExecutor = NewCheckinExecutor(app)
 	app.balanceRefresher = NewBalanceRefresher(app)
 	app.checkinBatch = NewCheckinBatchOrchestrator(app)
