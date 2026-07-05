@@ -3,7 +3,7 @@
 Date: 2026-07-05
 Status: Pre-launch verified locally with the release gate; production rollout still requires operator approval.
 
-Latest local release-gate run:
+Latest local release-gate run: 2026-07-05, passed.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1 -ProxyUrl http://127.0.0.1:7897
@@ -61,7 +61,7 @@ The script builds `dist\relaycheck.exe`, copies the operator docs, writes `manif
 - Confirm target machine has a writable application working directory.
 - Set `RELAYCHECK_BOOTSTRAP_PASSWORD` for first production launch if a deterministic initial password is required.
 - Back up existing `data\relaycheck.db` before replacing an already-running installation.
-- Start `dist\relaycheck.exe` from the intended working directory.
+- Extract the `scripts\package-release.ps1` zip package into the intended working directory and start package-root `relaycheck.exe`.
 - Open `http://127.0.0.1:3001` and verify `/api/health` reports all checks as `ok`.
 - Run `scripts\operator-acceptance.ps1` for read-only local health, status, and API-shape checks.
 - Run one manual critical flow with non-secret test data: open dashboard, inspect scheduler preview, create or view a site, and trigger a dry-run task.
