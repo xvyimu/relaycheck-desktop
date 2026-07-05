@@ -10,8 +10,8 @@ This slice should not change product behavior. It only adds a release/operator s
 
 - Phase 1: Planning - complete
 - Phase 2: Implementation - complete
-- Phase 3: Verification - in_progress
-- Phase 4: Commit - pending
+- Phase 3: Verification - complete
+- Phase 4: Commit - complete
 
 ## Task List
 
@@ -19,8 +19,8 @@ This slice should not change product behavior. It only adds a release/operator s
 - [x] SCRIPT: Add `scripts\operator-launch.ps1`.
 - [x] SCRIPT: Include the launch helper in package contents, manifest, and verifier requirements.
 - [x] DOCS: Document package-local operator launch flow and no-secrets launch record output.
-- [ ] CHECK: Run parser checks, development package checks, clean package checks, and package-local launch helper smoke.
-- [ ] COMMIT: Commit and push this release-handoff improvement.
+- [x] CHECK: Run parser checks, development package checks, clean package checks, and package-local launch helper smoke.
+- [x] COMMIT: Commit and push this release-handoff improvement.
 
 ## Verification Target
 

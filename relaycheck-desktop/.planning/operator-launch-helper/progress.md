@@ -9,3 +9,6 @@
 - Updated launch docs and acceptance-record template with the operator launch helper and launch-record evidence.
 - Ran parser checks and development packaging with `-AllowDirty`.
 - Ran package-local verifier and package-local operator launch smoke. The first run exposed port-fallback handling; after adding fallback detection and child-process log capture, isolated runtime smoke passed on port 3207.
+- Committed the implementation as `33376b7 Add operator launch helper`.
+- Ran clean-tree packaging after the commit; generated `relaycheck-desktop-1.1.0-33376b7d8a88-20260705-152040.zip` with SHA256 `96d89d0eb82f2921353038e3baaebb9d6aa0ea98d99da30354fc8090981bb67a` and `gitDirty=false`.
+- Verified the clean package with source-tree `scripts\verify-package.ps1`, package-local `scripts\verify-package.ps1 -PackageDir .`, and package-local `scripts\operator-launch.ps1 -Port 3207 -TimeoutSeconds 45 -NoOpen -StopAfterAcceptance -RuntimeDir .tmp\operator-launch-runtime`.

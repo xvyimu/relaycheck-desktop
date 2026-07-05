@@ -23,3 +23,9 @@
 - Package-local `scripts\verify-package.ps1 -PackageDir . -AllowDirtyManifest` passed.
 - Initial package-root launch smoke exposed an expected port-fallback handling gap; the helper was updated to detect fallback ports and to capture child-process logs.
 - Isolated package-local launch smoke passed with `scripts\operator-launch.ps1 -Port 3207 -TimeoutSeconds 45 -NoOpen -StopAfterAcceptance -AllowDirtyManifest -RuntimeDir .tmp\operator-launch-runtime`.
+- Clean-tree packaging passed after commit `33376b7d8a88692274463e4d79b87d53f90f16f6`.
+- Clean package: `dist\releases\relaycheck-desktop-1.1.0-33376b7d8a88-20260705-152040.zip`.
+- Clean package SHA256: `96d89d0eb82f2921353038e3baaebb9d6aa0ea98d99da30354fc8090981bb67a`.
+- Clean source-tree package verification passed with `manifest.gitDirty=false`.
+- Clean package-local verification passed with `manifest.gitDirty=false`.
+- Clean package-local operator launch smoke passed on port 3207 and generated a no-secrets launch record.
