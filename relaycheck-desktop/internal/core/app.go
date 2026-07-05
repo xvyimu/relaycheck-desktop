@@ -39,10 +39,12 @@ type App struct {
 	accountSession      *AccountSessionService
 	accountTasks        *AccountTaskService
 	browserLogin        *BrowserLoginService
+	siteTasks           *SiteTaskService
 	checkinExecutor     *CheckinExecutor
 	balanceRefresher    *BalanceRefresher
 	checkinBatch        *CheckinBatchOrchestrator
 	checkinTasks        *CheckinTaskService
+	scheduleProjection  *ScheduleProjectionService
 	schedulerRepo       *SchedulerRepo
 	browserSessions     *BrowserSessionStore
 	mu                  sync.RWMutex
@@ -161,8 +163,10 @@ func NewApp(root string) (*App, error) {
 	app.checkinBatch = NewCheckinBatchOrchestrator(app)
 	app.rootCtx, app.rootCancel = context.WithCancel(context.Background())
 	app.taskRunner.setRootCtx(app.rootCtx)
+	app.siteTasks = NewSiteTaskService(app)
 	app.checkinTasks = NewCheckinTaskService(app)
 	app.accountTasks = NewAccountTaskService(app)
+	app.scheduleProjection = NewScheduleProjectionService(app)
 
 	// Two-phase init: NotificationHTTPPort is satisfied by *App itself
 	// (externalURLPolicy + doHTTPWithTimeout), so the hub can only be wired

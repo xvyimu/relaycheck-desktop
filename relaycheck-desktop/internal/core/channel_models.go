@@ -24,8 +24,8 @@ type channelModelSyncItem struct {
 }
 
 // channelModelSyncRecord is the persisted state for one channel during a
-// model sync batch. Kept in core because task_runner.loadChannelModelSyncRecordsForHealthSite
-// produces it and feeds it to (*App).syncChannelModels.
+// model sync batch. Kept in core because SiteTaskService loads health-probe
+// model records and feeds them to (*App).syncChannelModels.
 type channelModelSyncRecord struct {
 	ID                  string
 	Name                string
@@ -84,7 +84,7 @@ func (a *App) handleChannelModelsSync(w http.ResponseWriter, r *http.Request) {
 // loadChannelModelSyncRecords is the *App forwarder for
 // channels.Service.LoadChannelModelSyncRecords. Converts the channels mirror
 // type back to core channelModelSyncRecord so existing callers (tests,
-// task_runner.syncModelsForHealthSite) are unchanged.
+// SiteTaskService.syncModelsForHealthSite) are unchanged.
 func (a *App) loadChannelModelSyncRecords(ctx context.Context, limit int) ([]channelModelSyncRecord, error) {
 	mirror, err := a.channelsService.LoadChannelModelSyncRecords(ctx, limit)
 	if err != nil {

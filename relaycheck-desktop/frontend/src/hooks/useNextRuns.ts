@@ -1,18 +1,13 @@
 import { useApi } from "@/hooks/useApi";
-import type { NextRunItem } from "@/types";
-
-type NextRunResponse = {
-  generatedAt: string;
-  items: NextRunItem[];
-};
-
-const emptyNextRuns: NextRunResponse = {
-  generatedAt: "",
-  items: [],
-};
+import {
+  emptyNextRuns,
+  nextRunItems,
+  schedulerNextRunsPath,
+  type NextRunResponse,
+} from "@/lib/schedulerPreview";
 
 export function useNextRuns() {
-  const { data, loading, refresh } = useApi<NextRunResponse>("/api/scheduler/next-runs", emptyNextRuns);
+  const { data, loading, refresh } = useApi<NextRunResponse>(schedulerNextRunsPath, emptyNextRuns);
 
-  return { nextRuns: data.items || [], loading, refresh };
+  return { nextRuns: nextRunItems(data), loading, refresh };
 }

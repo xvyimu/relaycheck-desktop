@@ -44,10 +44,12 @@ Each owns its own mutex and is independently testable. `*App` retains thin forwa
 | `browser_login_service.go` | `BrowserLoginService`: browser login open/save orchestration and login target URL resolution. `accounts.go` keeps thin compatibility wrappers. |
 | `account_api_client.go` | `AccountAPIClient`: account API request construction, auth headers, proxy-aware timeout handling, and bounded response reads. |
 | `account_session_service.go` | `AccountSessionService`: password login, session ensure/save, token/cookie persistence, and login response parsing. |
+| `site_task_service.go` | `SiteTaskService`: SSE task-facing site detection and channel-health probe orchestration. `task_runner.go` delegates `detect_sites`/`channel_health_probe` task bodies here. |
 | `checkin_executor.go` | `CheckinExecutor`: single-account checkin execution, retry, result persistence, and notification dispatch. `checkin_balance.go` keeps thin compatibility wrappers. |
 | `balance_refresher.go` | `BalanceRefresher`: single-account balance refresh, result persistence, and notification dispatch. `checkin_balance.go` keeps thin compatibility wrappers. |
 | `checkin_batch_orchestrator.go` | `CheckinBatchOrchestrator`: due-account selection, per-site throttling, batch run progress, and multi-account checkin orchestration. |
 | `checkin_task_service.go` | `CheckinTaskService`: SSE task-facing checkin and balance refresh orchestration. `task_runner.go` delegates `checkin`/`refresh_balances` task bodies here. |
+| `schedule_projection_service.go` | `ScheduleProjectionService`: scheduler calendar and next-runs projection. `channel_schedules.go` handlers delegate display projection here. |
 | `checkin_run_state.go` | `CheckinRunStore`: checkin run state with independent `sync.RWMutex`; `Snapshot()` for reads. Replaces `a.checkinRun` + 5 mutators. |
 | `sync_job_run_store.go` | `SyncJobRunStore`: `TryStart()`/`Finish()` re-entrancy guard for scheduled jobs. Replaces `a.localSyncRun`/`channelHealthRun`. |
 | `scheduler_repo.go` | `SchedulerRepo`: pure db repository for `loadSettingJSON`/`loadSchedulerRun`/`upsertSchedulerPlan`. |
@@ -99,7 +101,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | File | Purpose |
 |------|---------|
 | `scheduler.go` | Global scheduler, job status, next-run computation. |
-| `task_runner.go` | Unified task engine with SSE streaming progress and task start/cancel/stream HTTP handlers; checkin/balance task bodies delegate to `CheckinTaskService`, and API key test tasks delegate to `AccountTaskService`. |
+| `task_runner.go` | Unified task lifecycle engine with SSE streaming progress and task start/cancel/stream HTTP handlers; concrete task bodies delegate to `CheckinTaskService`, `AccountTaskService`, and `SiteTaskService`. |
 | `dry_run.go` | Dry-run preview for batch operations (200 account limit). |
 
 ### Analytics & Diagnostics
@@ -169,6 +171,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | `read_cache_store_test.go` | `ReadCacheStore` unit tests. |
 | `read_cache_test.go` | Read cache tests. |
 | `scanner_test.go` | Scanner tests. |
+| `site_task_service_test.go` | `SiteTaskService` task-progress integration test for detect-sites tasks. |
 | `scheduler_repo_test.go` | `SchedulerRepo` unit tests. |
 | `scheduler_test.go` | Scheduler tests. |
 | `secrets_security_test.go` | Security tests: no plaintext secrets in responses. |

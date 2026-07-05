@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -53,9 +54,21 @@ func TestHandleChannelsEmpty(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	body := rec.Body.String()
-	if !strings.Contains(body, `"ok"`) {
-		t.Fatalf("expected response with \"ok\" field, got: %s", body)
+	var payload struct {
+		OK   bool              `json:"ok"`
+		Data []ImportedChannel `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v; body=%s", err, rec.Body.String())
+	}
+	if !payload.OK {
+		t.Fatalf("expected ok response, got: %s", rec.Body.String())
+	}
+	if payload.Data == nil {
+		t.Fatalf("expected empty channels array, got null: %s", rec.Body.String())
+	}
+	if len(payload.Data) != 0 {
+		t.Fatalf("expected no channels, got %d", len(payload.Data))
 	}
 }
 

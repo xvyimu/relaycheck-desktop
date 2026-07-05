@@ -4,7 +4,7 @@ import { HubRadar } from "@/components/dashboard/HubRadar";
 import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
 import { UpdateBanner } from "@/components/ui/UpdateBanner";
 import { Badge as UiBadge } from "@/components/ui/badge";
-import { useNextRuns } from "@/hooks/useNextRuns";
+import { useSchedulerPreview } from "@/hooks/useSchedulerPreview";
 import { formatDuration, formatTime } from "@/lib/format";
 import { actionItemNavigationIntent } from "@/lib/navigation";
 import { statusTone, toneBadgeVariant } from "@/lib/tone";
@@ -121,7 +121,8 @@ function DashboardBase({
   const actionItems = actionCenter?.items || [];
   const priorityActions = actionItems;
 
-  const { nextRuns, loading: nextRunsBusy } = useNextRuns();
+  const schedulerPreview = useSchedulerPreview(2);
+  const { nextRuns, nextRunsLoading: nextRunsBusy } = schedulerPreview;
 
   const schedulerContent = useMemo<React.ReactNode>(() => {
     if (nextRunsBusy) {
@@ -178,6 +179,7 @@ function DashboardBase({
           modelOverview={modelOverview}
           pricingOverview={pricingOverview}
           usageOverview={usageOverview}
+          schedulerPreview={schedulerPreview}
           onNavigate={onNavigate}
           onRefresh={onRefresh}
         />

@@ -259,6 +259,49 @@ func TestHandleNextRuns_ReturnsJobs(t *testing.T) {
 	}
 }
 
+func TestScheduleProjectionServiceBuildNextRunsIncludesSiteSchedules(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	ctx := context.Background()
+	_, err := app.db.ExecContext(ctx,
+		`INSERT INTO upstream_sites (id, name, base_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+		"site-next-run-service", "Next Run Site", "https://next-run.example", now(), now())
+	if err != nil {
+		t.Fatalf("create upstream site: %v", err)
+	}
+	nextRunAt := time.Now().Add(2 * time.Hour).Format(time.RFC3339)
+	_, err = app.db.ExecContext(ctx, `
+		INSERT INTO channel_schedules (id, upstream_site_id, enabled, checkin_time, random_delay_min, random_delay_max, next_run_at, created_at, updated_at)
+		VALUES (?, ?, 1, '09:30', 0, 0, ?, ?, ?)
+	`, "site-next-run-service", "site-next-run-service", nextRunAt, now(), now())
+	if err != nil {
+		t.Fatalf("create channel schedule: %v", err)
+	}
+
+	list := app.scheduleProjection.BuildNextRuns(ctx, nowCST())
+
+	var found *NextRunItem
+	for i := range list.Items {
+		if list.Items[i].SiteID == "site-next-run-service" {
+			found = &list.Items[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected next-runs projection to include site schedule, got %#v", list.Items)
+	}
+	if found.JobKey != "channel.site-next-run-service" {
+		t.Fatalf("job key = %q, want channel.site-next-run-service", found.JobKey)
+	}
+	if found.Label != "Next Run Site 签到" {
+		t.Fatalf("label = %q, want site checkin label", found.Label)
+	}
+	if found.NextRunAt != nextRunAt {
+		t.Fatalf("nextRunAt = %q, want %q", found.NextRunAt, nextRunAt)
+	}
+}
+
 func TestHandleScheduleCalendar_ReturnsItems(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()

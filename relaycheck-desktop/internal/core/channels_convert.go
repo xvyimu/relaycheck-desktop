@@ -48,7 +48,7 @@ func channelFromMirror(item channels.ImportedChannel) ImportedChannel {
 
 func channelsListToCore(items []channels.ImportedChannel) []ImportedChannel {
 	if len(items) == 0 {
-		return nil
+		return []ImportedChannel{}
 	}
 	out := make([]ImportedChannel, 0, len(items))
 	for _, item := range items {

@@ -1,9 +1,8 @@
-import { useMemo } from "react";
-import { useApi } from "@/hooks/useApi";
 import { formatCompactNumber, formatTime } from "@/lib/format";
 import { diagnosticLevelLabel, schedulerStatusLabel } from "@/lib/labels";
 import { actionItemNavigationIntent } from "@/lib/navigation";
 import { LoadingSkeleton } from "../loading-skeleton";
+import type { SchedulerPreviewState } from "@/hooks/useSchedulerPreview";
 import type {
   ActionCenter,
   StatusPayload,
@@ -13,7 +12,6 @@ import type {
   UsageOverview,
   TabKey,
   NavigationIntent,
-  ScheduleCalendarItem,
 } from "@/types";
 
 export interface HubRadarProps {
@@ -23,19 +21,13 @@ export interface HubRadarProps {
   modelOverview: ModelOverview | null;
   pricingOverview: ModelPricingOverview | null;
   usageOverview: UsageOverview | null;
+  schedulerPreview: Pick<
+    SchedulerPreviewState,
+    "calendarItems" | "calendarGroups" | "calendarLoading" | "refreshCalendar"
+  >;
   onNavigate: (tab: TabKey, intent?: Omit<NavigationIntent, "target">) => void;
   onRefresh: () => void;
 }
-
-type ScheduleCalendarResponse = {
-  generatedAt: string;
-  items: ScheduleCalendarItem[];
-};
-
-const emptyScheduleCalendar: ScheduleCalendarResponse = {
-  generatedAt: "",
-  items: [],
-};
 
 export function HubRadar({
   status,
@@ -44,14 +36,16 @@ export function HubRadar({
   modelOverview,
   pricingOverview,
   usageOverview,
+  schedulerPreview,
   onNavigate,
   onRefresh,
 }: HubRadarProps) {
-  const { data: calendarData, loading: calendarBusy, refresh: refreshCalendar } = useApi<ScheduleCalendarResponse>(
-    "/api/scheduler/calendar?days=2",
-    emptyScheduleCalendar,
-  );
-  const calendarItems = calendarData.items || [];
+  const {
+    calendarItems,
+    calendarGroups,
+    calendarLoading: calendarBusy,
+    refreshCalendar,
+  } = schedulerPreview;
 
   const issueItems = (actionCenter?.items || []).filter((item) => item.level === "danger" || item.level === "warning");
   const topIssue = issueItems[0];
@@ -73,15 +67,6 @@ export function HubRadar({
         .map(([k, v]) => `${k}:${v}`)
         .join(" ")
     : "快照待刷新";
-
-  const calendarGroups = useMemo(() => {
-    const groups: Record<string, ScheduleCalendarItem[]> = {};
-    for (const item of calendarItems) {
-      if (!groups[item.date]) groups[item.date] = [];
-      groups[item.date].push(item);
-    }
-    return groups;
-  }, [calendarItems]);
 
   return (
     <section className="hub-radar" aria-label="AI API Hub 雷达">
@@ -182,7 +167,7 @@ export function HubRadar({
               {Object.entries(calendarGroups).map(([date, items]) => (
                   <div key={date} className="schedule-day">
                     <div className="schedule-day-label">{date.split("-").slice(1).join("-")}</div>
-                    {items.map((item, i) => (
+                    {items.map((item) => (
                       <div key={`${item.siteId}-${item.time}-${item.jobType}`} className="schedule-item">
                         <span className="schedule-item-time">{item.time.slice(0, 5)}</span>
                         <span className="schedule-item-name">{item.siteName || "未命名"}</span>

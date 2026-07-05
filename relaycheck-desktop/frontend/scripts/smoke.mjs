@@ -6,14 +6,14 @@
 //   2. playwright installed (npx playwright install chromium)
 //   3. RELAYCHECK_SMOKE_PASSWORD set if the app requires auth
 
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const verifier = join(__dirname, "verify-navigation.mjs");
 
 try {
-  await import(verifier);
+  await import(pathToFileURL(verifier).href);
 } catch (err) {
   if (err.code === "ERR_MODULE_NOT_FOUND" || err.code === "MODULE_NOT_FOUND") {
     // playwright may not be installed — give a helpful message

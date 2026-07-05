@@ -374,11 +374,7 @@ func (a *App) tickChannelHealthScheduler(ctx context.Context, currentTime time.T
 }
 
 func (a *App) runScheduledChannelHealthProbe(ctx context.Context, config channelHealthScheduleConfig) (channelHealthProbeResult, error) {
-	jobs, err := a.loadChannelHealthProbeJobs(ctx, config.Limit, config.OnlyRisky)
-	if err != nil {
-		return channelHealthProbeResult{}, err
-	}
-	return a.runChannelHealthProbe(ctx, jobs, nil), nil
+	return a.siteTasks.RunScheduledChannelHealthProbe(ctx, config)
 }
 
 func (a *App) runScheduledLocalNewAPISync(ctx context.Context) scheduledSyncResult {

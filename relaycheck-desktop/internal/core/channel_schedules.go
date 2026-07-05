@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sort"
 	"time"
 
 	"relaycheck-desktop/internal/channels"
@@ -191,35 +190,13 @@ func (a *App) handleScheduleCalendar(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	schedules, err := a.listChannelSchedules(ctx)
+	days := channels.ParseCalendarDays(r, 7)
+	projection, err := a.scheduleProjection.BuildCalendar(ctx, nowCST(), days)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	cst := time.FixedZone("CST", 8*3600)
-	now := time.Now().In(cst)
-	days := channels.ParseCalendarDays(r, 7)
-	windowEnd := now.AddDate(0, 0, days)
-	items := make([]ScheduleCalendarItem, 0, len(schedules)*days)
-
-	for _, sched := range schedules {
-		mirrorItems := channels.CalendarItemsForSchedule(scheduleToMirror(sched), now, windowEnd, days)
-		items = append(items, calendarItemsToCore(mirrorItems)...)
-	}
-	if item, ok := a.nextSyncCalendarItem(ctx, now, windowEnd); ok {
-		items = append(items, item)
-	}
-
-	// Sort by date+time
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].Date+items[i].Time < items[j].Date+items[j].Time
-	})
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"generatedAt": now.Format(time.RFC3339),
-		"items":       items,
-	})
+	writeJSON(w, http.StatusOK, projection)
 }
 
 // nextSyncCalendarItem is the *App forwarder for
@@ -237,66 +214,7 @@ func (a *App) handleNextRuns(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	ctx := r.Context()
-	status := a.buildSchedulerStatus(ctx)
-
-	var items []NextRunItem
-	nowTime := nowCST()
-	for _, job := range status.Jobs {
-		var nextRunInSec int64 = -1
-		if job.NextRunAt != "" {
-			if t, err := time.Parse(time.RFC3339, job.NextRunAt); err == nil {
-				nextRunInSec = int64(t.Sub(nowTime).Seconds())
-				if nextRunInSec < 0 {
-					nextRunInSec = 0
-				}
-			}
-		}
-		items = append(items, NextRunItem{
-			JobKey:       job.Key,
-			Label:        job.Label,
-			NextRunAt:    job.NextRunAt,
-			NextRunInSec: nextRunInSec,
-			Status:       job.Status,
-		})
-	}
-
-	// Add per-channel schedules
-	schedules, _ := a.listChannelSchedules(ctx)
-	for _, sched := range schedules {
-		if !sched.Enabled || sched.NextRunAt == "" {
-			continue
-		}
-		var nextRunInSec int64 = -1
-		if t, err := time.Parse(time.RFC3339, sched.NextRunAt); err == nil {
-			nextRunInSec = int64(t.Sub(nowTime).Seconds())
-			if nextRunInSec < 0 {
-				nextRunInSec = 0
-			}
-		}
-		label := sched.SiteName + " 签到"
-		if sched.CronExpr != "" {
-			label = sched.SiteName + " 签到(" + sched.CronExpr + ")"
-		}
-		items = append(items, NextRunItem{
-			JobKey:       "channel." + sched.UpstreamSiteID,
-			Label:        label,
-			NextRunAt:    sched.NextRunAt,
-			NextRunInSec: nextRunInSec,
-			Status:       "scheduled",
-			SiteID:       sched.UpstreamSiteID,
-			SiteName:     sched.SiteName,
-		})
-	}
-
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].NextRunAt < items[j].NextRunAt
-	})
-
-	writeJSON(w, http.StatusOK, NextRunList{
-		GeneratedAt: nowTime.Format(time.RFC3339),
-		Items:       items,
-	})
+	writeJSON(w, http.StatusOK, a.scheduleProjection.BuildNextRuns(r.Context(), nowCST()))
 }
 
 // ensureGlobalScheduleRecord is the *App forwarder for
