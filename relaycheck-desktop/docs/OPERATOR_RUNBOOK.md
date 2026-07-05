@@ -1,13 +1,14 @@
 # Operator Runbook
 
 Date: 2026-07-05
-Scope: RelayCheck Desktop local Windows launch from `dist\relaycheck.exe`.
+Scope: RelayCheck Desktop local Windows launch from a `scripts\package-release.ps1` zip package.
 
 Use this runbook after the one-command release gate in `docs\LAUNCH_READINESS.md` has passed. It is written for a trusted local operator and does not replace the release gate.
 
 ## Required Inputs
 
-- Release executable: `dist\relaycheck.exe`
+- Release package: `dist\releases\relaycheck-desktop-<version>-<commit>-<timestamp>.zip`
+- Release executable inside the package: `relaycheck.exe`
 - Intended working directory: the folder that should own `data\relaycheck.db`
 - Local URL: `http://127.0.0.1:3001` unless `RELAYCHECK_PORT` is changed
 - Bootstrap account: `admin`
@@ -26,14 +27,24 @@ powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1 -ProxyUrl ht
 
 Omit `-ProxyUrl` when direct module access works. Continue only if the script passes.
 
+Then create the handoff package from a clean Git tree:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\package-release.ps1
+```
+
+Before copying the package to the target machine, compare the zip SHA256 printed by the script and written to the sibling `.zip.sha256` file with the handoff record.
+
 ## First Launch
 
 1. Confirm the working directory is writable and has enough disk space for `data\`, `data\backups\`, logs, and exports.
 2. If this is a fresh install and a deterministic password is required, set `RELAYCHECK_BOOTSTRAP_PASSWORD` before starting the app.
 3. If this is an upgrade, stop the previous `relaycheck.exe`, copy the previous executable aside, and back up `data\relaycheck.db`.
-4. Start `dist\relaycheck.exe` from the intended working directory.
-5. Open `http://127.0.0.1:3001`.
-6. Run the read-only acceptance script:
+4. Extract the release package into the intended working directory.
+5. Confirm `manifest.json` and `checksums.sha256` are present beside `relaycheck.exe`.
+6. Start `relaycheck.exe` from the intended working directory.
+7. Open `http://127.0.0.1:3001`.
+8. Run the read-only acceptance script from the extracted package:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-acceptance.ps1 -BaseUrl http://127.0.0.1:3001
@@ -109,7 +120,7 @@ Roll back immediately if any of these happen:
 
 Record the following in the release note or handoff:
 
-- Release commit and executable path
+- Release commit, package path, and zip SHA256
 - Working directory
 - Whether this was a fresh install or upgrade
 - `scripts\verify-release.ps1` result

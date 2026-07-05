@@ -16,7 +16,13 @@ Set-StrictMode -Version Latest
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 if ([string]::IsNullOrWhiteSpace($ReleaseExe)) {
-  $ReleaseExe = Join-Path $RepoRoot "dist\relaycheck.exe"
+  $sourceTreeExe = Join-Path $RepoRoot "dist\relaycheck.exe"
+  $packageExe = Join-Path $RepoRoot "relaycheck.exe"
+  if (Test-Path -LiteralPath $sourceTreeExe) {
+    $ReleaseExe = $sourceTreeExe
+  } else {
+    $ReleaseExe = $packageExe
+  }
 }
 if ([string]::IsNullOrWhiteSpace($RuntimeDir)) {
   $RuntimeDir = Join-Path $RepoRoot ".tmp\operator-acceptance-runtime"
