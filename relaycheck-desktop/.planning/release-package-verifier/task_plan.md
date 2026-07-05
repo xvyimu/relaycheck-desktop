@@ -10,8 +10,8 @@ This slice should not change product behavior. It only adds a release script, pa
 
 - Phase 1: Planning - complete
 - Phase 2: Implementation - complete
-- Phase 3: Verification - in_progress
-- Phase 4: Commit - pending
+- Phase 3: Verification - complete
+- Phase 4: Commit - complete
 
 ## Task List
 
@@ -19,8 +19,8 @@ This slice should not change product behavior. It only adds a release script, pa
 - [x] SCRIPT: Add `scripts\verify-package.ps1`.
 - [x] SCRIPT: Include the verifier in release package contents, manifest, and checksums.
 - [x] DOCS: Document source-tree zip verification and package-local verification.
-- [ ] CHECK: Run parser checks, verifier checks, package build, clean package verification, and package-local acceptance.
-- [ ] COMMIT: Commit and push this release-handoff improvement.
+- [x] CHECK: Run parser checks, verifier checks, package build, clean package verification, and package-local acceptance.
+- [x] COMMIT: Commit and push this release-handoff improvement.
 
 ## Verification Target
 

@@ -22,3 +22,9 @@
 - Source-tree package verification passed with `scripts\verify-package.ps1 -AllowDirtyManifest`.
 - Package-local verification passed with `scripts\verify-package.ps1 -PackageDir . -AllowDirtyManifest`.
 - Package-local `scripts\operator-acceptance.ps1 -StartReleaseExe -ExpectedPort 3102 -TimeoutSeconds 30` passed with only expected relative `data\` path warnings.
+- Clean-tree packaging passed after commit `d1e528e8cbba1a9e0b74abaeee1d85fb617146df`.
+- Clean package: `dist\releases\relaycheck-desktop-1.1.0-d1e528e8cbba-20260705-144314.zip`.
+- Clean package SHA256: `5a5c8acd7fa54dc95e78a30f51f33278cc5a266f37585b69cff83d4cf1241a01`.
+- Clean source-tree package verification passed with `manifest.gitDirty=false`.
+- Clean package-local verification passed with `manifest.gitDirty=false`.
+- Clean package-local operator acceptance passed on port 3102 with only expected relative `data\` path warnings.
