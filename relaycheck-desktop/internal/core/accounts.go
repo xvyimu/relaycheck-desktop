@@ -1019,58 +1019,13 @@ func (a *App) testAccountLogin(w http.ResponseWriter, r *http.Request, id string
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	var baseURL, cookieEncrypted, accessEncrypted, apiKeyEncrypted, userAgent string
-	err := a.db.QueryRowContext(r.Context(), `
-		SELECT s.base_url, COALESCE(a.cookie_encrypted,''), COALESCE(a.access_token_encrypted,''), COALESCE(a.api_key_encrypted,''), COALESCE(a.user_agent,'')
-		FROM channel_accounts a
-		JOIN upstream_sites s ON s.id = a.upstream_site_id
-		WHERE a.id = ?
-	`, id).Scan(&baseURL, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &userAgent)
-	if err == sql.ErrNoRows {
-		writeError(w, http.StatusNotFound, "账号不存在。")
-		return
-	}
+	result, err := a.accountValidation.TestLogin(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		status, message := accountValidationHTTPErrorStatus(err)
+		writeError(w, status, message)
 		return
 	}
-
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, normalizeBaseURL(baseURL)+"/api/user/self", nil)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "账号 Base URL 无效，无法测试登录态。")
-		return
-	}
-	if userAgent != "" {
-		req.Header.Set("user-agent", userAgent)
-	}
-	if cookie, _ := a.decryptText(cookieEncrypted); cookie != "" {
-		req.Header.Set("cookie", cookie)
-	}
-	if token, _ := a.decryptText(accessEncrypted); token != "" {
-		if !strings.HasPrefix(strings.ToLower(token), "bearer ") {
-			token = "Bearer " + token
-		}
-		req.Header.Set("authorization", token)
-	}
-	if key, _ := a.decryptText(apiKeyEncrypted); key != "" && req.Header.Get("authorization") == "" {
-		req.Header.Set("authorization", "Bearer "+key)
-	}
-
-	status := "unknown"
-	httpStatus := 0
-	if resp, err := a.doHTTP(req); err == nil {
-		httpStatus = resp.StatusCode
-		_ = resp.Body.Close()
-		if resp.StatusCode == http.StatusOK {
-			status = "valid"
-		} else if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			status = "expired"
-		}
-	}
-	if _, execErr := a.db.ExecContext(r.Context(), `UPDATE channel_accounts SET login_status=?, last_validated_at=?, updated_at=? WHERE id=?`, status, now(), now(), id); execErr != nil {
-		log.Printf("[accounts] test login status update failed for account %s: %v", id, execErr)
-	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"status": status, "httpStatus": httpStatus})
+	writeJSON(w, http.StatusOK, result)
 }
 
 type apiKeyTestResult struct {
@@ -1164,151 +1119,11 @@ func (a *App) handleBulkTestAPIKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) testAPIKeyForAccount(ctx context.Context, id string, auth *accountAuthContext) apiKeyTestResult {
-	if auth == nil {
-		loaded, err := a.loadAccountAuth(ctx, id)
-		if err != nil {
-			return apiKeyTestResult{AccountID: id, Status: "failed", Message: err.Error()}
-		}
-		auth = &loaded
-	}
-	result := apiKeyTestResult{
-		AccountID:   auth.AccountID,
-		AccountName: auth.AccountName,
-		SiteName:    auth.UpstreamSite,
-		Fingerprint: secretFingerprint(auth.APIKey),
-	}
-	if strings.TrimSpace(auth.APIKey) == "" {
-		result.Status = "missing"
-		result.Message = "该账号没有保存 API Key。"
-		return result
-	}
-	auth.Cookie = ""
-	auth.AccessToken = ""
-	auth.AuthUserID = ""
-
-	modelsStatus, modelsBody, modelsErr := a.accountAPI.Do(ctx, *auth, http.MethodGet, "/v1/models", nil)
-	result.HTTPStatus = modelsStatus
-	result.Path = "/v1/models"
-	if modelsErr != nil {
-		result.Status = "unknown"
-		result.Message = modelsErr.Error()
-	} else if modelsStatus == http.StatusUnauthorized || modelsStatus == http.StatusForbidden {
-		result.Status = "expired"
-		result.Message = firstNonEmpty(extractMessage(modelsBody), "API Key 无权访问 /v1/models。")
-	} else if modelsStatus >= 200 && modelsStatus < 300 {
-		models := parseModelIDs(modelsBody)
-		result.Status = "valid"
-		result.ModelCount = len(models)
-		result.SampleModels = limitStrings(models, 8)
-		result.Message = fmt.Sprintf("/v1/models 返回 HTTP %d，识别到 %d 个模型。", modelsStatus, len(models))
-		if len(models) > 0 {
-			result.TestedModel = chooseModelForSpeedTest(models)
-			a.speedTestAPIKeyModel(ctx, auth, &result)
-		} else {
-			result.ModelTestMessage = "模型列表为空，未执行可用性测速。"
-		}
-	} else if modelsStatus == http.StatusNotFound || modelsStatus == http.StatusMethodNotAllowed {
-		result.Status = "unknown"
-		result.Message = firstNonEmpty(extractMessage(modelsBody), "/v1/models 不可用，继续用面板接口判断 Key。")
-	} else {
-		result.Status = "unknown"
-		result.Message = firstNonEmpty(extractMessage(modelsBody), fmt.Sprintf("/v1/models 返回 HTTP %d。", modelsStatus))
-	}
-
-	if result.Status == "unknown" {
-		probes := []string{"/api/user/self", "/api/token/"}
-		for _, path := range probes {
-			status, body, err := a.accountAPI.Do(ctx, *auth, http.MethodGet, path, nil)
-			if err != nil {
-				result.Path = path
-				result.Message = err.Error()
-				continue
-			}
-			result.HTTPStatus = status
-			result.Path = path
-			result.Message = firstNonEmpty(extractMessage(body), fmt.Sprintf("%s 返回 HTTP %d", path, status))
-			if status == http.StatusOK {
-				result.Status = "valid"
-				break
-			}
-			if status == http.StatusUnauthorized || status == http.StatusForbidden {
-				result.Status = "expired"
-				break
-			}
-			if status == http.StatusNotFound || status == http.StatusMethodNotAllowed {
-				continue
-			}
-			if status >= 200 && status < 300 {
-				result.Status = "valid"
-				break
-			}
-		}
-	}
-	if result.Status == "" {
-		result.Status = "unknown"
-		result.Message = "没有找到可判断 API Key 的接口。"
-	}
-	if result.Status == "valid" && result.ModelCount > 0 && result.TestedModel != "" {
-		if result.ModelUsable {
-			result.Message = fmt.Sprintf("密钥有效，模型 %s 可用，测速 %dms。", result.TestedModel, result.ModelTestLatencyMs)
-		} else if result.ModelTestMessage != "" {
-			result.Message = "密钥可读取模型，但模型调用未通过：" + result.ModelTestMessage
-		}
-	}
-	result.Message = sanitizeAPIKeyDiagnostic(result.Message, auth.APIKey)
-	result.ModelTestMessage = sanitizeAPIKeyDiagnostic(result.ModelTestMessage, auth.APIKey)
-	sampleModelsJSON := marshalStringSlice(limitStrings(result.SampleModels, 8))
-	if _, execErr := a.db.ExecContext(ctx, `
-		UPDATE channel_accounts
-		SET api_key_fingerprint=?, api_key_status=?, api_key_last_checked_at=?,
-		    api_key_model_count=?, api_key_sample_models_json=?, api_key_test_model=?,
-		    api_key_model_usable=?, api_key_latency_ms=?, api_key_test_http_status=?,
-		    api_key_test_message=?, api_key_test_path=?,
-		    login_status=CASE WHEN ?='valid' THEN 'valid' WHEN ?='expired' THEN 'expired' ELSE login_status END,
-		    last_validated_at=?, updated_at=?
-		WHERE id=?
-	`, result.Fingerprint, result.Status, now(), result.ModelCount, sampleModelsJSON, result.TestedModel, boolInt(result.ModelUsable), result.ModelTestLatencyMs, result.ModelTestHTTPStatus, result.ModelTestMessage, result.ModelTestPath, result.Status, result.Status, now(), now(), id); execErr != nil {
-		log.Printf("[accounts] api key test result update failed for account %s: %v", id, execErr)
-	}
-	return result
+	return a.accountValidation.TestAPIKey(ctx, id, auth)
 }
 
 func (a *App) speedTestAPIKeyModel(ctx context.Context, auth *accountAuthContext, result *apiKeyTestResult) {
-	if strings.TrimSpace(result.TestedModel) == "" {
-		return
-	}
-	payload := map[string]interface{}{
-		"model":       result.TestedModel,
-		"messages":    []map[string]string{{"role": "user", "content": "ping"}},
-		"max_tokens":  1,
-		"temperature": 0,
-		"stream":      false,
-	}
-	body, _ := json.Marshal(payload)
-	started := time.Now()
-	status, responseBody, err := a.accountAPI.DoWithTimeout(ctx, *auth, http.MethodPost, "/v1/chat/completions", body, 12*time.Second)
-	result.ModelTestLatencyMs = time.Since(started).Milliseconds()
-	result.ModelTestHTTPStatus = status
-	result.ModelTestPath = "/v1/chat/completions"
-	if err != nil {
-		result.ModelTestMessage = err.Error()
-		return
-	}
-	if status == http.StatusUnauthorized || status == http.StatusForbidden {
-		result.Status = "expired"
-		result.ModelTestMessage = firstNonEmpty(extractMessage(responseBody), "模型调用未授权。")
-		return
-	}
-	if status < 200 || status >= 300 {
-		result.ModelTestMessage = firstNonEmpty(extractMessage(responseBody), fmt.Sprintf("模型调用返回 HTTP %d。", status))
-		return
-	}
-	if responseExplicitlyFailed(responseBody) {
-		result.ModelTestMessage = firstNonEmpty(extractMessage(responseBody), "模型调用返回失败。")
-		return
-	}
-	result.ModelUsable = true
-	result.ModelTestMessage = firstNonEmpty(extractMessage(responseBody), "模型调用成功。")
+	a.accountValidation.SpeedTestAPIKeyModel(ctx, auth, result)
 }
 
 func (a *App) callAccountAPIWithTimeout(ctx context.Context, auth accountAuthContext, method string, path string, body []byte, timeout time.Duration) (int, string, error) {

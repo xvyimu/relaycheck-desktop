@@ -44,6 +44,7 @@ Each owns its own mutex and is independently testable. `*App` retains thin forwa
 | `browser_login_service.go` | `BrowserLoginService`: browser login open/save orchestration and login target URL resolution. `accounts.go` keeps thin compatibility wrappers. |
 | `account_api_client.go` | `AccountAPIClient`: account API request construction, auth headers, proxy-aware timeout handling, and bounded response reads. |
 | `account_session_service.go` | `AccountSessionService`: password login, session ensure/save, token/cookie persistence, and login response parsing. |
+| `account_validation_service.go` | `AccountValidationService`: login-state validation, API key validation, model speed probe, and validation result persistence. `accounts.go` keeps HTTP wrappers. |
 | `site_task_service.go` | `SiteTaskService`: SSE task-facing site detection and channel-health probe orchestration. `task_runner.go` delegates `detect_sites`/`channel_health_probe` task bodies here. |
 | `checkin_executor.go` | `CheckinExecutor`: single-account checkin execution, retry, result persistence, and notification dispatch. `checkin_balance.go` keeps thin compatibility wrappers. |
 | `balance_refresher.go` | `BalanceRefresher`: single-account balance refresh, result persistence, and notification dispatch. `checkin_balance.go` keeps thin compatibility wrappers. |
@@ -78,7 +79,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | `channel_models.go` | Channel model sync HTTP handlers (uses `channelsService`). |
 | `channel_schedules.go` | Per-site checkin scheduling plus global schedule compatibility projection, calendar preview, next-runs list (uses `channelsService`). |
 | `models_pricing.go` | Model overview, pricing sync, key export preview HTTP handlers. Pricing pure functions (`extractModelPricingSources`, etc.) remain here for test access. |
-| `accounts.go` | Forwarders to `*accounts.Service`: account CRUD HTTP handlers. |
+| `accounts.go` | Forwarders to `*accounts.Service`: account CRUD HTTP handlers plus thin compatibility wrappers for browser login and account validation services. |
 | `accounts_infra.go` | `*App` adapter methods implementing `accounts.Infra` (`EncryptText`, `DetectUpstreamForImport`, `EnsureChannelSiteForImport`). |
 | `import_sqlite.go` | SQLite import HTTP handlers (forwards to `accountsService`). |
 | `import_admin_api.go` | Admin API import HTTP handlers (forwards to `accountsService`). |
@@ -136,6 +137,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | File | Purpose |
 |------|---------|
 | `account_auth_repo_test.go` | `AccountAuthRepository` unit tests. |
+| `account_validation_service_test.go` | `AccountValidationService` tests for login validation header behavior and API key result persistence. |
 | `account_task_service_test.go` | `AccountTaskService` task-progress integration test for API key test tasks. |
 | `accounts_cleanup_test.go` | Account cleanup tests. |
 | `accounts_key_test.go` | API key management tests. |

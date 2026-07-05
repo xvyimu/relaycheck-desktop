@@ -7,7 +7,10 @@ import (
 	"strings"
 )
 
-const browserLoginConfidenceThreshold = 0.6
+const (
+	browserLoginConfidenceThreshold = 0.6
+	accountAuthNotFoundMessage      = "账号不存在。"
+)
 
 type browserLoginEntry struct {
 	URL        string
@@ -55,7 +58,7 @@ func (r *AccountAuthRepository) Load(ctx context.Context, id string) (*accountAu
 		WHERE a.id = ?
 	`, id).Scan(&auth.AccountID, &auth.AccountName, &auth.UpstreamSiteID, &auth.UpstreamSite, &siteKind, &auth.ChannelID, &auth.BaseURL, &loginURL, &loginURLSource, &loginURLConfidence, &loginDiscoveryJSON, &auth.BrowserProfilePath, &auth.UserAgent, &email, &username, &passwordEncrypted, &cookieEncrypted, &accessEncrypted, &apiKeyEncrypted, &auth.AuthUserID, &supportsCheckin, &supportsBalance, &checkinConfigJSON)
 	if err == sql.ErrNoRows {
-		return nil, errorsText("账号不存在。")
+		return nil, errorsText(accountAuthNotFoundMessage)
 	}
 	if err != nil {
 		return nil, err
