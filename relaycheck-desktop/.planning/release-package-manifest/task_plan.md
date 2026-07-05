@@ -11,7 +11,7 @@ This slice should not change product behavior. Generated package artifacts stay 
 - Phase 1: Planning - complete
 - Phase 2: Script and documentation update - complete
 - Phase 3: Verification - complete
-- Phase 4: Commit - pending
+- Phase 4: Commit - complete
 
 ## Task List
 
@@ -21,7 +21,7 @@ This slice should not change product behavior. Generated package artifacts stay 
 - [x] CHECK: Parse and run the packaging script in development mode.
 - [x] CHECK: Inspect generated manifest/checksum/package contents.
 - [x] REVIEW: Confirm generated artifacts are ignored and no secrets/runtime data are bundled.
-- [ ] COMMIT: Commit and push the packaging slice.
+- [x] COMMIT: Commit and push the packaging slice.
 
 ## Verification Target
 

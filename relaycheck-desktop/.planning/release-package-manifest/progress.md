@@ -18,3 +18,6 @@
 - Confirmed generated package artifacts are ignored by `.gitignore` through `git check-ignore -v`.
 - Checked generated zip entries for `data/`, `.db`, secret, token, and cookie naming patterns; found 0 entries.
 - Ran tracked diff secret-keyword review; hits are safety documentation/placeholders only, not real secrets.
+- Committed and pushed `679ff78 Add release package manifest script` to `origin/main`.
+- Ran a clean-tree packaging verification after commit: `scripts\package-release.ps1 -SkipBuild` produced `relaycheck-desktop-1.1.0-679ff782f62b-20260705-135058.zip`.
+- Verified the final package zip SHA256 sidecar matched `232db97f30cd4a747e7fcd1480a27a8c055b221e157b391a7fcde7886d1c2901`, manifest `gitDirty=false`, and package-local acceptance passed on port 3102.
