@@ -156,6 +156,7 @@ New-Item -ItemType Directory -Force $packageDir | Out-Null
 Copy-PackageFile $ReleaseExe (Join-Path $packageDir "relaycheck.exe")
 Copy-PackageFile (Join-Path $RepoRoot "docs\LAUNCH_READINESS.md") (Join-Path $packageDir "docs\LAUNCH_READINESS.md")
 Copy-PackageFile (Join-Path $RepoRoot "docs\OPERATOR_RUNBOOK.md") (Join-Path $packageDir "docs\OPERATOR_RUNBOOK.md")
+Copy-PackageFile (Join-Path $RepoRoot "docs\OPERATOR_ACCEPTANCE_RECORD.md") (Join-Path $packageDir "docs\OPERATOR_ACCEPTANCE_RECORD.md")
 Copy-PackageFile (Join-Path $RepoRoot "scripts\operator-acceptance.ps1") (Join-Path $packageDir "scripts\operator-acceptance.ps1")
 Copy-PackageFile (Join-Path $RepoRoot "README.md") (Join-Path $packageDir "README.md")
 
@@ -165,6 +166,7 @@ $includedFiles = @(
   (Join-Path $packageDir "README.md"),
   (Join-Path $packageDir "docs\LAUNCH_READINESS.md"),
   (Join-Path $packageDir "docs\OPERATOR_RUNBOOK.md"),
+  (Join-Path $packageDir "docs\OPERATOR_ACCEPTANCE_RECORD.md"),
   (Join-Path $packageDir "scripts\operator-acceptance.ps1")
 )
 
@@ -183,6 +185,7 @@ $manifest = [ordered]@{
   entrypoint       = "relaycheck.exe"
   releaseGate      = "Run scripts\\verify-release.ps1 before packaging."
   operatorRunbook  = "docs/OPERATOR_RUNBOOK.md"
+  operatorAcceptanceRecord = "docs/OPERATOR_ACCEPTANCE_RECORD.md"
   launchReadiness  = "docs/LAUNCH_READINESS.md"
   files            = $checksums
 }

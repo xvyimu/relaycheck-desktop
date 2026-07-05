@@ -118,7 +118,9 @@ Roll back immediately if any of these happen:
 
 ## Acceptance Record
 
-Record the following in the release note or handoff:
+Use `docs\OPERATOR_ACCEPTANCE_RECORD.md` from the extracted package as the operator record template. Keep the completed copy with the release note or handoff, and do not paste secrets into it.
+
+Record at least the following:
 
 - Release commit, package path, and zip SHA256
 - Working directory
