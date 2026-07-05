@@ -53,7 +53,9 @@ Omit `-ProxyUrl` when direct access to the Go module proxy works. The script sta
 - Back up existing `data\relaycheck.db` before replacing an already-running installation.
 - Start `dist\relaycheck.exe` from the intended working directory.
 - Open `http://127.0.0.1:3001` and verify `/api/health` reports all checks as `ok`.
+- Run `scripts\operator-acceptance.ps1` for read-only local health, status, and API-shape checks.
 - Run one manual critical flow with non-secret test data: open dashboard, inspect scheduler preview, create or view a site, and trigger a dry-run task.
+- Follow `docs\OPERATOR_RUNBOOK.md` for first-hour monitoring, port-conflict handling, accepted warning records, and rollback triggers.
 
 ## Rollback Plan
 
@@ -69,4 +71,4 @@ Trigger rollback if startup health fails, UI cannot render, SQLite migration fai
 
 - Add signed artifact packaging if this is distributed beyond a trusted local operator.
 - Decide whether to store launch smoke fixtures in shared test utilities once more browser smoke suites are added.
-- Add an explicit first-hour monitoring checklist if RelayCheck Desktop is handed to an operator who will run it outside this development workstation.
+- Record the first real operator run result once RelayCheck Desktop is launched outside this development workstation.

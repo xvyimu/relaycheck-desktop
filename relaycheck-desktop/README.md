@@ -50,6 +50,7 @@ cd frontend && npx tsc --noEmit
 |----------|---------|
 | `docs/PROJECT_STRUCTURE.md` | Current source tree, generated paths, archive boundary, and verification order. |
 | `docs/LAUNCH_READINESS.md` | Current local release gate evidence, operator checklist, and rollback plan. |
+| `docs/OPERATOR_RUNBOOK.md` | Launch-day operator acceptance, first-hour monitoring, and rollback triggers. |
 | `DESIGN_SYSTEM.md` | Control Room visual direction and UI rules. |
 | `CLAUDE.md` | Architecture guide, verification commands, and conventions for Claude Code / AI agents. |
 
@@ -130,6 +131,7 @@ Run from `E:\zidqiandao\relaycheck-desktop`.
 | Command | Purpose |
 |---------|---------|
 | `powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1 -ProxyUrl http://127.0.0.1:7897` | Run the full local release gate: tests, builds, audits, vulnerability scan, binary health smoke, browser smoke, and cleanup. Omit `-ProxyUrl` when direct access to Go module proxy works. |
+| `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-acceptance.ps1 -BaseUrl http://127.0.0.1:3001` | Run read-only launch-day acceptance checks against a running local RelayCheck Desktop instance. |
 | `cd frontend; npm ci --cache E:\zidqiandao\.npm-cache; npm run build` | Install frontend dependencies and build embedded assets. |
 | `cd frontend; $env:RELAYCHECK_SMOKE_PASSWORD='<local password>'; npm run smoke` | Run the browser smoke test against a running local desktop server. |
 | `go test -mod=vendor ./...` | Run Go test suite using vendored dependencies, including security, audit, health, and SSRF checks. |
