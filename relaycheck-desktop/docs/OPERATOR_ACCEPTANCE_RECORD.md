@@ -27,6 +27,8 @@ Do not record real passwords, cookies, bearer tokens, API keys, exported `.rczip
 | Release gate passed | Pending / Pass / Fail | |
 | Package SHA256 matched sidecar | Pending / Pass / Fail | |
 | Package verifier passed | Pending / Pass / Fail | |
+| Operator launch helper passed | Pending / Pass / Fail | |
+| Operator launch record path | | |
 | Operator reviewed runbook | Pending / Pass / Fail | |
 | Target working directory writable | Pending / Pass / Fail | |
 | Bootstrap password source chosen | Env var / Generated local file / Existing admin | Do not paste the password |

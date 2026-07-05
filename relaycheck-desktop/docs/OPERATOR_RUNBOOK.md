@@ -43,15 +43,22 @@ Before copying the package to the target machine, `scripts\verify-package.ps1` s
 3. If this is an upgrade, stop the previous `relaycheck.exe`, copy the previous executable aside, and back up `data\relaycheck.db`.
 4. Extract the release package into the intended working directory.
 5. Confirm `manifest.json` and `checksums.sha256` are present beside `relaycheck.exe`.
-6. Run package-local verification from the extracted package root:
+6. Run the package-local launch helper from the extracted package root:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1 -PackageDir .
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-launch.ps1 -Port 3001
 ```
 
-7. Start `relaycheck.exe` from the intended working directory.
-8. Open `http://127.0.0.1:3001`.
-9. Run the read-only acceptance script from the extracted package:
+The launch helper runs `scripts\verify-package.ps1 -PackageDir .`, starts `relaycheck.exe`, waits for `/api/health`, runs `scripts\operator-acceptance.ps1`, and writes a no-secrets record under `launch-records\`.
+
+For an isolated fresh-runtime smoke that starts and stops the app without using the package root `data\` directory, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-launch.ps1 -Port 3101 -RuntimeDir .tmp\operator-launch-runtime -NoOpen -StopAfterAcceptance
+```
+
+7. Open `http://127.0.0.1:3001`.
+8. If the app is already running and you only need a read-only recheck, run the acceptance script from the extracted package:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-acceptance.ps1 -BaseUrl http://127.0.0.1:3001

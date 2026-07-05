@@ -330,6 +330,7 @@ function Test-Manifest {
   Assert-ManifestPath $PackageRoot $manifest "entrypoint" "relaycheck.exe"
   Assert-ManifestPath $PackageRoot $manifest "operatorRunbook" "docs/OPERATOR_RUNBOOK.md"
   Assert-ManifestPath $PackageRoot $manifest "operatorAcceptanceRecord" "docs/OPERATOR_ACCEPTANCE_RECORD.md"
+  Assert-ManifestPath $PackageRoot $manifest "operatorLaunch" "scripts/operator-launch.ps1"
   Assert-ManifestPath $PackageRoot $manifest "packageVerifier" "scripts/verify-package.ps1"
   Assert-ManifestPath $PackageRoot $manifest "launchReadiness" "docs/LAUNCH_READINESS.md"
 
@@ -415,6 +416,7 @@ $requiredFiles = @(
   "docs/OPERATOR_RUNBOOK.md",
   "docs/OPERATOR_ACCEPTANCE_RECORD.md",
   "scripts/operator-acceptance.ps1",
+  "scripts/operator-launch.ps1",
   "scripts/verify-package.ps1",
   "manifest.json",
   "checksums.sha256"
