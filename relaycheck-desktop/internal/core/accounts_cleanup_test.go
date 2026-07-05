@@ -180,3 +180,51 @@ func TestDeleteUnsupportedCheckinAccountsReportsBatchProgress(t *testing.T) {
 		t.Fatalf("expected all unsupported accounts to be deleted, remaining=%d", remaining)
 	}
 }
+
+func TestAccountCleanupServiceExcludesLastUnsupportedWhenDisabled(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	siteUnsupportedID := newID()
+	lastUnsupportedSiteID := newID()
+	siteUnsupportedAccountID := newID()
+	lastUnsupportedAccountID := newID()
+	if _, err := app.db.Exec(`
+		INSERT INTO upstream_sites (id, name, base_url, kind, health_status, supports_checkin, created_at, updated_at)
+		VALUES
+		  (?, 'No Checkin Service', 'https://nocheckin-service.example', 'oneapi', 'healthy', 0, ?, ?),
+		  (?, 'Last Unsupported Service', 'https://lastunsupported-service.example', 'newapi', 'healthy', 1, ?, ?)
+	`, siteUnsupportedID, now(), now(), lastUnsupportedSiteID, now(), now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.db.Exec(`
+		INSERT INTO channel_accounts (id, upstream_site_id, display_name, auth_type, login_status, last_checkin_status, created_at, updated_at)
+		VALUES
+		  (?, ?, 'Delete Site Unsupported Service', 'cookie', 'valid', '', ?, ?),
+		  (?, ?, 'Keep Last Unsupported Service', 'cookie', 'valid', 'unsupported', ?, ?)
+	`, siteUnsupportedAccountID, siteUnsupportedID, now(), now(), lastUnsupportedAccountID, lastUnsupportedSiteID, now(), now()); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := app.accountCleanup.DeleteUnsupportedCheckinAccounts(context.Background(), 10, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Matched != 1 || result.Deleted != 1 || result.IncludeLastUnsupported {
+		t.Fatalf("unexpected cleanup result: %#v", result)
+	}
+
+	var remaining int
+	if err := app.db.QueryRow(`SELECT COUNT(*) FROM channel_accounts WHERE id=?`, siteUnsupportedAccountID).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 0 {
+		t.Fatalf("expected site-unsupported account to be deleted, remaining=%d", remaining)
+	}
+	if err := app.db.QueryRow(`SELECT COUNT(*) FROM channel_accounts WHERE id=?`, lastUnsupportedAccountID).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 1 {
+		t.Fatalf("expected last-unsupported-only account to remain, remaining=%d", remaining)
+	}
+}
