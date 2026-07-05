@@ -10,8 +10,8 @@ This slice should not change product behavior. It only changes release documenta
 
 - Phase 1: Planning - complete
 - Phase 2: Documentation - complete
-- Phase 3: Packaging verification - in_progress
-- Phase 4: Commit - pending
+- Phase 3: Packaging verification - complete
+- Phase 4: Commit - complete
 
 ## Task List
 
@@ -19,8 +19,8 @@ This slice should not change product behavior. It only changes release documenta
 - [x] DOCS: Add a no-secrets operator acceptance record template.
 - [x] DOCS: Link the template from the operator runbook and launch readiness notes.
 - [x] SCRIPT: Include the template in package manifest/checksums/zip contents.
-- [ ] CHECK: Run parser, diff, package, manifest/content, and package-local acceptance checks.
-- [ ] COMMIT: Commit and push this release-handoff improvement.
+- [x] CHECK: Run parser, diff, package, manifest/content, and package-local acceptance checks.
+- [x] COMMIT: Commit and push this release-handoff improvement.
 
 ## Verification Target
 

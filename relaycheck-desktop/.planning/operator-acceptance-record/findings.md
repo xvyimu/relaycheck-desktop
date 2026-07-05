@@ -20,3 +20,6 @@
 - The development package contained `docs\OPERATOR_ACCEPTANCE_RECORD.md`, listed it in `checksums.sha256`, and exposed `operatorAcceptanceRecord=docs/OPERATOR_ACCEPTANCE_RECORD.md` in `manifest.json`.
 - The development package zip SHA256 sidecar matched an independent `Get-FileHash` calculation.
 - Package-local `scripts\operator-acceptance.ps1 -StartReleaseExe -ExpectedPort 3102 -TimeoutSeconds 30` passed with only the expected relative `data\` path warnings.
+- Clean-tree packaging passed after commit `ce4420e8de2bd8c344aa5a3add03f1e9d091fb0d`.
+- The clean package manifest reported `gitDirty=false`, `operatorAcceptanceRecord=docs/OPERATOR_ACCEPTANCE_RECORD.md`, and the expected commit.
+- The clean package contained `docs\OPERATOR_ACCEPTANCE_RECORD.md`, listed it in `checksums.sha256`, and passed package-local operator acceptance on port 3102.
