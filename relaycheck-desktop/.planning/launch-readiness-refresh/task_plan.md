@@ -11,7 +11,7 @@ This slice does not change product behavior. It updates launch-facing documentat
 - Phase 1: Planning - complete
 - Phase 2: Documentation update - complete
 - Phase 3: Review - complete
-- Phase 4: Commit - pending
+- Phase 4: Commit - complete
 
 ## Task List
 
@@ -20,7 +20,7 @@ This slice does not change product behavior. It updates launch-facing documentat
 - [x] DOCS: Update `docs/LAUNCH_READINESS.md` with current release-gate evidence.
 - [x] DOCS: Add launch readiness to README core documents.
 - [x] REVIEW: Check documentation accuracy against observed command output.
-- [ ] COMMIT: Commit and push documentation refresh.
+- [x] COMMIT: Commit and push documentation refresh.
 
 ## Verification Evidence
 

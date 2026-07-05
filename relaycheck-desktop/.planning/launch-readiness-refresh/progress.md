@@ -12,3 +12,4 @@
 - Added `docs/LAUNCH_READINESS.md` to the README Core Documents table.
 - Reviewed documentation against release-gate evidence from the latest run.
 - Ran `rtk git diff --check`; passed.
+- Committed and pushed `787d440 Refresh launch readiness evidence` to `origin/main`.
