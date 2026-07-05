@@ -42,6 +42,7 @@ Each owns its own mutex and is independently testable. `*App` retains thin forwa
 | `account_auth_repo.go` | `AccountAuthRepository`: `Load(ctx,id)` + `LoadBatch(ctx,ids)` for account authentication context. Injects `db`+`crypto`. |
 | `account_task_service.go` | `AccountTaskService`: SSE task-facing account maintenance orchestration. `task_runner.go` delegates the `test_keys` task body here. |
 | `browser_login_service.go` | `BrowserLoginService`: browser login open/save orchestration and login target URL resolution. `accounts.go` keeps thin compatibility wrappers. |
+| `account_session_cleanup_service.go` | `AccountSessionCleanupService`: browser login session disconnect, safe browser-profile cleanup, account session field reset, and audit logging. `accounts.go` keeps the clear-session HTTP wrapper. |
 | `account_api_client.go` | `AccountAPIClient`: account API request construction, auth headers, proxy-aware timeout handling, and bounded response reads. |
 | `account_session_service.go` | `AccountSessionService`: password login, session ensure/save, token/cookie persistence, and login response parsing. |
 | `account_validation_service.go` | `AccountValidationService`: login-state validation, API key validation, model speed probe, and validation result persistence. `accounts.go` keeps HTTP wrappers. |
@@ -84,7 +85,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | `channel_models.go` | Channel model sync HTTP handlers (uses `channelsService`). |
 | `channel_schedules.go` | Per-site checkin scheduling plus global schedule compatibility projection, calendar preview, next-runs list (uses `channelsService`). |
 | `models_pricing.go` | Model overview, pricing sync, key export preview HTTP handlers. Pricing pure functions (`extractModelPricingSources`, etc.) remain here for test access. |
-| `accounts.go` | Forwarders to `*accounts.Service`: account CRUD HTTP handlers plus thin compatibility wrappers for account creation, browser login, account validation, cleanup, account-site update, and account-login batch services. Browser runtime helpers live in `browser_runtime.go`. |
+| `accounts.go` | Forwarders to `*accounts.Service`: account CRUD HTTP handlers plus thin compatibility wrappers for account creation, browser login, browser session cleanup, account validation, cleanup, account-site update, and account-login batch services. Browser runtime helpers live in `browser_runtime.go`. |
 | `accounts_infra.go` | `*App` adapter methods implementing `accounts.Infra` (`EncryptText`, `DetectUpstreamForImport`, `EnsureChannelSiteForImport`). |
 | `import_sqlite.go` | SQLite import HTTP handlers (forwards to `accountsService`). |
 | `import_admin_api.go` | Admin API import HTTP handlers (forwards to `accountsService`). |
@@ -144,6 +145,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | `account_auth_repo_test.go` | `AccountAuthRepository` unit tests. |
 | `account_creation_service_test.go` | `AccountCreationService` tests for credential/default persistence, browser-profile defaults, and injected manual-site creation with manual login metadata. |
 | `account_login_batch_service_test.go` | `AccountLoginBatchService` tests for due password-account selection, password retry status mapping, explicit browser-open limits, and active-session browser finish. |
+| `account_session_cleanup_service_test.go` | `AccountSessionCleanupService` tests for browser session/profile cleanup, DB field reset, audit logging, and out-of-data-dir path protection. |
 | `account_site_update_service_test.go` | `AccountSiteUpdateService` tests for shared-scope site reassignment and manual login metadata. |
 | `account_validation_service_test.go` | `AccountValidationService` tests for login validation header behavior and API key result persistence. |
 | `account_task_service_test.go` | `AccountTaskService` task-progress integration test for API key test tasks. |

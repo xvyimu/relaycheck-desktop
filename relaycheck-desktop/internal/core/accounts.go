@@ -5,10 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -802,26 +799,10 @@ func (a *App) clearAccountSession(w http.ResponseWriter, r *http.Request, id str
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	var profilePath string
-	a.browserSessions.Delete(id)
-	if err := a.db.QueryRowContext(r.Context(), `SELECT COALESCE(browser_profile_path,'') FROM channel_accounts WHERE id=?`, id).Scan(&profilePath); err != nil && err != sql.ErrNoRows {
-		log.Printf("[accounts] clearAccountSession load profile path failed for %s: %v", id, err)
-	}
-	if profilePath != "" && strings.HasPrefix(filepath.Clean(profilePath), filepath.Clean(a.dataDir)) {
-		if rmErr := os.RemoveAll(profilePath); rmErr != nil {
-			log.Printf("[accounts] clearAccountSession: remove profile %s failed: %v", profilePath, rmErr)
-		}
-	}
-	_, err := a.db.ExecContext(r.Context(), `
-		UPDATE channel_accounts
-		SET cookie_encrypted='', browser_profile_path='', user_agent='', login_status='manual_required', updated_at=?
-		WHERE id=?
-	`, now(), id)
-	if err != nil {
+	if err := a.accountSessionClean.Clear(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.audit("browser_auth.disconnected", "warning", "", "account", id, "网页登录授权已断开。", nil)
 	writeJSON(w, http.StatusOK, map[string]bool{"cleared": true})
 }
 

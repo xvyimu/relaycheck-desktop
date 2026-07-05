@@ -37,6 +37,7 @@ type App struct {
 	accountAuth         *AccountAuthRepository
 	accountAPI          *AccountAPIClient
 	accountSession      *AccountSessionService
+	accountSessionClean *AccountSessionCleanupService
 	accountValidation   *AccountValidationService
 	accountCleanup      *AccountCleanupService
 	accountCreation     *AccountCreationService
@@ -162,6 +163,7 @@ func NewApp(root string) (*App, error) {
 	}
 	app.accountAPI = NewAccountAPIClient(app)
 	app.accountSession = NewAccountSessionService(app)
+	app.accountSessionClean = NewAccountSessionCleanupService(app)
 	app.accountValidation = NewAccountValidationService(app)
 	app.accountCleanup = NewAccountCleanupService(app)
 	app.accountCreation = NewAccountCreationService(app)
