@@ -11,19 +11,19 @@ This slice should not change product behavior. Any generated artifacts stay unde
 - Phase 1: Planning - complete
 - Phase 2: Review - complete
 - Phase 3: Full verification - complete
-- Phase 4: Evidence refresh - in_progress
-- Phase 5: Commit - pending
+- Phase 4: Evidence refresh - complete
+- Phase 5: Commit - complete
 
 ## Task List
 
 - [x] OBSERVE: Confirm clean `main...origin/main`, latest launch/package commits, and applicable review/launch skills.
 - [x] REVIEW: Inspect release scripts, operator runbook, launch readiness docs, package manifest logic, and secret/runtime-data boundaries.
 - [x] CHECK: Run the full release gate with the 7897 proxy.
-- [ ] CHECK: Create a clean release package after the full gate.
-- [ ] CHECK: Verify final package hash, manifest, package contents, and package-local acceptance.
-- [ ] DOCS: Refresh launch readiness and final audit evidence.
-- [ ] REVIEW: Confirm no release-blocking findings remain.
-- [ ] COMMIT: Commit and push final launch audit evidence.
+- [x] CHECK: Create a clean release package after the full gate.
+- [x] CHECK: Verify final package hash, manifest, package contents, and package-local acceptance.
+- [x] DOCS: Refresh launch readiness and final audit evidence.
+- [x] REVIEW: Confirm no release-blocking findings remain.
+- [x] COMMIT: Commit and push final launch audit evidence.
 
 ## Verification Target
 

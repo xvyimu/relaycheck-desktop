@@ -27,3 +27,18 @@
 - `govulncheck` reported current code affected by 0 vulnerabilities; it also reported 1 imported package vulnerability that current code does not call.
 - Binary health smoke passed: temporary `relaycheck.exe` returned `/api/health` 200 and fresh DB `/api/channels` shape was OK.
 - Browser smoke passed: scheduler layout smoke passed at 1440x900 and 390x900; navigation intent smoke passed 9/9.
+
+## Package Findings
+
+- Clean-tree package was created from commit `05dcc933877bbdef7f193739d87ce66746c9c2a2`.
+- Package directory: `dist\releases\relaycheck-desktop-1.1.0-05dcc933877b-20260705-141058`.
+- Package zip: `dist\releases\relaycheck-desktop-1.1.0-05dcc933877b-20260705-141058.zip`.
+- Zip SHA256 sidecar matched an independent `Get-FileHash` calculation: `9777db21fc5f4387cd7fd2819d515a068595a4e245d428ec9e8cd0695a52d4e1`.
+- `manifest.json` reported `version=v1.1.0`, `gitDirty=false`, and commit `05dcc933877bbdef7f193739d87ce66746c9c2a2`.
+- Package contents were present: `relaycheck.exe`, `README.md`, `docs\LAUNCH_READINESS.md`, `docs\OPERATOR_RUNBOOK.md`, `scripts\operator-acceptance.ps1`, `manifest.json`, and `checksums.sha256`.
+- Package-local operator acceptance passed on port 3102. The only warnings were expected relative `data\relaycheck.db` and `data\backups` path reminders for the operator working directory.
+
+## Final Review Verdict
+
+- No release-blocking findings remain in this local pre-launch audit.
+- Production rollout still requires the human operator to approve the package, set any required bootstrap environment, back up existing data, run the package on the target machine, and record first real operator-run evidence.
