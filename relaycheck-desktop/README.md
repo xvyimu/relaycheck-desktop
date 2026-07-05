@@ -49,6 +49,7 @@ cd frontend && npx tsc --noEmit
 | Document | Purpose |
 |----------|---------|
 | `docs/PROJECT_STRUCTURE.md` | Current source tree, generated paths, archive boundary, and verification order. |
+| `docs/LAUNCH_READINESS.md` | Current local release gate evidence, operator checklist, and rollback plan. |
 | `DESIGN_SYSTEM.md` | Control Room visual direction and UI rules. |
 | `CLAUDE.md` | Architecture guide, verification commands, and conventions for Claude Code / AI agents. |
 
