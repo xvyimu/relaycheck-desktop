@@ -81,6 +81,16 @@ func TestBuildCookieHeader(t *testing.T) {
 	}
 }
 
+func TestFreeDebugPortSkipsUsedPorts(t *testing.T) {
+	port, err := freeDebugPort(map[int]bool{9222: true})
+	if err != nil {
+		t.Fatalf("freeDebugPort() error = %v", err)
+	}
+	if port == 0 || port == 9222 {
+		t.Fatalf("freeDebugPort() = %d, want available port other than 9222", port)
+	}
+}
+
 func TestStatusFromKey(t *testing.T) {
 	if got := statusFromKey(""); got != "" {
 		t.Fatalf("statusFromKey(empty) = %q", got)

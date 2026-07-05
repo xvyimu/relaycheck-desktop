@@ -60,6 +60,7 @@ Each owns its own mutex and is independently testable. `*App` retains thin forwa
 | `scheduler_repo.go` | `SchedulerRepo`: pure db repository for `loadSettingJSON`/`loadSchedulerRun`/`upsertSchedulerPlan`. |
 | `read_cache_store.go` | `ReadCacheStore`: generic `Get[T]` + `Invalidate()`; `cachedRead[T]` and `a.invalidateReadCache` are forwarders. Replaces `read_cache.go`. |
 | `browser_session_store.go` | `BrowserSessionStore`: Chrome login session management (`Get`/`Set`/`Delete`/`DeleteIfPIDMatches`/`List`/`Range`); watchdog uses `DeleteIfPIDMatches`. |
+| `browser_runtime.go` | Chrome browser runtime helpers: DevTools cookie/user-agent readback, cookie header construction, debug-port selection, Chrome executable discovery, and cookie-expiry estimation. |
 | `network_proxy_store.go` | `NetworkProxyStore`: proxy config `Get()`/`Set()`. |
 
 ### Domain Forwarders (Phase 2 — `*App` adapter methods + handlers)
@@ -83,7 +84,7 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | `channel_models.go` | Channel model sync HTTP handlers (uses `channelsService`). |
 | `channel_schedules.go` | Per-site checkin scheduling plus global schedule compatibility projection, calendar preview, next-runs list (uses `channelsService`). |
 | `models_pricing.go` | Model overview, pricing sync, key export preview HTTP handlers. Pricing pure functions (`extractModelPricingSources`, etc.) remain here for test access. |
-| `accounts.go` | Forwarders to `*accounts.Service`: account CRUD HTTP handlers plus thin compatibility wrappers for account creation, browser login, account validation, cleanup, account-site update, and account-login batch services. |
+| `accounts.go` | Forwarders to `*accounts.Service`: account CRUD HTTP handlers plus thin compatibility wrappers for account creation, browser login, account validation, cleanup, account-site update, and account-login batch services. Browser runtime helpers live in `browser_runtime.go`. |
 | `accounts_infra.go` | `*App` adapter methods implementing `accounts.Infra` (`EncryptText`, `DetectUpstreamForImport`, `EnsureChannelSiteForImport`). |
 | `import_sqlite.go` | SQLite import HTTP handlers (forwards to `accountsService`). |
 | `import_admin_api.go` | Admin API import HTTP handlers (forwards to `accountsService`). |
