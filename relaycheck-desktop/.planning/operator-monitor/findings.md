@@ -20,3 +20,5 @@
 - Development package verification passed from both source tree and package root with manifest.gitDirty=true explicitly allowed.
 - Package-local launch smoke passed on port 3218, then package-local monitor smoke sampled +0s/+1s/+2s and passed. Diagnostics reported warning status in the fresh runtime, which is recorded as a warning rather than a monitor failure.
 - No relaycheck process remained after smoke cleanup.
+- Clean package relaycheck-desktop-1.1.0-a1877b682202-20260706-025213.zip verified with manifest.gitDirty=false.
+- Final package-local operator-launch and operator-monitor smoke passed on port 3219; only expected fresh-runtime diagnostics warnings were recorded.

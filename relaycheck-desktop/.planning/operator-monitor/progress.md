@@ -16,3 +16,9 @@
 - Package-local operator-launch smoke passed on port 3218 with isolated runtime .tmp/operator-launch-runtime-3218.
 - Package-local operator-monitor smoke passed with -SampleCount 3 -IntervalSeconds 1 against http://127.0.0.1:3218; records were written under package launch-records/.
 - Confirmed no relaycheck process was left running after smoke cleanup.
+- Committed implementation as a1877b6 Add operator monitor helper.
+- Generated clean package relaycheck-desktop-1.1.0-a1877b682202-20260706-025213.zip with SHA256 528c34061107bed8f794c7ea1d52561a4ab482becf9357b07d27d6b63e75da25 and manifest.gitDirty=false.
+- Clean package source-tree verification and package-local verification passed.
+- Clean package-local operator-launch smoke passed on port 3219 with isolated runtime .tmp/operator-launch-runtime-3219.
+- Clean package-local operator-monitor smoke passed with -SampleCount 3 -IntervalSeconds 1 against http://127.0.0.1:3219.
+- Confirmed no relaycheck process was left running after final smoke cleanup.

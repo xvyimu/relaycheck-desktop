@@ -9,9 +9,9 @@ This slice should not change product runtime behavior. It only adds release/oper
 ## Current Phase
 
 - Phase 1: Planning - complete
-- Phase 2: Implementation - in progress
-- Phase 3: Verification - pending
-- Phase 4: Commit - pending
+- Phase 2: Implementation - complete
+- Phase 3: Verification - complete
+- Phase 4: Commit - in progress
 
 ## Task List
 
@@ -19,7 +19,7 @@ This slice should not change product runtime behavior. It only adds release/oper
 - [x] SCRIPT: Add scripts/operator-monitor.ps1.
 - [x] SCRIPT: Include the monitor helper in package contents, manifest, and verifier requirements.
 - [x] DOCS: Document first-hour monitor usage and generated monitor records.
-- [ ] CHECK: Run parser checks, development package checks, package-local launch plus monitor smoke, and clean package checks. Development checks complete; clean checks pending after commit.
+- [x] CHECK: Run parser checks, development package checks, package-local launch plus monitor smoke, and clean package checks.
 - [ ] COMMIT: Commit and push the release-monitoring improvement.
 
 ## Verification Target
