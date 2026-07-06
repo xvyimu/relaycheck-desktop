@@ -51,6 +51,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-launch.ps1 
 
 The launch helper runs `scripts\verify-package.ps1 -PackageDir .`, starts `relaycheck.exe`, waits for `/api/health`, runs `scripts\operator-acceptance.ps1`, and writes a no-secrets record under `launch-records\`.
 
+After acceptance passes and the app remains running, start automated first-hour monitoring from the extracted package root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-monitor.ps1 -BaseUrl http://127.0.0.1:3001 -ExpectedPort 3001
+```
+
+The monitor samples health, system status, scheduler projections, and Action Center, then writes Markdown and JSON records under `launch-records\`.
+
 For an isolated fresh-runtime smoke that starts and stops the app without using the package root `data\` directory, run:
 
 ```powershell
@@ -70,6 +78,12 @@ For an isolated fresh-runtime smoke that starts and stops the release executable
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-acceptance.ps1 -StartReleaseExe -ExpectedPort 3101
+```
+
+For a quick monitor smoke against an already-running app, use short intervals:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-monitor.ps1 -BaseUrl http://127.0.0.1:3101 -ExpectedPort 3101 -SampleCount 3 -IntervalSeconds 1
 ```
 
 ## Manual Critical Flow
@@ -97,7 +111,7 @@ When a conflict is unexpected, stop the extra process, restart RelayCheck Deskto
 
 ## First-Hour Monitoring
 
-Record checks at launch, 5 minutes, 15 minutes, 30 minutes, and 60 minutes.
+Run `scripts\operator-monitor.ps1` for automated checks at launch, 5 minutes, 15 minutes, 30 minutes, and 60 minutes. Keep both generated files under `launch-records\` with the completed acceptance record.
 
 | Time | Required check | Pass condition |
 | --- | --- | --- |
@@ -108,7 +122,7 @@ Record checks at launch, 5 minutes, 15 minutes, 30 minutes, and 60 minutes.
 | 30 min | Scheduler preview | Next runs and calendar preview load |
 | 60 min | Logs and notifications | No repeated startup, scheduler, database, or notification failures |
 
-Use `degraded` health as a hold condition unless the warning is already understood and documented. Use `down` health as a rollback trigger.
+Use `degraded` health as a hold condition unless the warning is already understood and documented. Use `down` health as a rollback trigger. The monitor also fails on unexpected port binding, missing API shape, critical diagnostics, or critical Action Center items unless explicitly allowed and recorded.
 
 ## Rollback Triggers
 
@@ -141,6 +155,7 @@ Record at least the following:
 - Whether this was a fresh install or upgrade
 - `scripts\verify-release.ps1` result
 - `scripts\operator-acceptance.ps1` result
+- `scripts\operator-monitor.ps1` result and record paths
 - Manual critical-flow result
 - First-hour monitoring result
 - Any accepted warnings, with owner and follow-up

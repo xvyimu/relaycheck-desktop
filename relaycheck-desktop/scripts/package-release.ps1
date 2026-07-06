@@ -159,6 +159,7 @@ Copy-PackageFile (Join-Path $RepoRoot "docs\OPERATOR_RUNBOOK.md") (Join-Path $pa
 Copy-PackageFile (Join-Path $RepoRoot "docs\OPERATOR_ACCEPTANCE_RECORD.md") (Join-Path $packageDir "docs\OPERATOR_ACCEPTANCE_RECORD.md")
 Copy-PackageFile (Join-Path $RepoRoot "scripts\operator-acceptance.ps1") (Join-Path $packageDir "scripts\operator-acceptance.ps1")
 Copy-PackageFile (Join-Path $RepoRoot "scripts\operator-launch.ps1") (Join-Path $packageDir "scripts\operator-launch.ps1")
+Copy-PackageFile (Join-Path $RepoRoot "scripts\operator-monitor.ps1") (Join-Path $packageDir "scripts\operator-monitor.ps1")
 Copy-PackageFile (Join-Path $RepoRoot "scripts\verify-package.ps1") (Join-Path $packageDir "scripts\verify-package.ps1")
 Copy-PackageFile (Join-Path $RepoRoot "README.md") (Join-Path $packageDir "README.md")
 
@@ -171,6 +172,7 @@ $includedFiles = @(
   (Join-Path $packageDir "docs\OPERATOR_ACCEPTANCE_RECORD.md"),
   (Join-Path $packageDir "scripts\operator-acceptance.ps1"),
   (Join-Path $packageDir "scripts\operator-launch.ps1"),
+  (Join-Path $packageDir "scripts\operator-monitor.ps1"),
   (Join-Path $packageDir "scripts\verify-package.ps1")
 )
 
@@ -191,6 +193,7 @@ $manifest = [ordered]@{
   operatorRunbook  = "docs/OPERATOR_RUNBOOK.md"
   operatorAcceptanceRecord = "docs/OPERATOR_ACCEPTANCE_RECORD.md"
   operatorLaunch   = "scripts/operator-launch.ps1"
+  operatorMonitor  = "scripts/operator-monitor.ps1"
   packageVerifier  = "scripts/verify-package.ps1"
   launchReadiness  = "docs/LAUNCH_READINESS.md"
   files            = $checksums

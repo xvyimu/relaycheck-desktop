@@ -46,6 +46,8 @@ Do not record real passwords, cookies, bearer tokens, API keys, exported `.rczip
 | Settings shows expected database path | Pending / Pass / Fail | |
 | Settings shows expected backup directory | Pending / Pass / Fail | |
 | `scripts\operator-acceptance.ps1` passed | Pending / Pass / Fail | |
+| `scripts\operator-monitor.ps1` started | Pending / Pass / Fail | |
+| Operator monitor record path | | Markdown and JSON paths |
 | Accepted warnings recorded below | N/A / Yes / No | |
 
 ## Manual Critical Flow
@@ -63,6 +65,10 @@ Use non-secret test data only.
 | Browser login URL opens without redirect loop, if tested | N/A / Pass / Fail | Use a disposable account |
 
 ## First-Hour Monitoring
+
+Automated monitor command:
+
+Automated monitor record path:
 
 | Time | Health | UI / API status | Logs / warnings | Operator initials |
 | --- | --- | --- | --- | --- |

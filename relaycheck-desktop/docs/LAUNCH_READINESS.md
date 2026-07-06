@@ -46,7 +46,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\package-release.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1
 ```
 
-The package script builds `dist\relaycheck.exe`, copies the operator docs, acceptance-record template, package verifier, and launch helper, writes `manifest.json`, writes `checksums.sha256`, creates a zip under `dist\releases`, and writes a sibling `.zip.sha256` file for handoff verification. The verifier checks the latest zip, sidecar SHA256, manifest fields, required files, and internal checksums. Use `-SkipBuild` only when validating packaging around an already-built executable; use `-AllowDirty` only for development verification, not final handoff.
+The package script builds `dist\relaycheck.exe`, copies the operator docs, acceptance-record template, package verifier, launch helper, and monitor helper, writes `manifest.json`, writes `checksums.sha256`, creates a zip under `dist\releases`, and writes a sibling `.zip.sha256` file for handoff verification. The verifier checks the latest zip, sidecar SHA256, manifest fields, required files, and internal checksums. Use `-SkipBuild` only when validating packaging around an already-built executable; use `-AllowDirty` only for development verification, not final handoff.
 
 ## Launch Notes
 
@@ -66,6 +66,7 @@ The package script builds `dist\relaycheck.exe`, copies the operator docs, accep
 - Run `scripts\operator-launch.ps1 -Port 3001` from the extracted package to verify the package, start the app, wait for health, run acceptance, and write a launch record.
 - Open `http://127.0.0.1:3001` and verify `/api/health` reports all checks as `ok`.
 - Run `scripts\operator-acceptance.ps1` for read-only local health, status, and API-shape checks.
+- Run `scripts\operator-monitor.ps1 -BaseUrl http://127.0.0.1:3001 -ExpectedPort 3001` for first-hour automated monitoring and keep the Markdown/JSON records under `launch-records\`.
 - Run one manual critical flow with non-secret test data: open dashboard, inspect scheduler preview, create or view a site, and trigger a dry-run task.
 - Fill out `docs\OPERATOR_ACCEPTANCE_RECORD.md` from the extracted package during launch and first-hour monitoring.
 - Follow `docs\OPERATOR_RUNBOOK.md` for first-hour monitoring, port-conflict handling, accepted warning records, and rollback triggers.

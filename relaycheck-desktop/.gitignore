@@ -21,6 +21,7 @@ frontend/tsconfig.app.tsbuildinfo
 
 # Generated reports
 docs/reports/
+launch-records/
 
 # Dev logs
 frontend/npm-dev.log
