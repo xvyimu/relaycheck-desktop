@@ -60,6 +60,7 @@ func (a *App) handleScanLocalNewAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(found) > 0 {
 		a.notify("local_newapi_discovered", "success", "本地 NewAPI 扫描完成", "发现可识别实例。", "", "")
+		a.invalidateReadCacheKeys("dashboard-summary", "action-center")
 	}
 	writeJSON(w, http.StatusOK, found)
 }

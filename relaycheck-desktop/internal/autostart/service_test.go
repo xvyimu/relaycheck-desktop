@@ -60,7 +60,7 @@ func TestEnableDisable_OnWindowsDoesNotPanic(t *testing.T) {
 	// Enable/Disable mutate the real shell:startup folder. We intentionally
 	// skip calling them to avoid side effects in the test environment; the
 	// platform_windows.go functions are exercised by the smoke suite
-	// (.pipeline / frontend/scripts/smoke.mjs) instead.
+	// (.pipeline / frontend/scripts/verify-navigation.mjs) instead.
 	svc := NewService()
 	_ = svc // verify construction without panicking
 }

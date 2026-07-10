@@ -290,8 +290,18 @@ async function checkViewport(browser, viewport) {
       ].join("\n"),
     );
   });
-  await navButtons.last().click({ force: true });
-  await page.locator(".site-schedules-card").waitFor({ state: "visible", timeout: 10000 });
+  const settingsButton = page.getByRole("button", { name: "设置", exact: true });
+  await settingsButton.click({ force: true });
+  await page.locator(".site-schedules-card").waitFor({ state: "visible", timeout: 10000 }).catch(async (error) => {
+    const bodyText = await page.locator("body").innerText().catch(() => "");
+    throw new Error(
+      [
+        `site schedules card did not render: ${error.message}`,
+        `console: ${consoleIssues.join(" | ") || "none"}`,
+        `body: ${bodyText.slice(0, 800) || "(empty)"}`,
+      ].join("\n"),
+    );
+  });
   await page.locator(".calendar-preview-row").first().waitFor({ state: "visible", timeout: 10000 });
   await page.locator(".next-run-row").first().waitFor({ state: "visible", timeout: 10000 });
   await page.waitForTimeout(300);

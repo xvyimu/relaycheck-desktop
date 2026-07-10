@@ -1,0 +1,201 @@
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at 10% -8%, rgba(21, 94, 239, 0.13), transparent 30rem),
+    radial-gradient(circle at 96% 2%, rgba(8, 145, 178, 0.12), transparent 28rem),
+    linear-gradient(135deg, #f8fbff 0%, #f4f7fb 44%, #eef3f8 100%);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--text);
+  background: transparent;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  min-height: 38px;
+  border: 1px solid rgba(21, 94, 239, 0.14);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, #256bff, var(--primary));
+  color: var(--surface-solid);
+  padding: 0 16px;
+  cursor: pointer;
+  box-shadow: 0 9px 20px rgba(21, 94, 239, 0.18);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 13px 28px rgba(21, 94, 239, 0.22);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 7px 18px rgba(15, 110, 234, 0.18);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+button.ghost,
+nav button {
+  background: transparent;
+  color: var(--muted-strong);
+  box-shadow: none;
+}
+
+button.ghost {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+button.ghost:hover:not(:disabled) {
+  border-color: rgba(21, 94, 239, 0.24);
+  background: var(--surface-solid);
+  color: var(--primary-strong);
+  box-shadow: var(--shadow-xs);
+}
+
+button.danger {
+  border-color: rgba(192, 54, 71, 0.22);
+  background: var(--danger-soft);
+  color: var(--danger);
+  box-shadow: none;
+}
+
+button.danger:hover:not(:disabled) {
+  border-color: rgba(192, 54, 71, 0.32);
+  background: #ffe7eb;
+  box-shadow: 0 12px 24px rgba(192, 54, 71, 0.12);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  transform: none;
+  box-shadow: none;
+}
+
+input,
+select,
+textarea {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
+  padding: 0 13px;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: rgba(15, 110, 234, 0.28);
+  background: var(--surface-solid);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(21, 94, 239, 0.46);
+  background: var(--surface-solid);
+  box-shadow: 0 0 0 4px rgba(21, 94, 239, 0.08);
+}
+
+textarea {
+  min-height: 116px;
+  padding: 12px 14px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+::placeholder {
+  color: #95a3b7;
+}
+
+.center,
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(15, 110, 234, 0.16), transparent 24rem),
+    radial-gradient(circle at 62% 72%, rgba(0, 165, 184, 0.12), transparent 22rem);
+}
+
+.center {
+  color: var(--muted-strong);
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.login form {
+  position: relative;
+  width: min(430px, 100%);
+  display: grid;
+  gap: 15px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: var(--radius-xl);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.9));
+  padding: 34px;
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(18px);
+}
+
+.login form::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  background: linear-gradient(90deg, var(--primary), var(--cyan));
+}
+
+.login h1 {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 36px);
+  letter-spacing: -0.04em;
+}
+
+.login p {
+  margin: -4px 0 8px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 258px minmax(0, 1fr);
+}

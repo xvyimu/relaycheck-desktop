@@ -22,6 +22,11 @@ func (a *App) handleActionCenter(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 	items := []ActionItem{}
+	setupItems, err := a.buildSetupActionItems(r)
+	if err != nil {
+		return ActionCenter{}, err
+	}
+	items = append(items, setupItems...)
 	type actionQuery struct {
 		id                string
 		priority          int
@@ -174,7 +179,7 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 				        AND COALESCE(a.api_key_status,'unchecked') NOT IN ('valid','unchecked','untested','')
 				    )
 				  )`,
-		sampleSQL: `SELECT s.name || ' · ' || s.health_status FROM upstream_sites s
+			sampleSQL: `SELECT s.name || ' · ' || s.health_status FROM upstream_sites s
 				WHERE s.id <> ?
 				  AND (
 				    s.health_status IN ('unreachable','down','failed','error')
@@ -193,7 +198,7 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 				    )
 				  )
 				ORDER BY s.updated_at DESC LIMIT 4`,
-		args: []interface{}{globalScheduleSiteID},
+			args: []interface{}{globalScheduleSiteID},
 		},
 		{
 			id:                "missing-channels",
@@ -279,6 +284,97 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 		Overall:     actionCenterLevel(items),
 		Items:       items,
 	}, nil
+}
+
+func (a *App) buildSetupActionItems(r *http.Request) ([]ActionItem, error) {
+	counts := struct {
+		localInstances int
+		channels       int
+		accounts       int
+		checkinLogs    int
+	}{}
+	queries := []struct {
+		target *int
+		sql    string
+	}{
+		{&counts.localInstances, `SELECT COUNT(*) FROM local_newapi_instances`},
+		{&counts.channels, `SELECT COUNT(*) FROM imported_channels`},
+		{&counts.accounts, `SELECT COUNT(*) FROM channel_accounts`},
+		{&counts.checkinLogs, `SELECT COUNT(*) FROM checkin_logs`},
+	}
+	for _, query := range queries {
+		if err := a.db.QueryRowContext(r.Context(), query.sql).Scan(query.target); err != nil {
+			return nil, err
+		}
+	}
+
+	switch {
+	case counts.localInstances == 0 && counts.channels == 0:
+		return []ActionItem{{
+			ID:                "setup-connect-newapi",
+			Priority:          96,
+			Level:             "info",
+			Category:          "setup",
+			Title:             "先连接 NewAPI 后台",
+			Description:       "当前还没有记录本机 NewAPI 实例，后续渠道、账号和签到都需要先从这里开始。",
+			Impact:            "这是初始化步骤，不是系统故障；完成后 Dashboard 会进入渠道导入路径。",
+			Count:             1,
+			Target:            "scan",
+			Action:            "进入本机扫描页，扫描常见端口或手动填写 NewAPI 后台地址。",
+			RecommendedAction: "优先扫描本机 3000/3001/8080/9999/3010 等端口；如果服务在其他端口，手动填写地址。",
+			Samples:           []string{"下一步：扫描或保存 NewAPI 实例"},
+		}}, nil
+	case counts.channels == 0:
+		return []ActionItem{{
+			ID:                "setup-import-channels",
+			Priority:          94,
+			Level:             "info",
+			Category:          "setup",
+			Title:             "导入 NewAPI 渠道",
+			Description:       "已经记录 NewAPI 实例，但还没有导入 channels，资产、模型和站点视图仍为空。",
+			Impact:            "导入渠道后才能识别站点能力、同步模型，并继续添加账号。",
+			Count:             1,
+			Target:            "scan",
+			Filter:            "import",
+			Action:            "在本机扫描页选择已发现实例，使用后台 API 或 SQLite 只读导入 channels。",
+			RecommendedAction: "优先使用后台 API 导入；没有访问令牌时使用 SQLite 数据库路径导入。",
+			Samples:           []string{"下一步：导入 channels"},
+		}}, nil
+	case counts.accounts == 0:
+		return []ActionItem{{
+			ID:                "setup-add-account",
+			Priority:          90,
+			Level:             "info",
+			Category:          "setup",
+			Title:             "添加渠道账号",
+			Description:       "渠道已存在，但还没有账号。签到、余额刷新、Key 检测和模型可用性都需要账号数据。",
+			Impact:            "没有账号时自动任务只能展示资产结构，无法验证真实运营链路。",
+			Count:             1,
+			Target:            "accounts",
+			Filter:            "all",
+			Action:            "进入账号页，为至少一个站点添加邮箱密码、API Key 或浏览器授权会话。",
+			RecommendedAction: "先添加一个低风险测试账号，确认登录态和 Key 检测可用后再批量导入。",
+			Samples:           []string{"下一步：添加第一个账号"},
+		}}, nil
+	case counts.checkinLogs == 0:
+		return []ActionItem{{
+			ID:                "setup-verify-dry-run",
+			Priority:          52,
+			Level:             "info",
+			Category:          "setup",
+			Title:             "验证签到链路",
+			Description:       "账号已存在，但还没有签到运行记录。建议先做 dry-run，再决定是否执行真实签到。",
+			Impact:            "验证链路后才能确认站点能力、账号授权和调度配置是否匹配。",
+			Count:             1,
+			Target:            "checkins",
+			Filter:            "all",
+			Action:            "进入签到页，先运行 dry-run 预览，再触发一次真实签到验证。",
+			RecommendedAction: "先检查 dry-run 结果中的跳过和失败项；确认无误后再运行真实签到。",
+			Samples:           []string{"下一步：dry-run 预览签到任务"},
+		}}, nil
+	default:
+		return nil, nil
+	}
 }
 
 func (a *App) queryActionCount(r *http.Request, query string, args []interface{}) (int, error) {

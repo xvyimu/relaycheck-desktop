@@ -130,6 +130,7 @@ if ($isDirty -and -not $AllowDirty) {
 
 if (-not $SkipBuild) {
   Invoke-Checked "Frontend build" $FrontendDir "npm" @("run", "build")
+  New-Item -ItemType Directory -Force (Split-Path -Parent $ReleaseExe) | Out-Null
   Invoke-Checked "Windows release binary build" $RepoRoot "go" @("build", "-mod=vendor", "-ldflags=-H windowsgui", "-o", "dist\relaycheck.exe", ".")
 }
 

@@ -51,6 +51,7 @@ func (a *App) handleImportFromAdminAPI(w http.ResponseWriter, r *http.Request) {
 		"importKeys":     input.ImportKeys,
 		"syncTokenSaved": input.SaveAccessToken,
 	})
+	a.invalidateReadCache()
 	writeJSON(w, http.StatusOK, result)
 }
 

@@ -104,6 +104,7 @@ func (a *App) createAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	a.invalidateReadCache()
 	writeJSON(w, http.StatusOK, map[string]string{"id": id})
 }
 

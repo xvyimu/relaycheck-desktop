@@ -15,6 +15,7 @@ frontend/node_modules/
 frontend/dist/
 
 # Build artifacts
+.tmp/
 frontend/src/*.css.map
 frontend/tsconfig.tsbuildinfo
 frontend/tsconfig.app.tsbuildinfo

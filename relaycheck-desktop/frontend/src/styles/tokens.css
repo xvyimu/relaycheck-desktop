@@ -1,0 +1,72 @@
+@theme {
+  --color-background: var(--v4-bg);
+  --color-foreground: var(--v4-text);
+  --color-card: var(--v4-card);
+  --color-card-foreground: var(--v4-text);
+  --color-popover: var(--v4-card);
+  --color-popover-foreground: var(--v4-text);
+  --color-primary: var(--v4-blue);
+  --color-primary-foreground: var(--surface-solid);
+  --color-secondary: var(--v4-blue-soft);
+  --color-secondary-foreground: var(--v4-blue);
+  --color-muted: var(--v4-card-soft);
+  --color-muted-foreground: var(--v4-muted);
+  --color-accent: var(--v4-blue-soft);
+  --color-accent-foreground: var(--v4-blue);
+  --color-destructive: var(--v4-red);
+  --color-destructive-foreground: var(--surface-solid);
+  --color-border: var(--v4-border);
+  --color-input: var(--v4-input-border);
+  --color-ring: var(--v4-input-focus-ring);
+  --radius-sm: var(--v4-radius-xs);
+  --radius-md: var(--v4-radius-sm);
+  --radius-lg: var(--v4-radius-md);
+  --radius-xl: var(--v4-radius-lg);
+  --shadow-card: var(--v4-shadow-md);
+  --font-sans: "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+:root {
+  color: #172033;
+  background: #eef3f8;
+  font-family: "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+  --bg: #eef3f8;
+  --bg-strong: #dce6f0;
+  --surface: rgba(255, 255, 255, 0.86);
+  --surface-solid: var(--surface-solid);
+  --surface-soft: #f8fafc;
+  --surface-subtle: #f1f5f9;
+  --line: rgba(71, 85, 105, 0.16);
+  --line-strong: rgba(51, 65, 85, 0.25);
+  --text: #172033;
+  --muted: #64748b;
+  --muted-strong: #475569;
+  --primary: #155eef;
+  --primary-strong: #0f3f9d;
+  --primary-soft: #eaf2ff;
+  --cyan: #0891b2;
+  --cyan-soft: #e6f8fb;
+  --success: #0f8a5f;
+  --success-soft: #e8f7ef;
+  --warning: #a16207;
+  --warning-soft: #fff7df;
+  --danger: #c23b4d;
+  --danger-soft: #fff0f3;
+  --ring: rgba(21, 94, 239, 0.18);
+  /* Shadow tokens – single source: V4 shadow system */
+  --shadow-xs: var(--v4-shadow-sm);
+  --shadow-sm: var(--v4-shadow-sm);
+  --shadow-md: var(--v4-shadow-md);
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+}
+
+* {
+  box-sizing: border-box;
+}

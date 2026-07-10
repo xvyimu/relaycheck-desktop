@@ -20,6 +20,51 @@ func TestBuildSchedulerStatusIncludesKnownJobs(t *testing.T) {
 	if status.Jobs[0].Key != schedulerJobCheckin || status.Jobs[1].Key != schedulerJobSync || status.Jobs[2].Key != schedulerJobChannelHealth {
 		t.Fatalf("unexpected scheduler jobs: %#v", status.Jobs)
 	}
+	if status.Jobs[0].Label != "自动签到" || status.Jobs[1].Label != "NewAPI 定时同步" || status.Jobs[2].Label != "渠道健康探测" {
+		t.Fatalf("unexpected scheduler job labels: %#v", status.Jobs)
+	}
+}
+
+func TestSchedulerRegistriesKeepTickAndStatusOrder(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	ticks := app.schedulerTickRegistry()
+	if len(ticks) != 4 {
+		t.Fatalf("expected four scheduler tick units, got %d", len(ticks))
+	}
+	expectedTickKeys := []string{
+		schedulerJobCheckin,
+		"channel.site_schedules",
+		schedulerJobSync,
+		schedulerJobChannelHealth,
+	}
+	for i, expected := range expectedTickKeys {
+		if ticks[i].key != expected {
+			t.Fatalf("tick %d key = %q, want %q", i, ticks[i].key, expected)
+		}
+		if ticks[i].tick == nil {
+			t.Fatalf("tick %d has nil handler", i)
+		}
+	}
+
+	statusJobs := app.schedulerStatusRegistry()
+	if len(statusJobs) != 3 {
+		t.Fatalf("expected three visible scheduler jobs, got %d", len(statusJobs))
+	}
+	expectedStatusKeys := []string{
+		schedulerJobCheckin,
+		schedulerJobSync,
+		schedulerJobChannelHealth,
+	}
+	for i, expected := range expectedStatusKeys {
+		if statusJobs[i].key != expected {
+			t.Fatalf("status job %d key = %q, want %q", i, statusJobs[i].key, expected)
+		}
+		if !statusJobs[i].visibleInStatus {
+			t.Fatalf("status job %d should be visible", i)
+		}
+	}
 }
 
 func TestChannelHealthSchedulerWaitsForDefaultIntervalOnStartup(t *testing.T) {

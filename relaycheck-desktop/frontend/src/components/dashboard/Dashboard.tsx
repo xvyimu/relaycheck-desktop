@@ -1,42 +1,28 @@
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { Empty } from "@/components/ui/empty";
 import { HubRadar } from "@/components/dashboard/HubRadar";
 import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
 import { UpdateBanner } from "@/components/ui/UpdateBanner";
 import { Badge as UiBadge } from "@/components/ui/badge";
+import type { InventoryDataState } from "@/hooks/useInventoryData";
+import type { ModelUsageOverviewState } from "@/hooks/useModelUsageOverview";
+import type { OpsHealthState } from "@/hooks/useOpsHealth";
 import { useSchedulerPreview } from "@/hooks/useSchedulerPreview";
+import type { SystemOverviewState } from "@/hooks/useSystemOverview";
 import { formatDuration, formatTime } from "@/lib/format";
 import { actionItemNavigationIntent } from "@/lib/navigation";
 import { statusTone, toneBadgeVariant } from "@/lib/tone";
 import type {
-  Account,
-  ActionCenter,
   ActionItem,
-  CheckinStatus,
-  ImportedChannel,
-  ModelOverview,
-  ModelPricingOverview,
-  NotificationItem,
-  StatusPayload,
-  SystemDiagnostics,
   NavigationIntent,
   TabKey,
-  UpstreamSite,
-  UsageOverview,
 } from "@/types";
 
 export interface DashboardProps {
-  status: StatusPayload | null;
-  channels: ImportedChannel[];
-  sites: UpstreamSite[];
-  accounts: Account[];
-  checkins: CheckinStatus | null;
-  notifications: NotificationItem[];
-  diagnostics: SystemDiagnostics | null;
-  actionCenter: ActionCenter | null;
-  modelOverview: ModelOverview | null;
-  pricingOverview: ModelPricingOverview | null;
-  usageOverview: UsageOverview | null;
+  system: SystemOverviewState;
+  inventory: InventoryDataState;
+  ops: OpsHealthState;
+  modelUsage: ModelUsageOverviewState;
   onNavigate: (tab: TabKey, intent?: Omit<NavigationIntent, "target">) => void;
   onRefresh: () => Promise<void>;
 }
@@ -84,10 +70,20 @@ function actionCategoryLabel(category?: string) {
     checkin: "签到",
     balance: "余额",
     channel: "渠道",
+    health: "健康",
     site: "站点",
     notification: "通知",
+    setup: "接入",
   };
   return labels[category || ""] || "运营";
+}
+
+function actionCenterSubtitle(items: ActionItem[]) {
+  if (!items.length) return "当前没有需要立即处理的运营事项";
+  if (items.every((item) => item.category === "setup")) {
+    return `按接入顺序处理 ${items.length} 项`;
+  }
+  return `按风险优先处理 ${items.length} 项`;
 }
 
 function navigateAction(onNavigate: DashboardProps["onNavigate"], item: ActionItem) {
@@ -97,20 +93,16 @@ function navigateAction(onNavigate: DashboardProps["onNavigate"], item: ActionIt
 }
 
 function DashboardBase({
-  status,
-  channels,
-  sites,
-  accounts,
-  checkins,
-  notifications,
-  diagnostics,
-  actionCenter,
-  modelOverview,
-  pricingOverview,
-  usageOverview,
+  system,
+  inventory,
+  ops,
+  modelUsage,
   onNavigate,
   onRefresh,
 }: DashboardProps) {
+  const { status } = system;
+  const { accounts, channels, sites } = inventory;
+  const { actionCenter, checkins, diagnostics, notifications } = ops;
   const { problemChannels, problemAccounts, unread } = useMemo(() => {
     const problemChannels = channels.filter((item) => item.sourceSyncStatus === "missing" || item.upstreamKind === "unknown").length;
     const problemAccounts = accounts.filter((item) => ["expired", "invalid", "failed"].includes((item.loginStatus || "").toLowerCase())).length;
@@ -123,6 +115,9 @@ function DashboardBase({
 
   const schedulerPreview = useSchedulerPreview(2);
   const { nextRuns, nextRunsLoading: nextRunsBusy } = schedulerPreview;
+  const refreshRadar = useCallback(() => {
+    void onRefresh();
+  }, [onRefresh]);
 
   const schedulerContent = useMemo<React.ReactNode>(() => {
     if (nextRunsBusy) {
@@ -176,12 +171,12 @@ function DashboardBase({
           status={status}
           diagnostics={diagnostics}
           actionCenter={actionCenter}
-          modelOverview={modelOverview}
-          pricingOverview={pricingOverview}
-          usageOverview={usageOverview}
+          modelOverview={modelUsage.modelOverview}
+          pricingOverview={modelUsage.pricingOverview}
+          usageOverview={modelUsage.usageOverview}
           schedulerPreview={schedulerPreview}
           onNavigate={onNavigate}
-          onRefresh={onRefresh}
+          onRefresh={refreshRadar}
         />
       ) : null}
       <section className="metric-grid">
@@ -195,7 +190,7 @@ function DashboardBase({
         <div className="section-heading">
           <div>
             <h2>运营待办</h2>
-            <span>{priorityActions.length ? `按风险优先处理 ${priorityActions.length} 项` : "当前没有需要立即处理的运营事项"}</span>
+            <span>{actionCenterSubtitle(priorityActions)}</span>
           </div>
           <button type="button" className="ghost" onClick={() => void onRefresh()}>刷新待办</button>
         </div>

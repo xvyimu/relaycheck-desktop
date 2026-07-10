@@ -3,11 +3,121 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-04
+**Last updated:** 2026-07-10
 
 ---
 
 ## Current state
+
+The project is stable after the 2026-07-06 global optimization slice, but the
+worktree is intentionally dirty and has not been committed or packaged as a
+final release.
+
+Current local state:
+
+- Branch: `main` tracking `origin/main`.
+- Worktree has uncommitted source/docs changes from the global optimization
+  slice.
+- Lightweight handoff state is now frozen. Do not keep slimming unless the
+  operator explicitly changes direction.
+- Preserved local state: `vendor\`, `data\`, and `frontend\dist\`.
+- Removed/generated state: `dist\`, `frontend\node_modules\`, `.tmp\`,
+  `docs\reports\`, smoke canary/output files, and TypeScript build info.
+- Before frontend test/build/smoke work, restore dependencies with
+  `cd frontend; npm ci`.
+- Before local executable launch or packaging, rebuild generated artifacts with
+  `cd frontend; npm run build` and
+  `go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .`.
+- Historical `338870bc3154` release artifacts were cleaned from `dist\releases`
+  during slimming. Rebuild a final package from the intended final tree before
+  operator handoff.
+- Final operator approval remains pending; see
+  `docs/OPERATOR_ACCEPTANCE_RECORD_DRAFT_2026-07-06.md`.
+
+Latest engineering changes:
+
+- Frontend query boundary: removed `frontend/src/hooks/useAppData.ts`; added
+  `useSystemOverview`, `useInventoryData`, `useOpsHealth`, and
+  `useModelUsageOverview`.
+- Frontend abort/cache fix: `frontend/src/api/client.ts` no longer caches GET
+  requests that carry an `AbortSignal`, preventing StrictMode aborted requests
+  from poisoning later reads.
+- Post-review frontend refresh hardening: `useApi` now preserves the last
+  successful data on later refresh failures, App-level startup loading only
+  applies before the initial resource groups finish, and the global refresh
+  includes model/pricing/usage radar data.
+- Setup/onboarding closure: Action Center now emits setup next-step items for
+  empty workspace states; Dashboard labels setup items as 接入.
+- Scheduler boundary: added `internal/core/scheduler_jobs.go` lightweight
+  scheduler tick/status registry and ADR-005.
+- CSS structure: `frontend/src/styles.css` is now an import index; rules moved
+  into `frontend/src/styles/` split by tokens/base/layout/components/domains/layers.
+- Slimming cleanup: generated `dist\` release artifacts, historical package
+  extracts, docs reports, and `frontend\node_modules` were removed. Run
+  `cd frontend; npm ci` before frontend test/build/smoke work.
+- Release docs: global optimization record, backend A3 audit, launch readiness,
+  and operator acceptance draft are updated.
+
+Latest verification gates passed:
+
+```powershell
+rtk go test -mod=vendor -count=1 ./...           # 991 passed in 12 packages
+rtk go vet -mod=vendor ./...                     # no issues
+cd frontend; rtk npm test                        # 17 files / 220 tests passed
+cd frontend; rtk npm run build                   # tsc + vite passed
+cd frontend; rtk npm run smoke:schedules         # 1440x900 and 390x900 passed
+rtk go build -mod=vendor -o dist\relaycheck.exe .
+rtk git diff --check
+```
+
+Current post-slimming verification note:
+
+- Frontend gates above passed before `frontend\node_modules\` was removed.
+- Run `cd frontend; npm ci` before repeating frontend gates.
+- Go verification remains runnable from the current checkout because `vendor\`
+  and `frontend\dist\` are preserved.
+
+Final packaging note:
+
+```powershell
+cd E:\zidqiandao\relaycheck-desktop
+rtk git status --branch --short
+# Commit or explicitly approve dirty package build before packaging.
+cd frontend; npm ci
+cd ..
+powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1 -ProxyUrl http://127.0.0.1:7897
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\package-release.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1
+```
+
+Historical launch package evidence, cleaned during slimming:
+
+- Zip: cleaned from `dist\releases`; rebuild with `scripts\package-release.ps1`
+- SHA256: `67f342e52e5c7aa081cf8fd20b9ea8a0bed7dd89a747e9b22b6b481bc45cb83d`
+- Manifest commit: `338870bc315456b231194043abb045a15937c996`
+- Manifest dirty: `false`
+- Local monitor rerun: historical result `pass`; extracted launch records were cleaned with the old package directory
+- Important: this package predates the current uncommitted optimization diff.
+
+---
+
+## What landed this session
+
+### Global optimization closure
+
+- Added `docs/PROJECT_GLOBAL_OPTIMIZATION_2026-07-06.md` as the execution
+  record for A1-A5.
+- Completed A2 frontend query module split.
+- Completed A3 backend module audit and scheduler registry ADR.
+- Completed A4 CSS layering by mechanically preserving original cascade order.
+- Completed A5 setup next-step Action Center behavior.
+- Added `docs/OPERATOR_ACCEPTANCE_RECORD_DRAFT_2026-07-06.md`; decision is
+  `Hold` until target machine, backup, acceptance, and final approval are
+  signed by a human operator.
+
+---
+
+## Historical state (2026-07-04)
 
 The project is stable. The latest backend slice is:
 
@@ -35,7 +145,7 @@ Remote sync note:
   ```
 - After push, confirm `rtk git status --branch --short` no longer reports `ahead` and the worktree is clean.
 
-Latest Go verification gates pass:
+Historical Go verification gates from that slice:
 
 ```powershell
 go vet -mod=vendor ./...
@@ -45,7 +155,7 @@ go test -mod=vendor -cover -count=1 ./internal/core ./internal/accounts ./intern
 git diff --check
 ```
 
-Recent frontend gates also passed:
+Historical frontend gates from that slice:
 
 ```powershell
 cd frontend; npm run build                       # tsc + vite
@@ -272,7 +382,12 @@ Expected final state: no `ahead` marker.
 | `README.md` | Product overview, route table, commands (user-facing) |
 | `internal/core/PACKAGE_INDEX.md` | File-by-file map of `core` package |
 | `docs/PROJECT_STRUCTURE.md` | Source tree, generated paths, archive boundary |
+| `docs/PROJECT_GLOBAL_OPTIMIZATION_2026-07-06.md` | Executed A1-A5 optimization record and final verification matrix |
+| `docs/A3_BACKEND_MODULE_AUDIT_2026-07-06.md` | Backend module audit for accounts/checkin/scheduler follow-ups |
+| `docs/adr/005-lightweight-scheduler-job-registry.md` | Scheduler registry architecture decision |
+| `docs/OPERATOR_ACCEPTANCE_RECORD_DRAFT_2026-07-06.md` | Prefilled operator acceptance draft; final decision remains Hold |
 | `DESIGN_SYSTEM.md` | Control Room visual direction |
+| `frontend/src/styles/` | Split CSS layers imported by `frontend/src/styles.css` |
 | `docs/superpowers/specs/2026-06-29-architecture-evolution-design.md` | Phase 1/2 refactor rationale |
 
 ---

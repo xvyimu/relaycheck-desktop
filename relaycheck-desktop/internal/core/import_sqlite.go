@@ -36,6 +36,7 @@ func (a *App) handleImportFromSQLite(w http.ResponseWriter, r *http.Request) {
 		"detectedCount": intFromResult(result, "detectedCount"),
 		"importKeys":    input.ImportKeys,
 	})
+	a.invalidateReadCache()
 	writeJSON(w, http.StatusOK, result)
 }
 

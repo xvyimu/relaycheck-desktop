@@ -164,6 +164,7 @@ try {
   Invoke-Checked "Go tests" $RepoRoot "go" @("test", "-mod=vendor", "-count=1", "./...")
   Invoke-Checked "Go vet" $RepoRoot "go" @("vet", "-mod=vendor", "./...")
   Invoke-Checked "Frontend build" $FrontendDir "npm" @("run", "build")
+  New-Item -ItemType Directory -Force (Split-Path -Parent $ReleaseExe) | Out-Null
   Invoke-Checked "Windows release binary build" $RepoRoot "go" @("build", "-mod=vendor", "-ldflags=-H windowsgui", "-o", "dist\relaycheck.exe", ".")
   Invoke-Checked "npm audit" $FrontendDir "npm" @("audit", "--audit-level=low")
 

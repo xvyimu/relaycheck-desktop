@@ -64,7 +64,7 @@ rtk git push origin main
 
 ## G3 · E2E smoke 接入 ✅
 
-**结果：** `frontend/scripts/smoke.mjs` 已创建，作为 `verify-navigation.mjs` 的 thin wrapper。
+**结果：** `npm run smoke` 直接执行 `frontend/scripts/verify-navigation.mjs`。
 **验证：** `npm run smoke` 可执行（需 dev server + playwright）。
 
 ---

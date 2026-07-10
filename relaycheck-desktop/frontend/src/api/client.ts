@@ -21,7 +21,7 @@ class ApiError extends Error {
 }
 
 function shouldCacheRead(url: string, method: string, options?: RequestInit) {
-  return method === "GET" && !options?.body && !uncachedReadPrefixes.some((prefix) => url.startsWith(prefix));
+  return method === "GET" && !options?.body && !options?.signal && !uncachedReadPrefixes.some((prefix) => url.startsWith(prefix));
 }
 
 function clearClientReadCache() {

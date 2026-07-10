@@ -1,0 +1,298 @@
+/* Numeric scan pass: important operational numbers should align and read first. */
+.stat strong,
+.dashboard-metric strong,
+.dashboard-quadrant-value,
+.radar-card-top strong,
+.radar-metrics span,
+.channel-summary strong,
+.channel-card-metrics strong,
+.account-card-metrics strong,
+.account-key-card strong,
+.account-key-summary strong,
+.capability-panel-head strong,
+.capability-row strong,
+.account-quick-actions strong,
+.compact-info-row strong,
+.checkin-live-metrics strong,
+.checkin-success-counts strong,
+.checkin-success-counts span,
+.notification-counts strong,
+.notification-counts span,
+.countdown-orb b,
+.balance-card strong,
+.balance-card b,
+.detail-metrics strong,
+.detail-list strong,
+.instance-card-head strong,
+.sync-result-metrics strong,
+.sync-result-item strong,
+.diff-action,
+.scheduler-job strong,
+.dashboard-priority-item b,
+.task-item b {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+.dashboard-quadrant-value,
+.radar-card-top strong,
+.channel-summary strong,
+.sync-result-metrics strong,
+.checkin-live-metrics strong,
+.balance-card strong {
+  letter-spacing: -0.035em;
+}
+
+.radar-card-top strong,
+.channel-summary strong,
+.sync-result-metrics strong {
+  align-self: start;
+}
+
+.chips span,
+.badge,
+.bell,
+.status-pill,
+.account-status {
+  border-radius: var(--v4-radius-pill);
+  border-color: var(--v4-border);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--v4-muted);
+}
+
+.status-pill.source-active,
+.status-pill.success,
+.status-valid {
+  border-color: var(--v4-green-border);
+  background: var(--v4-green-bg);
+  color: var(--v4-green);
+}
+
+.status-pill.source-missing,
+.status-expired,
+.status-manual_required,
+.status-captcha_required,
+.status-two_factor_required {
+  border-color: var(--v4-red-border);
+  background: var(--v4-red-bg);
+  color: var(--v4-red);
+}
+
+.status-pill.source-archived {
+  border-color: var(--v4-neutral-border);
+  background: var(--v4-neutral-bg);
+  color: var(--v4-muted);
+}
+
+.action-dock,
+.account-card-actions {
+  border-radius: var(--v4-radius-sm);
+  border-color: var(--v4-border);
+  background: rgba(255, 255, 255, 0.64);
+  padding: 7px;
+}
+
+.channel-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 7px;
+}
+
+.account-action-group.primary {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 6px;
+}
+
+.account-more-panel {
+  border-radius: var(--v4-radius-xs);
+  background: rgba(247, 250, 255, 0.76);
+  padding: 8px;
+}
+
+.channel-filters,
+.toolbar,
+.section-heading,
+.note,
+.compact-info-row,
+.detail-row {
+  border-color: var(--v4-border);
+  border-radius: var(--v4-radius-sm);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: var(--v4-shadow-sm);
+}
+
+.channel-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.35fr) repeat(2, minmax(160px, 0.75fr)) auto auto auto;
+  gap: 7px;
+}
+
+.channel-filters input,
+.channel-filters select,
+.channel-filters button,
+.toolbar button,
+.page-brief button,
+.account-card-actions button,
+.channel-actions button {
+  min-height: 34px;
+  border-radius: var(--v4-radius-xs);
+}
+
+.list {
+  gap: 7px;
+}
+
+.compact-info-row {
+  min-height: 54px;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.7fr) auto;
+  padding: 9px 10px;
+}
+
+.checkin-success-summary,
+.checkin-problem-card {
+  min-height: 230px;
+  padding: 13px;
+}
+
+.success-log-list,
+.problem-log-list {
+  max-height: 178px;
+  overflow: auto;
+}
+
+.balance-snapshot-row {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr) auto;
+}
+
+.settings-grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--v4-space-6);
+}
+
+.settings-path-card {
+  grid-column: 1 / -1;
+}
+
+.dashboard-hero {
+  border: 1px solid var(--v4-border);
+  box-shadow: var(--v4-shadow);
+}
+
+.dashboard-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 10px;
+}
+
+.dashboard-main-grid {
+  gap: 10px;
+}
+
+.dashboard-rail {
+  gap: 10px;
+}
+
+.dashboard-quadrant {
+  min-height: 196px;
+}
+
+@media (max-width: 1120px) {
+  .shell-v4 {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-v4 {
+    position: relative;
+    height: auto;
+    z-index: 30;
+    border-right: 0;
+    border-bottom: 1px solid var(--v4-border);
+  }
+
+  .sidebar-v4 nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .sidebar-footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .channel-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 0.55fr) minmax(150px, 0.55fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .main-v4 {
+    padding: 10px;
+  }
+
+  .sidebar-v4 {
+    padding: 10px;
+  }
+
+  .sidebar-v4 nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .topbar-v4,
+  .page-brief {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-v4 .topbar-actions,
+  .brief-stats {
+    justify-content: flex-start;
+  }
+
+  .channel-grid,
+  .account-grid,
+  .balance-grid,
+  .settings-grid,
+  .dashboard-layout,
+  .dashboard-main-grid,
+  .checkin-priority-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-path-card {
+    grid-column: auto;
+  }
+
+  .channel-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .account-card-metrics,
+  .channel-card-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .account-action-group.primary,
+  .channel-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .compact-info-row,
+  .balance-snapshot-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 440px) {
+  .nav-copy small,
+  .sidebar-health-card {
+    display: none;
+  }
+
+  .sidebar-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .account-card-metrics,
+  .channel-card-metrics,
+  .account-action-group.primary,
+  .channel-actions {
+    grid-template-columns: 1fr;
+  }
+}

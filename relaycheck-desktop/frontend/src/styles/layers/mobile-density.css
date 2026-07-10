@@ -1,0 +1,68 @@
+/* Mobile density pass: keep navigation compact so content appears sooner. */
+@media (max-width: 560px) {
+  .sidebar-v4 {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .sidebar-v4 .brand {
+    min-height: 46px;
+    border-radius: var(--v4-radius-sm);
+    padding: 7px;
+  }
+
+  .sidebar-section-label {
+    padding-left: 4px;
+  }
+
+  .sidebar-v4 nav {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 2px 1px 6px;
+    scrollbar-width: none;
+  }
+
+  .sidebar-v4 nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-v4 nav button {
+    min-width: 78px;
+    min-height: 36px;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 5px;
+    padding: 5px 7px;
+  }
+
+  .sidebar-v4 .nav-icon {
+    width: 20px;
+    height: 20px;
+    font-size: var(--v4-text-xs);
+  }
+
+  .nav-copy strong {
+    font-size: var(--v4-text-sm);
+    text-align: center;
+  }
+
+  .sidebar-footer {
+    margin-top: 0;
+  }
+
+  .sidebar-footer .ghost {
+    min-height: 30px;
+  }
+
+  .topbar-v4 {
+    top: 6px;
+    min-height: 0;
+    border-radius: var(--v4-radius-md);
+    padding: 11px;
+  }
+
+  .page-brief {
+    border-radius: var(--v4-radius-md);
+    padding: 11px;
+  }
+}

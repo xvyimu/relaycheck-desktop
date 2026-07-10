@@ -1,9 +1,11 @@
 # Launch Readiness
 
 Date: 2026-07-05
-Status: Pre-launch verified locally with the release gate; production rollout still requires operator approval.
+Status: Engineering verification passed after global optimization; production rollout still requires a clean final package and operator approval.
 
-Latest local release-gate run: 2026-07-05, passed.
+Latest local release-gate run before the current optimization diff: 2026-07-05, passed.
+
+Latest engineering verification after the current optimization diff: 2026-07-06, passed. The worktree is currently dirty, so do not treat the historical package as the final production handoff until the intended final changes are committed or an explicitly approved dirty package is rebuilt.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1 -ProxyUrl http://127.0.0.1:7897
@@ -13,13 +15,13 @@ powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1 -ProxyUrl ht
 
 | Gate | Result |
 | --- | --- |
-| Frontend tests | `npm test` via release gate - 14 files / 216 tests passed |
-| Go tests | `go test -mod=vendor -count=1 ./...` via release gate - passed across 12 packages |
-| Go vet | `go vet -mod=vendor ./...` via release gate - no issues |
-| Frontend build | `npm run build` via release gate - TypeScript + Vite build passed |
-| Windows binary build | `go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .` via release gate - passed |
+| Frontend tests | `cd frontend; rtk npm test` - 17 files / 220 tests passed |
+| Go tests | `rtk go test -mod=vendor -count=1 ./...` - 991 passed in 12 packages |
+| Go vet | `rtk go vet -mod=vendor ./...` - no issues |
+| Frontend build | `cd frontend; rtk npm run build` - TypeScript + Vite build passed |
+| Windows binary build | `rtk go build -mod=vendor -o dist\relaycheck.exe .` - passed |
 | npm vulnerability scan | `npm audit --audit-level=low` via release gate - 0 vulnerabilities |
-| Go vulnerability scan | `govulncheck` via release gate - current code affected by 0 vulnerabilities; one imported vulnerable package was not called |
+| Go vulnerability scan | Not run in this environment; `govulncheck` is not installed. Install and run it before final production approval. |
 | Scheduler layout smoke | `cd frontend; rtk npm run smoke:schedules` - 1440x900 and 390x900 passed |
 | Navigation smoke | `cd frontend; rtk npm run smoke` - 9 PASS / 0 FAIL |
 | Binary health smoke | Temporary `dist\relaycheck.exe` runtime returned `/api/health` 200 |
@@ -35,23 +37,23 @@ Run from the repository root:
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1 -ProxyUrl http://127.0.0.1:7897
 ```
 
-Omit `-ProxyUrl` when direct access to the Go module proxy works. The script starts temporary local processes for binary health and browser smoke, then stops them and removes generated smoke files. After the latest run, `.tmp`, `frontend\verify-canary.txt`, and `frontend\verify-nav-output.txt` were absent; `dist\relaycheck.exe` and `frontend\dist` remained as generated release/build artifacts.
+Omit `-ProxyUrl` when direct access to the Go module proxy works. The script starts temporary local processes for binary health and browser smoke, then stops them and removes generated smoke files. After the latest run, `.tmp`, `frontend\verify-canary.txt`, and `frontend\verify-nav-output.txt` were absent; generated `dist\` release artifacts were later cleaned during slimming, while `frontend\dist` remains as the embedded frontend build artifact.
 
 ## Release Package
 
-After the one-command gate passes on a clean Git tree, create the operator handoff package:
+After the one-command gate passes on the intended final tree, create the operator handoff package:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\package-release.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1
 ```
 
-The package script builds `dist\relaycheck.exe`, copies the operator docs, acceptance-record template, package verifier, launch helper, and monitor helper, writes `manifest.json`, writes `checksums.sha256`, creates a zip under `dist\releases`, and writes a sibling `.zip.sha256` file for handoff verification. The verifier checks the latest zip, sidecar SHA256, manifest fields, required files, and internal checksums. Use `-SkipBuild` only when validating packaging around an already-built executable; use `-AllowDirty` only for development verification, not final handoff.
+The package script builds `dist\relaycheck.exe`, copies the operator docs, acceptance-record template, package verifier, launch helper, and monitor helper, writes `manifest.json`, writes `checksums.sha256`, creates a zip under `dist\releases`, and writes a sibling `.zip.sha256` file for handoff verification. The verifier checks the latest zip, sidecar SHA256, manifest fields, required files, and internal checksums. Use `-SkipBuild` only when validating packaging around an already-built executable; use `-AllowDirty` only for development verification or when the operator explicitly approves a dirty package. Do not use the historical `338870bc3154` zip as the final package for the current optimization diff.
 
 ## Launch Notes
 
 - The application is a local desktop service bound to `127.0.0.1`.
-- The release executable is `dist\relaycheck.exe`, built from embedded `frontend/dist`; operator handoff should use the zip package generated by `scripts\package-release.ps1`.
+- The release executable is produced at `dist\relaycheck.exe` from embedded `frontend/dist`; operator handoff should use the zip package generated by `scripts\package-release.ps1`.
 - Startup creates a local SQLite database and key material under the process working directory's `data\` folder.
 - On a fresh database, the bootstrap admin password is read from `RELAYCHECK_BOOTSTRAP_PASSWORD` or generated into `data\bootstrap-admin-password.txt`.
 - Browser smoke now uses deterministic API fixtures for navigation intent coverage, so it does not depend on the operator's local database contents.
@@ -70,6 +72,7 @@ The package script builds `dist\relaycheck.exe`, copies the operator docs, accep
 - Run one manual critical flow with non-secret test data: open dashboard, inspect scheduler preview, create or view a site, and trigger a dry-run task.
 - Fill out `docs\OPERATOR_ACCEPTANCE_RECORD.md` from the extracted package during launch and first-hour monitoring.
 - Follow `docs\OPERATOR_RUNBOOK.md` for first-hour monitoring, port-conflict handling, accepted warning records, and rollback triggers.
+- Use `docs\OPERATOR_ACCEPTANCE_RECORD_DRAFT_2026-07-06.md` as the current prefilled draft, then copy the final operator-signed result out of the package/worktree as the audit record.
 
 ## Rollback Plan
 

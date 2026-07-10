@@ -147,10 +147,12 @@ func (a *App) tickSchedulers(ctx context.Context) {
 	// This also keeps runKey dates and "today" boundaries aligned with the
 	// rest of the system (action center, diagnostics, checkin summaries).
 	nowTime := nowCST()
-	a.tickCheckinScheduler(ctx, nowTime)
-	a.tickChannelScheduler(ctx, nowTime)
-	a.tickSyncScheduler(ctx, nowTime)
-	a.tickChannelHealthScheduler(ctx, nowTime)
+	for _, job := range a.schedulerTickRegistry() {
+		if ctx.Err() != nil {
+			return
+		}
+		job.tick(ctx, nowTime)
+	}
 }
 
 // tickChannelScheduler checks per-site channel schedules and triggers checkins for due sites.
@@ -606,14 +608,7 @@ func (a *App) buildSchedulerStatus(ctx context.Context) SchedulerStatus {
 		GeneratedAt: now(),
 		Jobs:        []SchedulerJobStatus{},
 	}
-	for _, job := range []struct {
-		key   string
-		label string
-	}{
-		{schedulerJobCheckin, "自动签到"},
-		{schedulerJobSync, "NewAPI 定时同步"},
-		{schedulerJobChannelHealth, "渠道健康探测"},
-	} {
+	for _, job := range a.schedulerStatusRegistry() {
 		record, err := a.loadSchedulerRun(ctx, job.key)
 		item := SchedulerJobStatus{Key: job.key, Label: job.label, Status: "idle"}
 		if err == nil {

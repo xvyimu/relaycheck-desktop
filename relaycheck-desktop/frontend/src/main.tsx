@@ -12,7 +12,11 @@ import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { ScanPanel } from "@/components/scan/ScanPanel";
 import { Settings as SettingsPanel } from "@/components/settings/Settings";
 import { SitesPanel } from "@/components/sites/SitesPanel";
-import { useAppData } from "@/hooks/useAppData";
+import { useInventoryData } from "@/hooks/useInventoryData";
+import { useModelUsageOverview } from "@/hooks/useModelUsageOverview";
+import { useOpsHealth } from "@/hooks/useOpsHealth";
+import { useSystemOverview } from "@/hooks/useSystemOverview";
+import { appIsInitialLoading, refreshAppData } from "@/lib/appData";
 import { initTheme } from "@/lib/theme";
 import type { NavigationIntent, TabKey } from "@/types";
 import "./styles.css";
@@ -23,7 +27,10 @@ function App() {
   // Track visited tabs so we can keep their panels mounted (preserving filter
   // state, scroll position, etc.) while hiding non-active ones.
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(["dashboard"]));
-  const data = useAppData();
+  const system = useSystemOverview();
+  const inventory = useInventoryData();
+  const ops = useOpsHealth();
+  const modelUsage = useModelUsageOverview();
 
   useEffect(() => {
     const cleanup = initTheme();
@@ -59,16 +66,28 @@ function App() {
     });
   }, []);
 
-  const handleRefresh = useCallback(() => {
-    void data.reload();
-  }, [data.reload]);
+  const reload = useCallback(async () => {
+    await refreshAppData(
+      { refresh: system.refresh },
+      { refresh: inventory.refresh },
+      { refresh: ops.refresh },
+      { refresh: modelUsage.refresh },
+    );
+  }, [inventory.refresh, modelUsage.refresh, ops.refresh, system.refresh]);
 
-  if (data.loading) {
+  const handleRefresh = useCallback(() => {
+    void reload();
+  }, [reload]);
+
+  const loading = appIsInitialLoading(system, inventory, ops);
+  const error = system.error || inventory.error || ops.error || modelUsage.error;
+
+  if (loading) {
     return (
       <main className="center-screen">
         <div className="loading-card">
           正在启动 RelayCheck Desktop…
-          {data.startupVersion ? <div className="loading-version">{data.startupVersion}</div> : null}
+          {system.startupVersion ? <div className="loading-version">{system.startupVersion}</div> : null}
         </div>
       </main>
     );
@@ -82,62 +101,55 @@ function App() {
       <Sidebar activeTab={tab} onTabChange={handleTabChange} />
       <main className="main-panel">
         <Topbar activeTab={tab} onRefresh={handleRefresh} />
-        {data.error ? <div className="notice error" aria-live="polite">{data.error}</div> : null}
+        {error ? <div className="notice error" aria-live="polite">{error}</div> : null}
         {visitedTabs.has("dashboard") ? (
           <div style={{ display: show("dashboard") }}>
             <Dashboard
-              status={data.status}
-              channels={data.channels}
-              sites={data.sites}
-              accounts={data.accounts}
-              checkins={data.checkins}
-              notifications={data.notifications}
-              diagnostics={data.diagnostics}
-              actionCenter={data.actionCenter}
-              modelOverview={data.modelOverview}
-              pricingOverview={data.pricingOverview}
-              usageOverview={data.usageOverview}
+              system={system}
+              inventory={inventory}
+              ops={ops}
+              modelUsage={modelUsage}
               onNavigate={handleNavigate}
-              onRefresh={data.reload}
+              onRefresh={reload}
             />
           </div>
         ) : null}
         {visitedTabs.has("channels") ? (
           <div style={{ display: show("channels") }}>
             <ChannelsPanel
-              onRefresh={data.reload}
+              onRefresh={reload}
               intent={navigationIntent?.target === "channels" ? navigationIntent : null}
             />
           </div>
         ) : null}
         {visitedTabs.has("sites") ? (
           <div style={{ display: show("sites") }}>
-            <SitesPanel sites={data.sites} onRefresh={data.reload} intent={navigationIntent?.target === "sites" ? navigationIntent : null} />
+            <SitesPanel sites={inventory.sites} onRefresh={reload} intent={navigationIntent?.target === "sites" ? navigationIntent : null} />
           </div>
         ) : null}
         {visitedTabs.has("accounts") ? (
           <div style={{ display: show("accounts") }}>
-            <AccountsPanel accounts={data.accounts} sites={data.sites} onRefresh={data.reload} intent={navigationIntent?.target === "accounts" ? navigationIntent : null} />
+            <AccountsPanel accounts={inventory.accounts} sites={inventory.sites} onRefresh={reload} intent={navigationIntent?.target === "accounts" ? navigationIntent : null} />
           </div>
         ) : null}
         {visitedTabs.has("checkins") ? (
           <div style={{ display: show("checkins") }}>
-            <CheckinsPanel checkins={data.checkins} onRefresh={data.reload} intent={navigationIntent?.target === "checkins" ? navigationIntent : null} />
+            <CheckinsPanel checkins={ops.checkins} onRefresh={reload} intent={navigationIntent?.target === "checkins" ? navigationIntent : null} />
           </div>
         ) : null}
         {visitedTabs.has("scan") ? (
           <div style={{ display: show("scan") }}>
-            <ScanPanel onRefresh={data.reload} />
+            <ScanPanel onRefresh={reload} />
           </div>
         ) : null}
         {visitedTabs.has("notifications") ? (
           <div style={{ display: show("notifications") }}>
-            <NotificationsPanel items={data.notifications} onRefresh={data.reload} intent={navigationIntent?.target === "notifications" ? navigationIntent : null} />
+            <NotificationsPanel items={ops.notifications} onRefresh={reload} intent={navigationIntent?.target === "notifications" ? navigationIntent : null} />
           </div>
         ) : null}
         {visitedTabs.has("settings") ? (
           <div style={{ display: show("settings") }}>
-            {data.status ? <SettingsPanel status={data.status} onDone={data.reload} /> : <Empty message="正在加载设置…" />}
+            {system.status ? <SettingsPanel status={system.status} onDone={reload} /> : <Empty message="正在加载设置…" />}
           </div>
         ) : null}
       </main>

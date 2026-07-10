@@ -28,7 +28,7 @@ RelayCheck Hub is a local operations console for NewAPI/Sub2API relay management
 
 ## Component Rules
 - Local UI primitives live under `frontend/src/components/ui/*`; they are project-owned wrappers, not a generated shadcn install.
-- Current primitives: `Button`, `Card`, `Badge`, `Input`, `Select`, `Skeleton`, `Dialog`, `Progress`, `Tooltip`, `Switch`, `ThemeToggle`, `UpdateBanner`, `TwoFactorGuide`, `Empty`.
+- Current primitives: `Button`, `Card`, `Badge`, `Progress`, `Tooltip`, `ThemeToggle`, `UpdateBanner`, `TwoFactorGuide`, `StatusLabel`, `LineIcon`, `Empty`, `EmptyState`, and task progress views.
 - `ThemeToggle` uses inline SVG icons (monitor/sun/moon), not emoji.
 - `UpdateBanner` renders a blue gradient banner when `updateAvailable` is true; dismiss state persists in `localStorage` keyed by version.
 - `TwoFactorGuide` supports `inline` and `dialog` modes with 5-step instructions and collapsible FAQ.
