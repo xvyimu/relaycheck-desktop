@@ -4,6 +4,9 @@ import { PROBLEM_CHECKIN_STATUSES, PROBLEM_LOGIN_STATUSES } from "@/lib/constant
 /** Local UI phase for the manual re-login loop (not persisted). */
 export type ReloginUiPhase = "idle" | "browser_open" | "auth_saved";
 
+/** How the browser session became open (for R2 chip copy). */
+export type BrowserSessionOpenKind = "opened" | "already_open" | null;
+
 export type PrimaryActionKey = "open" | "save" | "test" | "checkin" | "detail";
 
 export const RELOGIN_STEPS = ["打开网页登录", "保存授权", "测试登录态", "签到/余额"] as const;
@@ -85,6 +88,20 @@ export function reloginStepIndex(phase: ReloginUiPhase, loginStatus: string): nu
 export function isBrowserLoginOpenSuccess(status: string | undefined): boolean {
   const value = (status || "").toLowerCase();
   return value === "opened" || value === "already_open";
+}
+
+export function browserSessionOpenKind(status: string | undefined): BrowserSessionOpenKind {
+  const value = (status || "").toLowerCase();
+  if (value === "already_open") return "already_open";
+  if (value === "opened") return "opened";
+  return null;
+}
+
+/** Persistent chip while phase is browser_open (R2). */
+export function browserSessionRunningLabel(kind: BrowserSessionOpenKind): string {
+  if (kind === "already_open") return "窗口已在运行 · 可保存授权";
+  if (kind === "opened") return "登录窗口已打开 · 可保存授权";
+  return "登录窗口可用 · 可保存授权";
 }
 
 export function isBrowserLoginSaveSuccess(status: string | undefined): boolean {

@@ -42,7 +42,7 @@ func TestActionCenterAnnotatesOperationalMetadata(t *testing.T) {
 	if keyIssue.RecommendedAction == "" {
 		t.Fatal("api-key-problems recommended action should be populated")
 	}
-	if len(keyIssue.Samples) != 1 || keyIssue.Samples[0] == "" {
+	if len(keyIssue.Samples) != 1 || keyIssue.Samples[0].Label == "" {
 		t.Fatalf("api-key-problems samples = %#v, want one non-empty sample", keyIssue.Samples)
 	}
 
@@ -52,6 +52,15 @@ func TestActionCenterAnnotatesOperationalMetadata(t *testing.T) {
 	}
 	if siteIssue.Impact == "" || siteIssue.RecommendedAction == "" {
 		t.Fatalf("unreachable-sites metadata missing impact/action: %#v", siteIssue)
+	}
+	if len(siteIssue.Samples) != 1 {
+		t.Fatalf("unreachable-sites samples = %#v, want one sample with site entity", siteIssue.Samples)
+	}
+	if siteIssue.Samples[0].EntityType != "site" || siteIssue.Samples[0].EntityID != "site-down" {
+		t.Fatalf("unreachable-sites sample entity = %#v, want site/site-down", siteIssue.Samples[0])
+	}
+	if siteIssue.Samples[0].Label == "" {
+		t.Fatal("unreachable-sites sample label should be non-empty")
 	}
 }
 
@@ -104,6 +113,15 @@ func TestActionCenterIncludesChannelHealthRisks(t *testing.T) {
 	}
 	if item.Impact == "" || item.RecommendedAction == "" {
 		t.Fatalf("missing health risk metadata: %#v", item)
+	}
+	if len(item.Samples) != 1 {
+		t.Fatalf("channel-health-risks samples = %#v, want one site sample", item.Samples)
+	}
+	if item.Samples[0].EntityType != "site" || item.Samples[0].EntityID != "site-health-risk" {
+		t.Fatalf("channel-health-risks sample entity = %#v, want site/site-health-risk", item.Samples[0])
+	}
+	if item.Samples[0].Label == "" {
+		t.Fatal("channel-health-risks sample label should be non-empty")
 	}
 }
 

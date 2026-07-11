@@ -90,22 +90,30 @@ type ActionCenter struct {
 	Items       []ActionItem `json:"items"`
 }
 
+// ActionSample is a clickable sample row under an ActionItem.
+// When EntityType/EntityID are set, the UI can deep-link (e.g. site -> master-detail).
+type ActionSample struct {
+	Label      string `json:"label"`
+	EntityType string `json:"entityType,omitempty"` // site | account | channel
+	EntityID   string `json:"entityId,omitempty"`
+}
+
 // ActionItem is a single recommended action shown in the Action Center.
 // Level is "info" | "warning" | "critical".
 type ActionItem struct {
-	ID                string   `json:"id"`
-	Priority          int      `json:"priority"` // higher = higher priority
-	Level             string   `json:"level"`
-	Category          string   `json:"category"`
-	Title             string   `json:"title"`
-	Description       string   `json:"description"`
-	Impact            string   `json:"impact,omitempty"`
-	Count             int      `json:"count"`
-	Target            string   `json:"target"` // route path for navigation
-	Filter            string   `json:"filter,omitempty"`
-	Action            string   `json:"action"`
-	RecommendedAction string   `json:"recommendedAction,omitempty"`
-	Samples           []string `json:"samples,omitempty"`
+	ID                string         `json:"id"`
+	Priority          int            `json:"priority"` // higher = higher priority
+	Level             string         `json:"level"`
+	Category          string         `json:"category"`
+	Title             string         `json:"title"`
+	Description       string         `json:"description"`
+	Impact            string         `json:"impact,omitempty"`
+	Count             int            `json:"count"`
+	Target            string         `json:"target"` // route path for navigation
+	Filter            string         `json:"filter,omitempty"`
+	Action            string         `json:"action"`
+	RecommendedAction string         `json:"recommendedAction,omitempty"`
+	Samples           []ActionSample `json:"samples,omitempty"`
 }
 
 // ChannelHealthOverview summarizes relay site, API key, and model sync health.

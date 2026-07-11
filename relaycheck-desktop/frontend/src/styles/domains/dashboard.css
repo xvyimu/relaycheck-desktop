@@ -365,6 +365,26 @@
   white-space: nowrap;
 }
 
+.task-samples .task-sample-link {
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(21, 94, 239, 0.18);
+  border-radius: 999px;
+  background: rgba(234, 242, 255, 0.9);
+  color: var(--primary-strong);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.task-samples .task-sample-link:hover {
+  border-color: rgba(21, 94, 239, 0.32);
+  background: rgba(219, 233, 255, 0.96);
+}
+
 .task-resolution {
   display: grid;
   gap: 7px;

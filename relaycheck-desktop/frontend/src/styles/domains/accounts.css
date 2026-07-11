@@ -821,6 +821,23 @@
   color: var(--primary-strong);
 }
 
+/* #9 R2: browser session running indicator */
+.account-session-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 6px;
+  border: 1px solid rgba(15, 110, 234, 0.28);
+  border-radius: 999px;
+  background: rgba(239, 247, 255, 0.96);
+  color: var(--primary-strong);
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
 /* Layout β master-detail */
 .master-detail {
   display: grid;

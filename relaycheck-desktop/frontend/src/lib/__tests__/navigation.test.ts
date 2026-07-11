@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { actionItemNavigationIntent, siteAccountsNavigationIntent } from "../navigation";
+import {
+  actionItemNavigationIntent,
+  actionSampleNavigationIntent,
+  siteAccountsNavigationIntent,
+} from "../navigation";
 
 describe("actionItemNavigationIntent", () => {
   it("routes accounts with problem filter", () => {
@@ -107,5 +111,35 @@ describe("siteAccountsNavigationIntent", () => {
   it("preserves empty string site id (caller may normalize)", () => {
     const result = siteAccountsNavigationIntent("");
     expect(result).toEqual({ target: "sites", upstreamSiteId: "" });
+  });
+});
+
+describe("actionSampleNavigationIntent", () => {
+  it("deep-links site samples under unreachable-sites to sites master-detail", () => {
+    const result = actionSampleNavigationIntent(
+      { target: "sites", filter: "unreachable" },
+      { entityType: "site", entityId: "site-down" },
+    );
+    expect(result).toEqual({
+      target: "sites",
+      siteHealth: "unreachable",
+      upstreamSiteId: "site-down",
+    });
+  });
+
+  it("deep-links channel-health site samples to sites without forcing unreachable filter", () => {
+    const result = actionSampleNavigationIntent(
+      { target: "channels", filter: "health" },
+      { entityType: "site", entityId: "site-health-risk" },
+    );
+    expect(result).toEqual({ target: "sites", upstreamSiteId: "site-health-risk" });
+  });
+
+  it("falls back to parent intent when sample has no entity", () => {
+    const result = actionSampleNavigationIntent(
+      { target: "accounts", filter: "problem" },
+      { entityType: "", entityId: "" },
+    );
+    expect(result).toEqual({ target: "accounts", accountStatus: "problem" });
   });
 });

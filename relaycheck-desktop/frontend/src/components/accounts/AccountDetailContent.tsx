@@ -2,6 +2,8 @@ import { useState } from "react";
 
 import { api } from "@/api/client";
 import {
+  browserSessionOpenKind,
+  browserSessionRunningLabel,
   formatBrowserLoginOpenMessage,
   formatBrowserLoginSaveMessage,
   formatLoginStatusTestMessage,
@@ -11,6 +13,7 @@ import {
   RELOGIN_STEPS,
   reloginStepIndex,
   shouldShowReloginSteps,
+  type BrowserSessionOpenKind,
   type ReloginUiPhase,
 } from "@/lib/accountActions";
 import { formatBalanceValue, formatTime } from "@/lib/format";
@@ -29,6 +32,7 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
   const keyState = account.apiKeyFingerprint ? apiKeyStatusLabel(account.apiKeyStatus || "unchecked") : "未保存";
   const needsTwoFactor = account.loginStatus === "two_factor_required";
   const [reloginPhase, setReloginPhase] = useState<ReloginUiPhase>("idle");
+  const [sessionOpenKind, setSessionOpenKind] = useState<BrowserSessionOpenKind>(null);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const showReloginSteps = shouldShowReloginSteps(account.loginStatus, account.lastCheckinStatus, reloginPhase);
@@ -46,6 +50,7 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
       });
       if (isBrowserLoginOpenSuccess(result.status)) {
         setReloginPhase("browser_open");
+        setSessionOpenKind(browserSessionOpenKind(result.status));
       }
       setMessage(formatBrowserLoginOpenMessage(result));
     } catch (error) {
@@ -66,6 +71,7 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
       });
       if (isBrowserLoginSaveSuccess(result.status)) {
         setReloginPhase("auth_saved");
+        setSessionOpenKind(null);
       }
       setMessage(formatBrowserLoginSaveMessage(result));
     } catch (error) {
@@ -120,6 +126,12 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
               </span>
             );
           })}
+        </div>
+      ) : null}
+
+      {reloginPhase === "browser_open" ? (
+        <div className="account-session-chip" role="status" aria-live="polite">
+          {browserSessionRunningLabel(sessionOpenKind)}
         </div>
       ) : null}
 

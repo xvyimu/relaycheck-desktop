@@ -161,7 +161,13 @@ export type ActionItem = {
   filter?: string;
   action: string;
   recommendedAction?: string;
-  samples?: string[];
+  samples?: ActionSample[];
+};
+
+export type ActionSample = {
+  label: string;
+  entityType?: "site" | "account" | "channel" | string;
+  entityId?: string;
 };
 
 export type DetailDrawerKind = "account" | "channel" | "site";

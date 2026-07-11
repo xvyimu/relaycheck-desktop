@@ -3,6 +3,8 @@ import { api } from "@/api/client";
 import {
   accountActionButtonLabel,
   appendReloginHint,
+  browserSessionOpenKind,
+  browserSessionRunningLabel,
   formatBrowserLoginOpenMessage,
   formatBrowserLoginSaveMessage,
   formatLoginStatusTestMessage,
@@ -14,6 +16,7 @@ import {
   RELOGIN_STEPS,
   reloginStepIndex,
   shouldShowReloginSteps,
+  type BrowserSessionOpenKind,
   type PrimaryActionKey,
   type ReloginUiPhase,
 } from "@/lib/accountActions";
@@ -37,6 +40,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
   const [showTwoFactorGuide, setShowTwoFactorGuide] = useState(false);
   const [dismissedTwoFactor, setDismissedTwoFactor] = useState(false);
   const [reloginPhase, setReloginPhase] = useState<ReloginUiPhase>("idle");
+  const [sessionOpenKind, setSessionOpenKind] = useState<BrowserSessionOpenKind>(null);
   const [displayName, setDisplayName] = useState(account.displayName);
   const [siteName, setSiteName] = useState(account.upstreamSiteName);
   const [baseUrl, setBaseUrl] = useState(account.upstreamSiteBaseUrl || "");
@@ -79,6 +83,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
 
   useEffect(() => {
     setReloginPhase("idle");
+    setSessionOpenKind(null);
     setMessage("");
     setMoreOpen(false);
   }, [account.id]);
@@ -112,6 +117,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
         });
         if (isBrowserLoginOpenSuccess(result.status)) {
           setReloginPhase("browser_open");
+          setSessionOpenKind(browserSessionOpenKind(result.status));
         }
         return result;
       },
@@ -128,6 +134,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
         });
         if (isBrowserLoginSaveSuccess(result.status)) {
           setReloginPhase("auth_saved");
+          setSessionOpenKind(null);
         }
         return result;
       },
@@ -306,6 +313,12 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
               </span>
             );
           })}
+        </div>
+      ) : null}
+
+      {reloginPhase === "browser_open" ? (
+        <div className="account-session-chip" role="status" aria-live="polite">
+          {browserSessionRunningLabel(sessionOpenKind)}
         </div>
       ) : null}
 

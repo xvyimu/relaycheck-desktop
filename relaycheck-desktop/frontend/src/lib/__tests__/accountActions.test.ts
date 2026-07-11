@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   accountActionButtonLabel,
   appendReloginHint,
+  browserSessionOpenKind,
+  browserSessionRunningLabel,
   formatBrowserLoginOpenMessage,
   formatBrowserLoginSaveMessage,
   formatLoginStatusTestMessage,
@@ -122,6 +124,16 @@ describe("relogin state machine helpers", () => {
     expect(isBrowserLoginOpenSuccess("failed")).toBe(false);
     expect(isBrowserLoginSaveSuccess("saved")).toBe(true);
     expect(isLoginStatusValid("valid")).toBe(true);
+  });
+
+  it("labels browser session running chip for R2", () => {
+    expect(browserSessionOpenKind("already_open")).toBe("already_open");
+    expect(browserSessionOpenKind("opened")).toBe("opened");
+    expect(browserSessionOpenKind("failed")).toBe(null);
+    expect(browserSessionRunningLabel("already_open")).toMatch(/窗口已在运行/);
+    expect(browserSessionRunningLabel("already_open")).toMatch(/保存授权/);
+    expect(browserSessionRunningLabel("opened")).toMatch(/登录窗口已打开/);
+    expect(browserSessionRunningLabel("opened")).not.toMatch(/关闭 2FA/);
   });
 
   it("detects auth-ish failures and appends relogin hint once", () => {

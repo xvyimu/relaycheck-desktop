@@ -1,7 +1,7 @@
 # #9 会话重登方案（签到 / 余额）
 
 **日期：** 2026-07-11  
-**状态：** 首期已实现（9.1–9.5 前端）· 阶段 2 仍搁置  
+**状态：** 首期已实现（9.1–9.6 + R2/9.3 会话指示）· Phase 2 批量向导已落地 · 其余阶段 2 项另案  
 **范围：** 上游站账号登录态失效后的 **可重复人工闭环**（打开网页登录 → 保存授权 → 测登录态 → 签到/余额）  
 **关联：**  
 - 既有设计：`2026-07-03-login-flow-usable-loop-design.md`、`2026-07-04-checkin-login-execution-seam-design.md`  
@@ -219,8 +219,10 @@ states:
 | 日期 | 说明 |
 |------|------|
 | 2026-07-11 | 初稿：对齐现网 BrowserLogin/AccountCard 与 07-03 闭环设计；明确非自动登录；docs-only |
+| 2026-07-11 | R2/9.3 会话指示落地：browser_open 阶段 chip；BulkReloginWizard + 详情重登 |
 
 ## Implementation note (2026-07-11)
 
 - Phase 2: BulkReloginWizard on Accounts tab; detail drawer re-login steps/CTAs in AccountDetailContent.
+- R2 / 9.3: while `reloginPhase === browser_open`, AccountCard + AccountDetailContent show session chip via `browserSessionOpenKind` / `browserSessionRunningLabel` (`opened` vs `already_open`); cleared on successful save.
 - Still **no** auto-login / 2FA bypass.

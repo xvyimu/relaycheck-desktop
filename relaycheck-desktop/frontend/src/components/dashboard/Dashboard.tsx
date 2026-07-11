@@ -10,10 +10,11 @@ import type { OpsHealthState } from "@/hooks/useOpsHealth";
 import { useSchedulerPreview } from "@/hooks/useSchedulerPreview";
 import type { SystemOverviewState } from "@/hooks/useSystemOverview";
 import { formatDuration, formatTime } from "@/lib/format";
-import { actionItemNavigationIntent } from "@/lib/navigation";
+import { actionItemNavigationIntent, actionSampleNavigationIntent } from "@/lib/navigation";
 import { statusTone, toneBadgeVariant } from "@/lib/tone";
 import type {
   ActionItem,
+  ActionSample,
   NavigationIntent,
   TabKey,
 } from "@/types";
@@ -103,6 +104,16 @@ function actionCenterSubtitle(items: ActionItem[]) {
 
 function navigateAction(onNavigate: DashboardProps["onNavigate"], item: ActionItem) {
   const intent = actionItemNavigationIntent(item);
+  const { target, ...nextIntent } = intent;
+  onNavigate(target, nextIntent);
+}
+
+function navigateActionSample(
+  onNavigate: DashboardProps["onNavigate"],
+  item: ActionItem,
+  sample: ActionSample,
+) {
+  const intent = actionSampleNavigationIntent(item, sample);
   const { target, ...nextIntent } = intent;
   onNavigate(target, nextIntent);
 }
@@ -224,9 +235,22 @@ function DashboardBase({
                 </div>
                 {item.samples?.length ? (
                   <div className="task-samples">
-                    {item.samples.slice(0, 3).map((sample) => (
-                      <span key={sample}>{sample}</span>
-                    ))}
+                    {item.samples.slice(0, 3).map((sample) => {
+                      const clickable = Boolean(sample.entityType && sample.entityId);
+                      if (clickable) {
+                        return (
+                          <button
+                            key={`${sample.entityType}:${sample.entityId}:${sample.label}`}
+                            type="button"
+                            className="task-sample-link"
+                            onClick={() => navigateActionSample(onNavigate, item, sample)}
+                          >
+                            {sample.label}
+                          </button>
+                        );
+                      }
+                      return <span key={sample.label}>{sample.label}</span>;
+                    })}
                   </div>
                 ) : null}
                 <em>{item.recommendedAction || item.action}</em>

@@ -41,6 +41,7 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 		recommendedAction string
 		countSQL          string
 		sampleSQL         string
+		sampleEntityType  string // empty = label-only; site|account|channel = id+label
 		args              []interface{}
 	}
 	queries := []actionQuery{
@@ -179,7 +180,7 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 				        AND COALESCE(a.api_key_status,'unchecked') NOT IN ('valid','unchecked','untested','')
 				    )
 				  )`,
-			sampleSQL: `SELECT s.name || ' · ' || s.health_status FROM upstream_sites s
+			sampleSQL: `SELECT s.id, s.name || ' · ' || s.health_status FROM upstream_sites s
 				WHERE s.id <> ?
 				  AND (
 				    s.health_status IN ('unreachable','down','failed','error')
@@ -198,6 +199,7 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 				    )
 				  )
 				ORDER BY s.updated_at DESC LIMIT 4`,
+			sampleEntityType:  "site",
 			args: []interface{}{globalScheduleSiteID},
 		},
 		{
@@ -228,7 +230,8 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 			action:            "进入上游站点页重新识别，或检查网络、域名、防火墙。",
 			recommendedAction: "先重跑站点探测；持续不可达时暂停相关账号的自动任务。",
 			countSQL:          `SELECT COUNT(*) FROM upstream_sites WHERE health_status='unreachable'`,
-			sampleSQL:         `SELECT name || ' · ' || base_url FROM upstream_sites WHERE health_status='unreachable' ORDER BY updated_at DESC LIMIT 4`,
+			sampleSQL:         `SELECT id, name || ' · ' || base_url FROM upstream_sites WHERE health_status='unreachable' ORDER BY updated_at DESC LIMIT 4`,
+			sampleEntityType:  "site",
 		},
 		{
 			id:                "unread-notifications",
@@ -255,7 +258,7 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 		if count <= 0 {
 			continue
 		}
-		samples, err := a.queryActionSamples(r, query.sampleSQL, query.args)
+		samples, err := a.queryActionSamples(r, query.sampleSQL, query.args, query.sampleEntityType)
 		if err != nil {
 			return ActionCenter{}, err
 		}
@@ -322,7 +325,7 @@ func (a *App) buildSetupActionItems(r *http.Request) ([]ActionItem, error) {
 			Target:            "scan",
 			Action:            "进入本机扫描页，扫描常见端口或手动填写 NewAPI 后台地址。",
 			RecommendedAction: "优先扫描本机 3000/3001/8080/9999/3010 等端口；如果服务在其他端口，手动填写地址。",
-			Samples:           []string{"下一步：扫描或保存 NewAPI 实例"},
+			Samples:           []ActionSample{{Label: "下一步：扫描或保存 NewAPI 实例"}},
 		}}, nil
 	case counts.channels == 0:
 		return []ActionItem{{
@@ -338,7 +341,7 @@ func (a *App) buildSetupActionItems(r *http.Request) ([]ActionItem, error) {
 			Filter:            "import",
 			Action:            "在本机扫描页选择已发现实例，使用后台 API 或 SQLite 只读导入 channels。",
 			RecommendedAction: "优先使用后台 API 导入；没有访问令牌时使用 SQLite 数据库路径导入。",
-			Samples:           []string{"下一步：导入 channels"},
+			Samples:           []ActionSample{{Label: "下一步：导入 channels"}},
 		}}, nil
 	case counts.accounts == 0:
 		return []ActionItem{{
@@ -354,7 +357,7 @@ func (a *App) buildSetupActionItems(r *http.Request) ([]ActionItem, error) {
 			Filter:            "all",
 			Action:            "进入账号页，为至少一个站点添加邮箱密码、API Key 或浏览器授权会话。",
 			RecommendedAction: "先添加一个低风险测试账号，确认登录态和 Key 检测可用后再批量导入。",
-			Samples:           []string{"下一步：添加第一个账号"},
+			Samples:           []ActionSample{{Label: "下一步：添加第一个账号"}},
 		}}, nil
 	case counts.checkinLogs == 0:
 		return []ActionItem{{
@@ -370,7 +373,7 @@ func (a *App) buildSetupActionItems(r *http.Request) ([]ActionItem, error) {
 			Filter:            "all",
 			Action:            "进入签到页，先运行 dry-run 预览，再触发一次真实签到验证。",
 			RecommendedAction: "先检查 dry-run 结果中的跳过和失败项；确认无误后再运行真实签到。",
-			Samples:           []string{"下一步：dry-run 预览签到任务"},
+			Samples:           []ActionSample{{Label: "下一步：dry-run 预览签到任务"}},
 		}}, nil
 	default:
 		return nil, nil
@@ -383,21 +386,37 @@ func (a *App) queryActionCount(r *http.Request, query string, args []interface{}
 	return count, err
 }
 
-func (a *App) queryActionSamples(r *http.Request, query string, args []interface{}) ([]string, error) {
+func (a *App) queryActionSamples(r *http.Request, query string, args []interface{}, entityType string) ([]ActionSample, error) {
 	rows, err := a.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	samples := []string{}
+	samples := []ActionSample{}
+	entityType = strings.TrimSpace(entityType)
 	for rows.Next() {
-		var sample string
-		if err := rows.Scan(&sample); err != nil {
+		if entityType == "" {
+			var label string
+			if err := rows.Scan(&label); err != nil {
+				return nil, err
+			}
+			if strings.TrimSpace(label) != "" {
+				samples = append(samples, ActionSample{Label: label})
+			}
+			continue
+		}
+		var id, label string
+		if err := rows.Scan(&id, &label); err != nil {
 			return nil, err
 		}
-		if strings.TrimSpace(sample) != "" {
-			samples = append(samples, sample)
+		if strings.TrimSpace(label) == "" {
+			continue
 		}
+		samples = append(samples, ActionSample{
+			Label:      label,
+			EntityType: entityType,
+			EntityID:   strings.TrimSpace(id),
+		})
 	}
 	// Surface iteration errors (context cancellation, decode failures) that
 	// would otherwise be silently dropped.

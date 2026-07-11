@@ -1,4 +1,4 @@
-import type { ActionItem, NavigationIntent, TabKey } from "@/types";
+import type { ActionItem, ActionSample, NavigationIntent, TabKey } from "@/types";
 
 type NavigableAction = Pick<ActionItem, "target" | "filter">;
 
@@ -43,4 +43,30 @@ export function siteAccountsNavigationIntent(
     target: "sites",
     upstreamSiteId,
   };
+}
+
+/**
+ * Deep-link from an Action Center sample row.
+ * Site samples open Sites master-detail with that site selected (and keep list filter when known).
+ * Other samples fall back to the parent action item intent.
+ */
+export function actionSampleNavigationIntent(
+  item: NavigableAction,
+  sample: Pick<ActionSample, "entityType" | "entityId">,
+): NavigationIntent {
+  const entityType = (sample.entityType || "").toLowerCase();
+  const entityId = (sample.entityId || "").trim();
+  if (entityType === "site" && entityId) {
+    const base = actionItemNavigationIntent(item);
+    if (base.target === "sites") {
+      return { ...base, upstreamSiteId: entityId };
+    }
+    // channel-health and similar land on channels filter, but sample is a site id —
+    // prefer sites master-detail so the operator can act on the site immediately.
+    if (item.filter === "unreachable") {
+      return { target: "sites", upstreamSiteId: entityId, siteHealth: "unreachable" };
+    }
+    return { target: "sites", upstreamSiteId: entityId };
+  }
+  return actionItemNavigationIntent(item);
 }
