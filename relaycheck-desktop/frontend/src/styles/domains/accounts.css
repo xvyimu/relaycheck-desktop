@@ -1158,3 +1158,21 @@
   font-size: 12px;
   font-weight: 750;
 }
+
+.local-newapi-exclude-rules ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.local-newapi-exclude-rules code {
+  margin-right: 0.5rem;
+}
+.local-newapi-last-sync {
+  margin: 0.35rem 0;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+.local-newapi-last-sync.muted {
+  opacity: 0.65;
+}

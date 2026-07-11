@@ -54,6 +54,7 @@ func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/local-newapi/import-from-sqlite", a.requireSession(a.handleImportFromSQLite))
 	mux.HandleFunc("/api/local-newapi/import-from-admin-api", a.requireSession(a.handleImportFromAdminAPI))
 	mux.HandleFunc("/api/local-newapi/auto-detect-import", a.requireSession(a.handleAutoDetectAndImport))
+	mux.HandleFunc("/api/local-newapi/exclude-rules", a.requireSession(a.handleLocalNewAPIExcludeRules))
 	mux.HandleFunc("/api/local-newapi/", a.requireSession(a.handleLocalNewAPIInstanceByID))
 	mux.HandleFunc("/api/channels", a.requireSession(a.handleChannels))
 	mux.HandleFunc("/api/channels/bulk-source-status", a.requireSession(a.handleBulkChannelSourceSyncStatus))

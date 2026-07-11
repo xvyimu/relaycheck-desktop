@@ -9,6 +9,14 @@ export type ImportCounters = {
   sitesMerged?: number;
   detectedCount?: number;
   syncTokenSaved?: boolean;
+  lastSyncAt?: string;
+  lastSyncSummary?: string;
+  skippedExcludedSamples?: Array<{
+    sourceChannelId?: string;
+    name?: string;
+    matchedToken?: string;
+  }>;
+  skippedExcludedTruncated?: boolean;
   message?: string;
 };
 
@@ -106,4 +114,22 @@ export function instanceNeedsCredential(instance: {
   if (instance.hasSyncToken) return false;
   const kind = normalizeSyncCapability(instance.syncCapability);
   return kind !== "sqlite";
+}
+
+/** Short audit line for excluded samples (no secrets). */
+export function formatExcludedSamplesHint(
+  samples?: ImportCounters["skippedExcludedSamples"],
+  truncated?: boolean,
+): string {
+  if (!samples?.length) return "";
+  const preview = samples
+    .slice(0, 5)
+    .map((item) => {
+      const name = (item.name || item.sourceChannelId || "?").trim();
+      const token = (item.matchedToken || "").trim();
+      return token ? `${name}→${token}` : name;
+    })
+    .join("；");
+  const more = truncated || samples.length > 5 ? "（列表已截断）" : "";
+  return `排除样例：${preview}${more}`;
 }

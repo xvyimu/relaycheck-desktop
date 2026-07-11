@@ -2,13 +2,14 @@ import { memo, useCallback, useEffect, useState } from "react";
 
 import { api } from "@/api/client";
 import {
+  formatExcludedSamplesHint,
   formatImportCountersMessage,
   instanceNeedsCredential,
   syncCapabilityLabel,
   syncTokenStatusLabel,
   type ImportCounters,
 } from "@/lib/syncFeedback";
-import type { LocalNewAPIInstance } from "@/types";
+import type { ExcludedRelaySiteRule, LocalNewAPIInstance } from "@/types";
 
 export type LocalNewAPISyncPanelProps = {
   onRefresh: () => Promise<void>;
@@ -27,6 +28,9 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
   const [tokenDrafts, setTokenDrafts] = useState<Record<string, string>>({});
   const [messages, setMessages] = useState<Record<string, SyncResultMessage>>({});
   const [listError, setListError] = useState("");
+  const [excludeRules, setExcludeRules] = useState<ExcludedRelaySiteRule[]>([]);
+  const [excludeNote, setExcludeNote] = useState("");
+  const [showRules, setShowRules] = useState(false);
 
   const loadInstances = useCallback(async () => {
     setLoading(true);
@@ -42,9 +46,23 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
     }
   }, []);
 
+  const loadExcludeRules = useCallback(async () => {
+    try {
+      const result = await api<{ rules?: ExcludedRelaySiteRule[]; note?: string }>(
+        "/api/local-newapi/exclude-rules",
+      );
+      setExcludeRules(Array.isArray(result.rules) ? result.rules : []);
+      setExcludeNote(result.note || "");
+    } catch {
+      setExcludeRules([]);
+      setExcludeNote("");
+    }
+  }, []);
+
   useEffect(() => {
     void loadInstances();
-  }, [loadInstances]);
+    void loadExcludeRules();
+  }, [loadInstances, loadExcludeRules]);
 
   function setMessage(instanceId: string, level: SyncResultMessage["level"], text: string) {
     setMessages((current) => ({
@@ -74,6 +92,10 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
         },
       );
       const text = formatImportCountersMessage(result);
+      const sampleHint = formatExcludedSamplesHint(
+        result.skippedExcludedSamples,
+        result.skippedExcludedTruncated,
+      );
       const level =
         (result.importedCount ?? 0) > 0
           ? "success"
@@ -82,7 +104,7 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
             : (result.fetchedCount ?? 0) === 0
               ? "info"
               : "warning";
-      setMessage(instance.id, level, text);
+      setMessage(instance.id, level, sampleHint ? `${text} ${sampleHint}` : text);
       if (draft) {
         setTokenDrafts((current) => ({ ...current, [instance.id]: "" }));
       }
@@ -110,19 +132,48 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
         <div>
           <strong>NewAPI 实例同步</strong>
           <p>
-            展示同步能力、访问令牌状态与结果计数。渠道同步使用系统访问令牌或本机数据库路径，
+            展示同步能力、访问令牌状态、上次同步摘要与排除样例。渠道同步使用系统访问令牌或本机数据库路径，
             与账号网页登录 / 2FA 无关。
           </p>
         </div>
-        <button
-          type="button"
-          className="ghost"
-          disabled={loading || Boolean(busyId)}
-          onClick={() => void loadInstances()}
-        >
-          {loading ? "刷新中…" : "刷新实例"}
-        </button>
+        <div className="toolbar">
+          <button
+            type="button"
+            className="ghost"
+            disabled={loading || Boolean(busyId)}
+            onClick={() => setShowRules((current) => !current)}
+          >
+            {showRules ? "收起排除规则" : "排除规则"}
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            disabled={loading || Boolean(busyId)}
+            onClick={() => void loadInstances()}
+          >
+            {loading ? "刷新中…" : "刷新实例"}
+          </button>
+        </div>
       </div>
+
+      {showRules ? (
+        <div className="card local-newapi-exclude-rules" data-testid="exclude-rules">
+          <strong>排除规则（只读）</strong>
+          <p>
+            {excludeNote ||
+              "同步时若渠道名称或 BaseURL 包含下列关键字则跳过导入，不视为失败。"}
+          </p>
+          <ul>
+            {excludeRules.map((rule) => (
+              <li key={rule.token}>
+                <code>{rule.token}</code>
+                <span>{rule.description}</span>
+              </li>
+            ))}
+          </ul>
+          {!excludeRules.length ? <span className="note">暂无规则数据</span> : null}
+        </div>
+      ) : null}
 
       {listError ? <div className="error">{listError}</div> : null}
 
@@ -156,6 +207,15 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
               <p className="local-newapi-hint">
                 {syncTokenStatusLabel(instance.hasSyncToken, instance.syncCapability)}
               </p>
+
+              {instance.lastSyncSummary ? (
+                <p className="local-newapi-last-sync" title={instance.lastSyncAt || ""}>
+                  上次同步{instance.lastSyncAt ? `（${instance.lastSyncAt}）` : ""}：
+                  {instance.lastSyncSummary}
+                </p>
+              ) : (
+                <p className="local-newapi-last-sync muted">尚无同步摘要</p>
+              )}
 
               {instance.databasePath ? (
                 <p className="local-newapi-db">数据库路径已配置（本地同步）</p>

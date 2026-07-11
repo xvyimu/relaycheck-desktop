@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -13,6 +14,7 @@ func (s *Service) ListLocalNewAPIInstances(ctx context.Context) ([]LocalNewAPIIn
 	rows, err := s.infra.DB().QueryContext(ctx, `
 		SELECT i.id, i.name, i.base_url, COALESCE(i.detected_from,''), i.status,
 		       COALESCE(i.version,''), COALESCE(i.database_path,''), COALESCE(i.last_scanned_at,''),
+		       COALESCE(i.last_sync_at,''), COALESCE(i.last_sync_summary,''),
 		       COALESCE(i.sync_access_token_masked,''), i.created_at, i.updated_at,
 		       (SELECT COUNT(*) FROM imported_channels c WHERE c.local_instance_id = i.id)
 		FROM local_newapi_instances i
@@ -26,7 +28,7 @@ func (s *Service) ListLocalNewAPIInstances(ctx context.Context) ([]LocalNewAPIIn
 	items := []LocalNewAPIInstance{}
 	for rows.Next() {
 		var item LocalNewAPIInstance
-		if err := rows.Scan(&item.ID, &item.Name, &item.BaseURL, &item.DetectedFrom, &item.Status, &item.Version, &item.DatabasePath, &item.LastScannedAt, &item.SyncTokenMasked, &item.CreatedAt, &item.UpdatedAt, &item.ChannelCount); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.BaseURL, &item.DetectedFrom, &item.Status, &item.Version, &item.DatabasePath, &item.LastScannedAt, &item.LastSyncAt, &item.LastSyncSummary, &item.SyncTokenMasked, &item.CreatedAt, &item.UpdatedAt, &item.ChannelCount); err != nil {
 			return nil, err
 		}
 		item.HasSyncToken = strings.TrimSpace(item.SyncTokenMasked) != ""
@@ -79,6 +81,9 @@ func (s *Service) SyncLocalNewAPIInstanceData(ctx context.Context, id string, in
 	}
 	result["synced"] = true
 	result["sourceInstanceId"] = id
+	if err := s.SaveLocalNewAPILastSyncSummary(ctx, id, result); err != nil {
+		result["lastSyncPersistError"] = err.Error()
+	}
 	return result, nil
 }
 
@@ -88,10 +93,11 @@ func (s *Service) GetLocalNewAPIInstance(ctx context.Context, id string) (LocalN
 	err := s.infra.DB().QueryRowContext(ctx, `
 		SELECT id, name, base_url, COALESCE(detected_from,''), status,
 		       COALESCE(version,''), COALESCE(database_path,''), COALESCE(last_scanned_at,''),
+		       COALESCE(last_sync_at,''), COALESCE(last_sync_summary,''),
 		       COALESCE(sync_access_token_encrypted,''), COALESCE(sync_access_token_masked,''), created_at, updated_at
 		FROM local_newapi_instances
 		WHERE id = ?
-	`, id).Scan(&instance.ID, &instance.Name, &instance.BaseURL, &instance.DetectedFrom, &instance.Status, &instance.Version, &instance.DatabasePath, &instance.LastScannedAt, &instance.SyncTokenEncrypted, &instance.SyncTokenMasked, &instance.CreatedAt, &instance.UpdatedAt)
+	`, id).Scan(&instance.ID, &instance.Name, &instance.BaseURL, &instance.DetectedFrom, &instance.Status, &instance.Version, &instance.DatabasePath, &instance.LastScannedAt, &instance.LastSyncAt, &instance.LastSyncSummary, &instance.SyncTokenEncrypted, &instance.SyncTokenMasked, &instance.CreatedAt, &instance.UpdatedAt)
 	if err == nil {
 		instance.HasSyncToken = strings.TrimSpace(instance.SyncTokenMasked) != ""
 		instance.SyncCapability = syncCapability(instance)
@@ -153,4 +159,59 @@ func (s *Service) BaseURLForAutoDetectedDB(ctx context.Context, dbPath string) s
 		return baseURL
 	}
 	return baseURLFromDBPath(cleanPath)
+}
+
+// SaveLocalNewAPILastSyncSummary persists a no-secret sync summary on the instance row.
+func (s *Service) SaveLocalNewAPILastSyncSummary(ctx context.Context, instanceID string, result map[string]interface{}) error {
+	summary := FormatLastSyncSummary(result)
+	now := s.infra.Now()
+	result["lastSyncSummary"] = summary
+	result["lastSyncAt"] = now
+	_, err := s.infra.DB().ExecContext(ctx, `
+		UPDATE local_newapi_instances
+		SET last_sync_at=?, last_sync_summary=?, updated_at=?
+		WHERE id=?
+	`, now, summary, now, instanceID)
+	return err
+}
+
+// FormatLastSyncSummary builds a short Chinese summary without secrets/tokens.
+func FormatLastSyncSummary(result map[string]interface{}) string {
+	fetched := intFromAny(result["fetchedCount"])
+	imported := intFromAny(result["importedCount"])
+	skippedExcluded := intFromAny(result["skippedExcluded"])
+	skippedNoBase := intFromAny(result["skippedNoBaseURL"])
+	sitesCreated := intFromAny(result["sitesCreated"])
+	sitesMerged := intFromAny(result["sitesMerged"])
+	parts := make([]string, 0, 6)
+	parts = append(parts, "拉取 "+strconv.Itoa(fetched))
+	parts = append(parts, "导入 "+strconv.Itoa(imported))
+	if skippedExcluded > 0 {
+		parts = append(parts, "排除 "+strconv.Itoa(skippedExcluded))
+	}
+	if skippedNoBase > 0 {
+		parts = append(parts, "无地址 "+strconv.Itoa(skippedNoBase))
+	}
+	if sitesCreated > 0 {
+		parts = append(parts, "新建站 "+strconv.Itoa(sitesCreated))
+	}
+	if sitesMerged > 0 {
+		parts = append(parts, "合并站 "+strconv.Itoa(sitesMerged))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func intFromAny(v interface{}) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	case float32:
+		return int(n)
+	default:
+		return 0
+	}
 }

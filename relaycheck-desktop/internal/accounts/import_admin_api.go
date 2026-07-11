@@ -46,6 +46,8 @@ func (s *Service) ImportChannelsFromAdminAPIWithOptions(ctx context.Context, raw
 	sitesCreated := 0
 	sitesMerged := 0
 	detected := 0
+	excludedSamples := make([]ExcludedChannelSample, 0, 8)
+	excludedTruncated := false
 	for page := 0; page < 200; page++ {
 		items, err := s.fetchAdminAPIChannels(ctx, baseURL, accessToken, userID, page, pageSize)
 		if err != nil {
@@ -63,6 +65,15 @@ func (s *Service) ImportChannelsFromAdminAPIWithOptions(ctx context.Context, raw
 			switch outcome.Skip {
 			case importSkipExcluded:
 				skippedExcluded++
+				if len(excludedSamples) < MaxExcludedSamples {
+					excludedSamples = append(excludedSamples, ExcludedChannelSample{
+						SourceChannelID: outcome.SourceChannelID,
+						Name:            outcome.Name,
+						MatchedToken:    outcome.MatchedToken,
+					})
+				} else {
+					excludedTruncated = true
+				}
 			case importSkipNone:
 				imported++
 				if outcome.NoBaseURL {
@@ -86,7 +97,7 @@ func (s *Service) ImportChannelsFromAdminAPIWithOptions(ctx context.Context, raw
 	if notify {
 		s.infra.Notify("channels_imported", "success", "NewAPI 后台导入完成", fmt.Sprintf("从 %s 导入 %d 条渠道（拉取 %d，排除 %d，无地址 %d），生成 %d 个站点，合并 %d 个站点。", baseURL, imported, fetched, skippedExcluded, skippedNoBaseURL, sitesCreated, sitesMerged), "local_newapi_instance", instanceID)
 	}
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"instanceId":       instanceID,
 		"fetchedCount":     fetched,
 		"importedCount":    imported,
@@ -95,7 +106,12 @@ func (s *Service) ImportChannelsFromAdminAPIWithOptions(ctx context.Context, raw
 		"sitesCreated":     sitesCreated,
 		"sitesMerged":      sitesMerged,
 		"detectedCount":    detected,
-	}, nil
+	}
+	if len(excludedSamples) > 0 {
+		result["skippedExcludedSamples"] = excludedSamples
+		result["skippedExcludedTruncated"] = excludedTruncated
+	}
+	return result, nil
 }
 
 // fetchAdminAPIChannels fetches one page of channels from the NewAPI admin API.
@@ -157,12 +173,15 @@ const (
 
 // importChannelOutcome is the structured result of importing one channel record.
 type importChannelOutcome struct {
-	ChannelID string
-	Created   bool
-	Merged    bool
-	DidDetect bool
-	NoBaseURL bool
-	Skip      importSkipReason
+	ChannelID       string
+	SourceChannelID string
+	Name            string
+	Created         bool
+	Merged          bool
+	DidDetect       bool
+	NoBaseURL       bool
+	Skip            importSkipReason
+	MatchedToken    string
 }
 
 // importChannelRecordOutcome inserts/updates a single imported_channels row and
@@ -178,8 +197,11 @@ func (s *Service) importChannelRecordOutcome(ctx context.Context, instanceID str
 		name = "渠道 " + sourceID
 	}
 	channelBaseURL := extractImportedBaseURL(record)
-	if isExcludedRelaySite(name, channelBaseURL) {
+	out.SourceChannelID = sourceID
+	out.Name = name
+	if token, matched := excludedRelaySiteMatch(name, channelBaseURL); matched {
 		out.Skip = importSkipExcluded
+		out.MatchedToken = token
 		return out, nil
 	}
 	if channelBaseURL == "" {

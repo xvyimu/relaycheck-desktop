@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatExcludedSamplesHint,
   formatImportCountersMessage,
   instanceNeedsCredential,
   normalizeSyncCapability,
@@ -42,5 +43,18 @@ describe("syncFeedback", () => {
     const label = syncTokenStatusLabel(false, "admin_api");
     expect(label).toMatch(/系统访问令牌|数据库路径/);
     expect(label).not.toMatch(/关闭 2FA/);
+  });
+
+  it("formats excluded sample hints without secrets", () => {
+    const hint = formatExcludedSamplesHint(
+      [
+        { sourceChannelId: "2", name: "9router free", matchedToken: "9router" },
+        { sourceChannelId: "3", name: "tokenrouter", matchedToken: "tokenrouter" },
+      ],
+      false,
+    );
+    expect(hint).toMatch(/排除样例/);
+    expect(hint).toMatch(/9router/);
+    expect(hint).not.toMatch(/关闭 2FA/);
   });
 });

@@ -408,6 +408,52 @@ var excludedRelaySiteTokens = []string{
 	"token router",
 }
 
+// ExcludedChannelSample is a truncated audit record for channels skipped by
+// exclusion rules during import/sync. Never includes keys or tokens.
+type ExcludedChannelSample struct {
+	SourceChannelID string `json:"sourceChannelId"`
+	Name            string `json:"name"`
+	MatchedToken    string `json:"matchedToken"`
+}
+
+// ExcludedRelaySiteRuleSummary is a privacy-safe description of one exclusion
+// token used by isExcludedRelaySite. Token text is the literal substring match
+// (lowercased matching against name+url); no secrets.
+type ExcludedRelaySiteRuleSummary struct {
+	Token       string `json:"token"`
+	Description string `json:"description"`
+}
+
+// ListExcludedRelaySiteRules returns the current exclusion rule tokens with
+// short Chinese descriptions for the diagnostics / settings UI.
+func ListExcludedRelaySiteRules() []ExcludedRelaySiteRuleSummary {
+	out := make([]ExcludedRelaySiteRuleSummary, 0, len(excludedRelaySiteTokens))
+	for _, token := range excludedRelaySiteTokens {
+		out = append(out, ExcludedRelaySiteRuleSummary{
+			Token:       token,
+			Description: excludedRelayTokenDescription(token),
+		})
+	}
+	return out
+}
+
+func excludedRelayTokenDescription(token string) string {
+	switch strings.ToLower(strings.TrimSpace(token)) {
+	case "9router":
+		return "名称或网址包含 9router 的中继站"
+	case "freemodel", "free model":
+		return "名称或网址包含 freemodel / free model 的免费模型聚合"
+	case "tokenrouter", "token router":
+		return "名称或网址包含 tokenrouter / token router 的路由站"
+	default:
+		return "名称或网址包含该关键字的中继站"
+	}
+}
+
+// MaxExcludedSamples is the max number of excluded channel samples returned
+// in a single import/sync response (truncation for payload size).
+const MaxExcludedSamples = 50
+
 // isExcludedRelaySite reports whether name/baseURL matches an excluded token.
 func isExcludedRelaySite(name string, baseURL string) bool {
 	_, matched := excludedRelaySiteMatch(name, baseURL)

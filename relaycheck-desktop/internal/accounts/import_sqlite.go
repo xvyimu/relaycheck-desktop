@@ -68,6 +68,8 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 	sitesCreated := 0
 	sitesMerged := 0
 	detected := 0
+	excludedSamples := make([]ExcludedChannelSample, 0, 8)
+	excludedTruncated := false
 	for rows.Next() {
 		values := make([]interface{}, len(columns))
 		dest := make([]interface{}, len(columns))
@@ -91,6 +93,15 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 		switch outcome.Skip {
 		case importSkipExcluded:
 			skippedExcluded++
+			if len(excludedSamples) < MaxExcludedSamples {
+				excludedSamples = append(excludedSamples, ExcludedChannelSample{
+					SourceChannelID: outcome.SourceChannelID,
+					Name:            outcome.Name,
+					MatchedToken:    outcome.MatchedToken,
+				})
+			} else {
+				excludedTruncated = true
+			}
 		case importSkipNone:
 			imported++
 			if outcome.NoBaseURL {
@@ -114,7 +125,7 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 	if notify {
 		s.infra.Notify("channels_imported", "success", "渠道导入完成", fmt.Sprintf("从 SQLite 导入 %d 条渠道（拉取 %d，排除 %d，无地址 %d），生成 %d 个站点，合并 %d 个站点。", imported, fetched, skippedExcluded, skippedNoBaseURL, sitesCreated, sitesMerged), "local_newapi_instance", instanceID)
 	}
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"instanceId":       instanceID,
 		"fetchedCount":     fetched,
 		"importedCount":    imported,
@@ -123,7 +134,12 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 		"sitesCreated":     sitesCreated,
 		"sitesMerged":      sitesMerged,
 		"detectedCount":    detected,
-	}, nil
+	}
+	if len(excludedSamples) > 0 {
+		result["skippedExcludedSamples"] = excludedSamples
+		result["skippedExcludedTruncated"] = excludedTruncated
+	}
+	return result, nil
 }
 
 // readSQLiteChannelRecords reads all rows from the channels table of a local

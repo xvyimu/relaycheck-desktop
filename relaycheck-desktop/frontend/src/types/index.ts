@@ -316,7 +316,20 @@ export type LocalNewAPIInstance = {
   hasSyncToken: boolean;
   syncTokenMasked?: string;
   lastScannedAt?: string;
+  lastSyncAt?: string;
+  lastSyncSummary?: string;
   syncCapability: string;
+};
+
+export type ExcludedChannelSample = {
+  sourceChannelId: string;
+  name: string;
+  matchedToken: string;
+};
+
+export type ExcludedRelaySiteRule = {
+  token: string;
+  description: string;
 };
 
 export type SyncPreviewItem = {

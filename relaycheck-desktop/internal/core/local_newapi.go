@@ -125,6 +125,17 @@ func (a *App) updateLocalNewAPISyncToken(ctx context.Context, instanceID string,
 	return a.accountsService.UpdateLocalNewAPISyncToken(ctx, instanceID, token, save, clear)
 }
 
+func (a *App) handleLocalNewAPIExcludeRules(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodGet) {
+		return
+	}
+	rules := accounts.ListExcludedRelaySiteRules()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"rules": rules,
+		"note":  "同步时若渠道名称或 BaseURL 包含下列关键字（不区分大小写子串）则跳过导入，不视为失败。",
+	})
+}
+
 // localNewAPIInstanceFromMirror converts an accounts.LocalNewAPIInstance back
 // to core.LocalNewAPIInstance so handlers and the scheduler keep using the
 // core type.
@@ -141,6 +152,8 @@ func localNewAPIInstanceFromMirror(m accounts.LocalNewAPIInstance) LocalNewAPIIn
 		HasSyncToken:       m.HasSyncToken,
 		SyncTokenMasked:    m.SyncTokenMasked,
 		LastScannedAt:      m.LastScannedAt,
+		LastSyncAt:         m.LastSyncAt,
+		LastSyncSummary:    m.LastSyncSummary,
 		CreatedAt:          m.CreatedAt,
 		UpdatedAt:          m.UpdatedAt,
 		SyncCapability:     m.SyncCapability,

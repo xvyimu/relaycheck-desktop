@@ -13,21 +13,21 @@ import (
 
 // stubInfra implements accounts.Infra for testing.
 type stubInfra struct {
-	db         *sql.DB
-	encryptFn  func(string) (string, error)
-	decryptFn  func(string) (string, error)
-	detectFn   func(context.Context, string) (Detection, error)
-	ensureFn   func(context.Context, string, string, string, string, *Detection) (string, bool, error)
-	doHTTPFn   func(*http.Request) (*http.Response, error)
-	notifyFn   func(kind, level, title, content, relatedType, relatedID string)
-	auditFn    func(action, level, userID, entityType, entityID, detail string, metadata map[string]interface{})
-	nowFn      func() string
-	newIDFn    func() string
+	db        *sql.DB
+	encryptFn func(string) (string, error)
+	decryptFn func(string) (string, error)
+	detectFn  func(context.Context, string) (Detection, error)
+	ensureFn  func(context.Context, string, string, string, string, *Detection) (string, bool, error)
+	doHTTPFn  func(*http.Request) (*http.Response, error)
+	notifyFn  func(kind, level, title, content, relatedType, relatedID string)
+	auditFn   func(action, level, userID, entityType, entityID, detail string, metadata map[string]interface{})
+	nowFn     func() string
+	newIDFn   func() string
 }
 
 var _ Infra = (*stubInfra)(nil)
 
-func (s *stubInfra) DB() *sql.DB                               { return s.db }
+func (s *stubInfra) DB() *sql.DB { return s.db }
 func (s *stubInfra) DoHTTP(req *http.Request) (*http.Response, error) {
 	if s.doHTTPFn != nil {
 		return s.doHTTPFn(req)
@@ -103,6 +103,8 @@ CREATE TABLE IF NOT EXISTS local_newapi_instances (
 	last_scanned_at TEXT,
 	sync_access_token_encrypted TEXT,
 	sync_access_token_masked TEXT,
+	last_sync_at TEXT,
+	last_sync_summary TEXT,
 	created_at TEXT NOT NULL,
 	updated_at TEXT NOT NULL
 );

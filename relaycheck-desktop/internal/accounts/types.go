@@ -42,6 +42,8 @@ type LocalNewAPIInstance struct {
 	HasSyncToken       bool   `json:"hasSyncToken"`
 	SyncTokenMasked    string `json:"syncTokenMasked,omitempty"`
 	LastScannedAt      string `json:"lastScannedAt,omitempty"`
+	LastSyncAt         string `json:"lastSyncAt,omitempty"`
+	LastSyncSummary    string `json:"lastSyncSummary,omitempty"`
 	CreatedAt          string `json:"createdAt"`
 	UpdatedAt          string `json:"updatedAt"`
 	SyncCapability     string `json:"syncCapability"`

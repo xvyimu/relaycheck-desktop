@@ -253,6 +253,8 @@ CREATE INDEX IF NOT EXISTS idx_site_pricing_cache_synced ON site_pricing_cache(l
 		{"imported_channels", "models_message", "TEXT"},
 		{"local_newapi_instances", "sync_access_token_encrypted", "TEXT"},
 		{"local_newapi_instances", "sync_access_token_masked", "TEXT"},
+		{"local_newapi_instances", "last_sync_at", "TEXT"},
+		{"local_newapi_instances", "last_sync_summary", "TEXT"},
 		{"channel_schedules", "cron_expr", "TEXT NOT NULL DEFAULT ''"},
 		{"channel_schedules", "skip_dates_json", "TEXT NOT NULL DEFAULT '[]'"},
 	} {
