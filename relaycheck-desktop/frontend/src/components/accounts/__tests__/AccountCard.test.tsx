@@ -18,21 +18,21 @@ const account: Account = {
 };
 
 describe("AccountCard action chain", () => {
-  it("shows the browser-login loop before check-in and balance actions", () => {
+  it("keeps only browser login, check-in, and detail as primary actions", () => {
     const html = renderToStaticMarkup(
       <AccountCard account={account} onDone={async () => undefined} onOpenDetail={() => undefined} />,
     );
 
-    const open = html.indexOf("网页登录");
-    const save = html.indexOf("保存授权");
-    const test = html.indexOf("测试登录态");
-    const checkin = html.indexOf("执行签到");
-    const balance = html.indexOf("刷新 Primary Account 的余额");
+    const primaryStart = html.indexOf('account-action-group primary');
+    const morePanel = html.indexOf("account-more-panel");
+    const primaryHtml = morePanel === -1 ? html.slice(primaryStart) : html.slice(primaryStart, morePanel);
 
-    expect(open).toBeGreaterThan(-1);
-    expect(save).toBeGreaterThan(open);
-    expect(test).toBeGreaterThan(save);
-    expect(checkin).toBeGreaterThan(test);
-    expect(balance).toBeGreaterThan(checkin);
+    expect(primaryHtml.indexOf("网页登录")).toBeGreaterThan(-1);
+    expect(primaryHtml.indexOf("签到")).toBeGreaterThan(-1);
+    expect(primaryHtml.indexOf(">详情<")).toBeGreaterThan(-1);
+    expect(primaryHtml.indexOf("保存授权")).toBe(-1);
+    expect(primaryHtml.indexOf("测试登录态")).toBe(-1);
+    expect(primaryHtml.indexOf("刷新余额")).toBe(-1);
+    expect(html.indexOf("更多")).toBeGreaterThan(-1);
   });
 });

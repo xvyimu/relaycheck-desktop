@@ -109,6 +109,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
     .slice(0, 3);
   const modelCoverage = buildModelCoverage(keyAccounts).slice(0, 7);
   const [message, setMessage] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [keyTestBusyId, setKeyTestBusyId] = useState("");
   const [modelOverview, setModelOverview] = useState<ModelOverview | null>(null);
@@ -317,13 +318,70 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
   }
 
   return (
-    <div className="account-insight-strip">
-      <div className="mini-stats">
-        <span>成功 {successful.length}</span>
-        <span>需授权 {pendingAuth.length}</span>
-        <span>有密钥 {keyAccounts.length}</span>
-        <span>本地疑似 {localSuspects.length}</span>
+    <div className={`account-insight-strip ${expanded ? "is-expanded" : "is-collapsed"}`}>
+      <div className="account-insight-head">
+        <div className="mini-stats">
+          <span>成功 {successful.length}</span>
+          <span>需授权 {pendingAuth.length}</span>
+          <span>有密钥 {keyAccounts.length}</span>
+          <span>本地疑似 {localSuspects.length}</span>
+        </div>
+        <div className="toolbar account-insight-bulk">
+          <button
+            type="button"
+            disabled={!keyAccounts.length || keyTask.loading || keyTask.progress?.status === "running"}
+            onClick={() => void keyTask.startTask("test_keys")}
+          >
+            {keyTask.loading || keyTask.progress?.status === "running" ? "测试中…" : "批量测试 Key"}
+          </button>
+          <button
+            type="button"
+            disabled={balanceTask.loading || balanceTask.progress?.status === "running"}
+            onClick={() => void balanceTask.startTask("refresh_balances")}
+          >
+            {balanceTask.loading || balanceTask.progress?.status === "running" ? "刷新中…" : "批量刷新余额"}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              setMessage("正在批量打开网页登录窗口…");
+              const result = await api<BulkBrowserOpenResponse>("/api/accounts/bulk-open-browser-login", {
+                method: "POST",
+                body: JSON.stringify({ limit: 5 }),
+              });
+              setMessage(`网页登录已打开/复用 ${result.opened} 个，失败 ${result.failed} 个。登录完成后点"批量保存已登录"。`);
+            }}
+          >
+            批量打开授权
+          </button>
+          <button type="button" className="ghost" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
+            {expanded ? "收起洞察" : "展开洞察"}
+          </button>
+        </div>
       </div>
+      {keyTask.progress || keyTask.loading || keyTask.error ? (
+        <TaskProgressView
+          progress={keyTask.progress}
+          loading={keyTask.loading}
+          error={keyTask.error}
+          onCancel={keyTask.cancelTask}
+          onDismiss={keyTask.reset}
+          labels={LABELS_TEST_KEYS}
+        />
+      ) : null}
+      {balanceTask.progress || balanceTask.loading || balanceTask.error ? (
+        <TaskProgressView
+          progress={balanceTask.progress}
+          loading={balanceTask.loading}
+          error={balanceTask.error}
+          onCancel={balanceTask.cancelTask}
+          onDismiss={balanceTask.reset}
+          labels={LABELS_REFRESH_BALANCE}
+        />
+      ) : null}
+      {message ? <span className="muted">{message}</span> : null}
+      {expanded ? (
+        <>
       <div className="account-key-overview" aria-label="API Key 与模型能力总览">
         <div className="account-key-card">
           <span>有效 Key</span>
@@ -562,19 +620,6 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
       <div className="toolbar">
         <button
           type="button"
-          disabled={!keyAccounts.length || keyTask.loading || keyTask.progress?.status === "running"}
-          onClick={() => void keyTask.startTask("test_keys")}
-        >
-          {keyTask.loading || keyTask.progress?.status === "running" ? "测试中…" : "批量测试 Key"}
-        </button>
-        <button
-          type="button"
-          disabled={balanceTask.loading || balanceTask.progress?.status === "running"}
-          onClick={() => void balanceTask.startTask("refresh_balances")}
-        >
-          {balanceTask.loading || balanceTask.progress?.status === "running" ? "刷新中…" : "批量刷新余额"}
-        </button>
-        <button
           onClick={async () => {
             setMessage("正在用已保存密码重登…");
             const result = await api<BulkPasswordLoginResponse>("/api/accounts/bulk-password-login", {
@@ -595,18 +640,6 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
         </button>
         <button
           onClick={async () => {
-            setMessage("正在批量打开网页登录窗口…");
-            const result = await api<BulkBrowserOpenResponse>("/api/accounts/bulk-open-browser-login", {
-              method: "POST",
-              body: JSON.stringify({ limit: 5 }),
-            });
-            setMessage(`网页登录已打开/复用 ${result.opened} 个，失败 ${result.failed} 个。登录完成后点"批量保存已登录"。`);
-          }}
-        >
-          批量打开授权
-        </button>
-        <button
-          onClick={async () => {
             setMessage("正在保存已完成网页登录的账号…");
             const result = await api<BulkBrowserSaveResponse>("/api/accounts/bulk-finish-browser-login", {
               method: "POST",
@@ -620,27 +653,6 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
         </button>
         <button type="button" className="ghost" onClick={() => setShowDetails((current) => !current)}>{showDetails ? "收起明细" : "展开明细"}</button>
       </div>
-      {keyTask.progress || keyTask.loading || keyTask.error ? (
-        <TaskProgressView
-          progress={keyTask.progress}
-          loading={keyTask.loading}
-          error={keyTask.error}
-          onCancel={keyTask.cancelTask}
-          onDismiss={keyTask.reset}
-          labels={LABELS_TEST_KEYS}
-        />
-      ) : null}
-      {balanceTask.progress || balanceTask.loading || balanceTask.error ? (
-        <TaskProgressView
-          progress={balanceTask.progress}
-          loading={balanceTask.loading}
-          error={balanceTask.error}
-          onCancel={balanceTask.cancelTask}
-          onDismiss={balanceTask.reset}
-          labels={LABELS_REFRESH_BALANCE}
-        />
-      ) : null}
-      {message ? <span className="muted">{message}</span> : null}
       {showDetails ? (
         <div className="account-insight-details">
           <div>
@@ -680,6 +692,8 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
             {!localSuspects.length ? <EmptyState title="没有本地误匹配" description="未发现 localhost 或 127.0.0.1 误绑定到远程账号。" /> : null}
           </div>
         </div>
+      ) : null}
+        </>
       ) : null}
     </div>
   );

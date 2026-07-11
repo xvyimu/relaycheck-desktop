@@ -59,6 +59,30 @@
   letter-spacing: -0.04em;
 }
 
+.sidebar nav {
+  display: grid;
+  gap: 14px;
+}
+
+.sidebar-nav-group {
+  display: grid;
+  gap: 6px;
+}
+
+.sidebar-section-label {
+  color: var(--muted, #64748b);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 14px 0;
+  text-transform: uppercase;
+}
+
+.sidebar-nav-items {
+  display: grid;
+  gap: 6px;
+}
+
 nav {
   display: grid;
   gap: 6px;

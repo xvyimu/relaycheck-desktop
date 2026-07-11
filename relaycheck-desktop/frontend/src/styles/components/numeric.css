@@ -200,7 +200,8 @@
     grid-template-columns: 1fr;
   }
 
-  .sidebar-v4 {
+  .sidebar-v4,
+  .sidebar {
     position: relative;
     height: auto;
     z-index: 30;
@@ -208,7 +209,8 @@
     border-bottom: 1px solid var(--v4-border);
   }
 
-  .sidebar-v4 nav {
+  .sidebar-v4 nav,
+  .sidebar nav {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -227,11 +229,13 @@
     padding: 10px;
   }
 
-  .sidebar-v4 {
+  .sidebar-v4,
+  .sidebar {
     padding: 10px;
   }
 
-  .sidebar-v4 nav {
+  .sidebar-v4 nav,
+  .sidebar nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

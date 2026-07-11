@@ -6,6 +6,52 @@
     radial-gradient(circle at top right, rgba(47, 183, 191, 0.16), transparent 30%);
 }
 
+.account-create-collapsed {
+  gap: 0;
+  padding: 12px 14px;
+}
+
+.account-create-collapsed .section-heading {
+  margin: 0;
+  align-items: center;
+}
+
+.section-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) minmax(120px, 160px) minmax(0, 320px);
+  gap: 10px 12px;
+  align-items: end;
+}
+
+.account-insight-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+}
+
+.account-insight-bulk {
+  max-width: none !important;
+}
+
+.account-insight-strip.is-collapsed .account-insight-head {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .account-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .account-panel {
   gap: 12px;
 }

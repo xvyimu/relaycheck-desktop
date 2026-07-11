@@ -265,34 +265,62 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
           <button
             type="button"
             disabled={isBusy}
-            aria-label={`保存 ${account.displayName} 的浏览器授权`}
-            onClick={() => void runAction(
-              "保存授权",
-              () => api<BrowserLoginSaveResponse>(`/api/accounts/${account.id}/finish-browser-login`, { method: "POST" }),
-              formatBrowserLoginSaveMessage,
-            )}
+            aria-label={`为 ${account.displayName} 执行签到`}
+            onClick={() => void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))}
           >
-            {accountActionButtonLabel("保存授权", busy)}
+            {accountActionButtonLabel("签到", busy)}
           </button>
+          <button type="button" className="ghost" disabled={isBusy} onClick={onOpenDetail}>详情</button>
           <button
             type="button"
+            className={`ghost more-toggle ${moreOpen ? "active" : ""}`}
             disabled={isBusy}
-            aria-label={`测试 ${account.displayName} 的登录态`}
-            onClick={() => void runAction(
-              "测试登录态",
-              () => api<LoginStatusTestResponse>(`/api/accounts/${account.id}/test-login`, { method: "POST" }),
-              formatLoginStatusTestMessage,
-            )}
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((current) => !current)}
           >
-            {accountActionButtonLabel("测试登录态", busy, "检测中…")}
+            {moreOpen ? "收起" : "更多"}
           </button>
-          <button type="button" disabled={isBusy} aria-label={`为 ${account.displayName} 执行签到`} onClick={() => void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))}>{accountActionButtonLabel("签到", busy)}</button>
-          <button type="button" disabled={isBusy} aria-label={`刷新 ${account.displayName} 的余额`} onClick={() => void runAction("刷新余额", () => api(`/api/accounts/${account.id}/refresh-balance`, { method: "POST" }))}>{accountActionButtonLabel("刷新余额", busy)}</button>
-          <button type="button" className="ghost" disabled={isBusy} onClick={onOpenDetail}>详情</button>
-          <button type="button" className={`ghost more-toggle ${moreOpen ? "active" : ""}`} disabled={isBusy} aria-expanded={moreOpen} onClick={() => setMoreOpen((current) => !current)}>{moreOpen ? "收起" : "更多"}</button>
         </div>
         {moreOpen ? (
           <div className="account-more-panel">
+            <div className="account-action-label">会话与余额</div>
+            <div className="account-action-group secondary">
+              <button
+                type="button"
+                className="ghost"
+                disabled={isBusy}
+                aria-label={`保存 ${account.displayName} 的浏览器授权`}
+                onClick={() => void runAction(
+                  "保存授权",
+                  () => api<BrowserLoginSaveResponse>(`/api/accounts/${account.id}/finish-browser-login`, { method: "POST" }),
+                  formatBrowserLoginSaveMessage,
+                )}
+              >
+                {accountActionButtonLabel("保存授权", busy)}
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                disabled={isBusy}
+                aria-label={`测试 ${account.displayName} 的登录态`}
+                onClick={() => void runAction(
+                  "测试登录态",
+                  () => api<LoginStatusTestResponse>(`/api/accounts/${account.id}/test-login`, { method: "POST" }),
+                  formatLoginStatusTestMessage,
+                )}
+              >
+                {accountActionButtonLabel("测试登录态", busy, "检测中…")}
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                disabled={isBusy}
+                aria-label={`刷新 ${account.displayName} 的余额`}
+                onClick={() => void runAction("刷新余额", () => api(`/api/accounts/${account.id}/refresh-balance`, { method: "POST" }))}
+              >
+                {accountActionButtonLabel("刷新余额", busy)}
+              </button>
+            </div>
             <div className="account-action-label">维护操作</div>
             <div className="account-action-group secondary">
               <button type="button" className="ghost" disabled={isBusy} onClick={() => setEditing((current) => !current)}>{editing ? "收起编辑" : "编辑账号"}</button>

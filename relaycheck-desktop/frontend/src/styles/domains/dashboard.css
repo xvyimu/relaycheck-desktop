@@ -580,3 +580,64 @@
     border-bottom: 0;
   }
 }
+
+/* S4: compact metric strip + collapsible secondary blocks */
+.metric-grid.metric-grid-compact {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.metric-grid.metric-grid-compact .metric-card {
+  min-height: 0;
+  padding: 8px 12px;
+  border: 1px solid rgba(71, 85, 105, 0.12);
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.78);
+  box-shadow: none;
+}
+
+.metric-grid.metric-grid-compact .metric-card span {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.metric-grid.metric-grid-compact .metric-card strong {
+  margin-top: 4px;
+  font-size: 18px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-secondary-grid {
+  margin-top: 0;
+}
+
+.dashboard-collapsible-card.is-collapsed {
+  padding-bottom: 12px;
+}
+
+.dashboard-collapsible-head {
+  margin: 0;
+  align-items: center;
+}
+
+.dashboard-collapsible-card.is-collapsed .dashboard-collapsible-head {
+  margin-bottom: 0;
+}
+
+.dashboard-collapsible-head h2 {
+  margin: 0;
+}
+
+.dashboard-analytics-shell {
+  margin-top: 14px;
+}
+
+.dashboard-analytics-shell .analytics-panel {
+  margin-top: 10px;
+}
+
+.dashboard-analytics-shell .analytics-header {
+  margin-bottom: 10px;
+}

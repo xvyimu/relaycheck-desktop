@@ -916,6 +916,8 @@ export type NavigationIntent = {
   checkinStatus?: string;
   siteHealth?: string;
   siteKind?: string;
+  /** Prefer accounts belonging to this upstream site (client or server filter). */
+  upstreamSiteId?: string;
   unreadOnly?: boolean;
   query?: string;
 };

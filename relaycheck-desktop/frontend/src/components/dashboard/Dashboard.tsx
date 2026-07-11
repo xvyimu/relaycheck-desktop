@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { Empty } from "@/components/ui/empty";
 import { HubRadar } from "@/components/dashboard/HubRadar";
 import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
@@ -45,11 +45,26 @@ function Metric({ title, value }: { title: string; value?: number }) {
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function CollapsibleCard({
+  title,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="card">
-      <h2>{title}</h2>
-      {children}
+    <section className={`card dashboard-collapsible-card ${expanded ? "is-expanded" : "is-collapsed"}`}>
+      <div className="section-heading dashboard-collapsible-head">
+        <h2>{title}</h2>
+        <button type="button" className="ghost" aria-expanded={expanded} onClick={onToggle}>
+          {expanded ? "收起" : "展开"}
+        </button>
+      </div>
+      {expanded ? children : null}
     </section>
   );
 }
@@ -101,7 +116,7 @@ function DashboardBase({
   onRefresh,
 }: DashboardProps) {
   const { status } = system;
-  const { accounts, channels, sites } = inventory;
+  const { accounts, channels } = inventory;
   const { actionCenter, checkins, diagnostics, notifications } = ops;
   const { problemChannels, problemAccounts, unread } = useMemo(() => {
     const problemChannels = channels.filter((item) => item.sourceSyncStatus === "missing" || item.upstreamKind === "unknown").length;
@@ -112,6 +127,12 @@ function DashboardBase({
   const schedulerJobs = status?.scheduler?.jobs || [];
   const actionItems = actionCenter?.items || [];
   const priorityActions = actionItems;
+
+  // Progressive disclosure: secondary blocks stay collapsed by default (layout α S4).
+  const [systemOpen, setSystemOpen] = useState(false);
+  const [opsOpen, setOpsOpen] = useState(false);
+  const [schedulerOpen, setSchedulerOpen] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   const schedulerPreview = useSchedulerPreview(2);
   const { nextRuns, nextRunsLoading: nextRunsBusy } = schedulerPreview;
@@ -179,13 +200,8 @@ function DashboardBase({
           onRefresh={refreshRadar}
         />
       ) : null}
-      <section className="metric-grid">
-        <Metric title="本地 NewAPI" value={status?.summary.localNewApiCount} />
-        <Metric title="渠道" value={status?.summary.importedChannelCount ?? channels.length} />
-        <Metric title="已识别" value={status?.summary.identifiedChannelCount} />
-        <Metric title="账号" value={status?.summary.accountCount ?? accounts.length} />
-        <Metric title="未读" value={status?.summary.unreadNotifications ?? unread} />
-      </section>
+
+      {/* S4.1: 运营待办 immediately after Radar (primary decision path) */}
       <section className="card dashboard-priority-card">
         <div className="section-heading">
           <div>
@@ -225,8 +241,19 @@ function DashboardBase({
           <Empty message="运营状态清爽，暂无待办。" />
         )}
       </section>
-      <section className="card-grid">
-        <Card title="系统">
+
+      {/* S4.2: metrics as compact strip (lower visual weight than priority) */}
+      <section className="metric-grid metric-grid-compact" aria-label="资产摘要">
+        <Metric title="本地 NewAPI" value={status?.summary.localNewApiCount} />
+        <Metric title="渠道" value={status?.summary.importedChannelCount ?? channels.length} />
+        <Metric title="已识别" value={status?.summary.identifiedChannelCount} />
+        <Metric title="账号" value={status?.summary.accountCount ?? accounts.length} />
+        <Metric title="未读" value={status?.summary.unreadNotifications ?? unread} />
+      </section>
+
+      {/* S4.3: 系统 / 运营 / 调度 default collapsed */}
+      <section className="card-grid dashboard-secondary-grid">
+        <CollapsibleCard title="系统" expanded={systemOpen} onToggle={() => setSystemOpen((v) => !v)}>
           <dl className="kv">
             <dt>产品</dt>
             <dd>{status?.productName || "RelayCheck Desktop"}</dd>
@@ -237,22 +264,39 @@ function DashboardBase({
             <dt>自检</dt>
             <dd>{status?.lastDiagnostics?.overall || "未知"}</dd>
           </dl>
-        </Card>
-        <Card title="运营">
+        </CollapsibleCard>
+        <CollapsibleCard title="运营" expanded={opsOpen} onToggle={() => setOpsOpen((v) => !v)}>
           <div className="stack">
             <Row label="待复核渠道" value={problemChannels} />
             <Row label="待复核账号" value={problemAccounts} />
             <Row label="今日待签到" value={checkins?.today.dueAccounts ?? 0} />
             <Row label="今日签到失败" value={checkins?.today.failedCount ?? 0} />
           </div>
-        </Card>
-        <Card title="调度器">
+        </CollapsibleCard>
+        <CollapsibleCard title="调度器" expanded={schedulerOpen} onToggle={() => setSchedulerOpen((v) => !v)}>
           {schedulerContent}
-        </Card>
+        </CollapsibleCard>
       </section>
-      <AnalyticsPanel />
+
+      {/* S4.4: Analytics default collapsed; mount only when open to avoid idle polling */}
+      <section className={`card dashboard-collapsible-card dashboard-analytics-shell ${analyticsOpen ? "is-expanded" : "is-collapsed"}`}>
+        <div className="section-heading dashboard-collapsible-head">
+          <div>
+            <h2>数据分析</h2>
+            <span>余额趋势、签到分布与站点可靠性</span>
+          </div>
+          <button
+            type="button"
+            className="ghost"
+            aria-expanded={analyticsOpen}
+            onClick={() => setAnalyticsOpen((v) => !v)}
+          >
+            {analyticsOpen ? "收起分析" : "展开分析"}
+          </button>
+        </div>
+        {analyticsOpen ? <AnalyticsPanel /> : null}
+      </section>
     </>
   );
 }
-
 export const Dashboard = memo(DashboardBase);

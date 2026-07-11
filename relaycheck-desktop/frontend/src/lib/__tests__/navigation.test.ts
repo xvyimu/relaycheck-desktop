@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { actionItemNavigationIntent } from "../navigation";
+import { actionItemNavigationIntent, siteAccountsNavigationIntent } from "../navigation";
 
 describe("actionItemNavigationIntent", () => {
   it("routes accounts with problem filter", () => {
@@ -52,9 +52,9 @@ describe("actionItemNavigationIntent", () => {
     expect(result).toEqual({ target: "channels" });
   });
 
-  it("routes balances", () => {
+  it("routes balances to accounts (no dead balances tab)", () => {
     const result = actionItemNavigationIntent({ target: "balances" });
-    expect(result).toEqual({ target: "balances" });
+    expect(result).toEqual({ target: "accounts", query: "余额" });
   });
 
   it("routes sites with unreachable filter", () => {
@@ -95,5 +95,17 @@ describe("actionItemNavigationIntent", () => {
   it("routes dashboard", () => {
     const result = actionItemNavigationIntent({ target: "dashboard" });
     expect(result).toEqual({ target: "dashboard" });
+  });
+});
+
+describe("siteAccountsNavigationIntent", () => {
+  it("targets accounts with the given upstream site id", () => {
+    const result = siteAccountsNavigationIntent("site-abc");
+    expect(result).toEqual({ target: "accounts", upstreamSiteId: "site-abc" });
+  });
+
+  it("preserves empty string site id (caller may normalize)", () => {
+    const result = siteAccountsNavigationIntent("");
+    expect(result).toEqual({ target: "accounts", upstreamSiteId: "" });
   });
 });

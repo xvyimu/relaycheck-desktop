@@ -122,7 +122,7 @@ export function HubRadar({
             <span>{estimatedDailyUseText}</span>
           </div>
           <div className="radar-actions">
-            <button type="button" onClick={() => onNavigate("balances")}>余额用量</button>
+            <button type="button" onClick={() => onNavigate("accounts", { query: "余额" })}>余额用量</button>
             <button type="button" className="ghost" onClick={() => onNavigate("accounts")}>价格雷达</button>
           </div>
         </article>

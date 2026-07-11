@@ -14,7 +14,8 @@ export function actionItemNavigationIntent(item: NavigableAction): NavigationInt
       if (item.filter === "unknown") return { target: "channels", channelKind: "unknown", sourceStatus: "not_archived" };
       return { target: "channels" };
     case "balances":
-      return { target: "balances" };
+      // balances tab is not implemented; land on accounts (usage/balance surface).
+      return { target: "accounts", query: "余额" };
     case "sites":
       return { target: "sites", siteHealth: item.filter === "unreachable" ? "unreachable" : "all" };
     case "notifications":
@@ -28,4 +29,14 @@ export function actionItemNavigationIntent(item: NavigableAction): NavigationInt
     default:
       return { target: item.target satisfies TabKey };
   }
+}
+
+/** Jump to accounts tab with a site filter applied (sites card / detail CTA). */
+export function siteAccountsNavigationIntent(
+  upstreamSiteId: string,
+): Omit<NavigationIntent, "target"> & { target: "accounts" } {
+  return {
+    target: "accounts",
+    upstreamSiteId,
+  };
 }

@@ -3,10 +3,11 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/api/client";
 import { formatConfidence, formatDuration, formatTime } from "@/lib/format";
 import { loginDiscoverySourceLabel, normalizeLoginDiscovery, parseLoginDiscovery } from "@/lib/loginDiscovery";
-import type { LoginDiscovery, NextRunItem, NavigationIntent, SiteDetail, UpstreamSite } from "@/types";
+import type { LoginDiscovery, NextRunItem, NavigationIntent, SiteDetail, TabKey, UpstreamSite } from "@/types";
 import { useNextRuns } from "@/hooks/useNextRuns";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
+import { siteAccountsNavigationIntent } from "@/lib/navigation";
 
 const LABELS_BATCH_DETECT = { title: "批量识别" } as const;
 
@@ -14,6 +15,7 @@ type SitesPanelProps = {
   sites: UpstreamSite[];
   onRefresh: () => Promise<void>;
   intent?: NavigationIntent | null;
+  onNavigate?: (tab: TabKey, intent?: Omit<NavigationIntent, "target">) => void;
 };
 
 function isUnhealthy(status: string) {
@@ -35,7 +37,7 @@ function siteLoginDiscovery(site: UpstreamSite, detection?: SiteDetail["detectio
   );
 }
 
-function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
+function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProps) {
   const [busyId, setBusyId] = useState("");
   const [detailBusyId, setDetailBusyId] = useState("");
   const [detail, setDetail] = useState<SiteDetail | null>(null);
@@ -325,6 +327,18 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
                 >
                   {detailBusyId === site.id ? "加载中…" : "详情"}
                 </button>
+                {onNavigate ? (
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      const next = siteAccountsNavigationIntent(site.id);
+                      onNavigate(next.target, { upstreamSiteId: next.upstreamSiteId });
+                    }}
+                  >
+                    查看账号
+                  </button>
+                ) : null}
                 <button
                   disabled={busyId === site.id}
                   onClick={() => void detect(site)}
@@ -361,7 +375,20 @@ function SitesPanelBase({ sites, onRefresh, intent }: SitesPanelProps) {
                 <h2 id="site-detail-title">{detail.site.name}</h2>
                 <p>{detail.site.kind || "unknown"} · {detail.site.healthStatus || "未知"}</p>
               </div>
-              <button type="button" className="ghost" ref={detailCloseButtonRef} onClick={closeDetail}>关闭</button>
+              <div className="toolbar">
+                {onNavigate ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = siteAccountsNavigationIntent(detail.site.id);
+                      onNavigate(next.target, { upstreamSiteId: next.upstreamSiteId });
+                    }}
+                  >
+                    查看账号
+                  </button>
+                ) : null}
+                <button type="button" className="ghost" ref={detailCloseButtonRef} onClick={closeDetail}>关闭</button>
+              </div>
             </div>
 
             <div className="detail-grid">

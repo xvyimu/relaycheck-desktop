@@ -16,21 +16,32 @@ const site: UpstreamSite = {
   accountCount: 1,
 };
 
-function renderAccountForm() {
-  return renderToStaticMarkup(<AccountForm sites={[site]} onDone={() => undefined} />);
+function renderAccountForm(defaultExpanded = false) {
+  return renderToStaticMarkup(
+    <AccountForm sites={[site]} onDone={() => undefined} defaultExpanded={defaultExpanded} />,
+  );
 }
 
 describe("AccountForm accessibility", () => {
-  it("exposes busy state and selected mode semantics", () => {
+  it("collapses create form by default (S1)", () => {
     const html = renderAccountForm();
+
+    expect(html).toContain("account-create-collapsed");
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain("+ 添加账号");
+    expect(html).not.toContain('aria-busy=');
+  });
+
+  it("exposes busy state and selected mode semantics when expanded", () => {
+    const html = renderAccountForm(true);
 
     expect(html).toContain('aria-busy="false"');
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('aria-pressed="false"');
   });
 
-  it("uses semantic input attributes for credentials", () => {
-    const html = renderAccountForm();
+  it("uses semantic input attributes for credentials when expanded", () => {
+    const html = renderAccountForm(true);
 
     expect(html).toContain('type="email"');
     expect(html).toContain('inputMode="email"');

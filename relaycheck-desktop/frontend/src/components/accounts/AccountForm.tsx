@@ -2,7 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
 import type { UpstreamSite } from "@/types";
 
-export function AccountForm({ sites, onDone }: { sites: UpstreamSite[]; onDone: () => void }) {
+export function AccountForm({
+  sites,
+  onDone,
+  defaultExpanded = false,
+}: {
+  sites: UpstreamSite[];
+  onDone: () => void;
+  /** Test/diagnostic only; product default remains collapsed. */
+  defaultExpanded?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [siteMode, setSiteMode] = useState<"existing" | "custom">("existing");
   const [upstreamSiteId, setUpstreamSiteId] = useState("");
   const [siteName, setSiteName] = useState("");
@@ -25,6 +35,22 @@ export function AccountForm({ sites, onDone }: { sites: UpstreamSite[]; onDone: 
   useEffect(() => {
     if (siteMode === "existing" && !upstreamSiteId && siteOptions[0]) setUpstreamSiteId(siteOptions[0].id);
   }, [siteMode, siteOptions, upstreamSiteId]);
+
+  if (!expanded) {
+    return (
+      <div className="card account-create-card account-create-collapsed">
+        <div className="section-heading">
+          <div>
+            <strong>添加账号</strong>
+            <span>同一站点可绑多个账号；新建表单默认收起以露出列表。</span>
+          </div>
+          <button type="button" onClick={() => setExpanded(true)} aria-expanded={false}>
+            + 添加账号
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form
@@ -71,22 +97,27 @@ export function AccountForm({ sites, onDone }: { sites: UpstreamSite[]; onDone: 
           <strong>添加账号 / 自定义站点</strong>
           <span>同一个中转站可以绑定多个账号；填新网址时会先识别 NewAPI / OneAPI / Sub2API，再创建账号。</span>
         </div>
-        <div className="segmented" role="group" aria-label="站点来源">
-          <button
-            type="button"
-            className={siteMode === "existing" ? "active" : ""}
-            aria-pressed={siteMode === "existing"}
-            onClick={() => setSiteMode("existing")}
-          >
-            已有站点
-          </button>
-          <button
-            type="button"
-            className={siteMode === "custom" ? "active" : ""}
-            aria-pressed={siteMode === "custom"}
-            onClick={() => setSiteMode("custom")}
-          >
-            自定义网址
+        <div className="section-heading-actions">
+          <div className="segmented" role="group" aria-label="站点来源">
+            <button
+              type="button"
+              className={siteMode === "existing" ? "active" : ""}
+              aria-pressed={siteMode === "existing"}
+              onClick={() => setSiteMode("existing")}
+            >
+              已有站点
+            </button>
+            <button
+              type="button"
+              className={siteMode === "custom" ? "active" : ""}
+              aria-pressed={siteMode === "custom"}
+              onClick={() => setSiteMode("custom")}
+            >
+              自定义网址
+            </button>
+          </div>
+          <button type="button" className="ghost" onClick={() => setExpanded(false)} aria-expanded={true}>
+            收起
           </button>
         </div>
       </div>

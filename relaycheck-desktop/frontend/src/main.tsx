@@ -124,7 +124,7 @@ function App() {
         ) : null}
         {visitedTabs.has("sites") ? (
           <div style={{ display: show("sites") }}>
-            <SitesPanel sites={inventory.sites} onRefresh={reload} intent={navigationIntent?.target === "sites" ? navigationIntent : null} />
+            <SitesPanel sites={inventory.sites} onRefresh={reload} intent={navigationIntent?.target === "sites" ? navigationIntent : null} onNavigate={handleNavigate} />
           </div>
         ) : null}
         {visitedTabs.has("accounts") ? (

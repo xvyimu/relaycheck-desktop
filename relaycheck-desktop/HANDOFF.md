@@ -9,98 +9,59 @@ Read this first, then `CLAUDE.md` for architecture.
 
 ## Current state
 
-The project is stable after the 2026-07-06 global optimization slice. Git tree was
-clean on `main`/`origin/main` at `98cb94e` when layout design was written; rebuild
-`dist\relaycheck.exe` for local launch (done once for accounts filter live test on
-2026-07-11).
+Layout optimization **alpha** (action-first flow) is **fully implemented** on branch `main`.
 
-Current local notes:
+- **Docs:** `458a6c6` - design + plan under `docs/superpowers/specs/2026-07-11-layout-optimization-*.md`.
+- **Code:** S1-S6 implemented (frontend); backend `?upstreamSiteId=` already in tree.
+- **Verification (2026-07-11):**
+  - `cd frontend; npx tsc --noEmit` - PASS
+  - `cd frontend; npm test` - 22 files / **232** tests PASS
+  - `go test -mod=vendor -count=1 -run TestListAccountsHonorsUpstreamSiteIDFilter ./internal/core/` - PASS
+- Branch may be ahead of `origin/main`; do not push unless asked.
+- Preserved: `vendor/`, `data/`, `frontend/dist/`. Run `cd frontend; npm ci` if `node_modules` missing.
+- Operator acceptance still Hold - see `docs/OPERATOR_ACCEPTANCE_RECORD_DRAFT_2026-07-06.md`.
 
-- Branch: `main` tracking `origin/main`.
-- Accounts server filter (`?upstreamSiteId=`) already shipped in `e12aca5`; live
-  API check on 2026-07-11: PASS (25 accounts, multi-site filter correct).
-- **Layout optimization design complete (docs only, not yet coded):**
-  - Design: `docs/superpowers/specs/2026-07-11-layout-optimization-design.md`
-  - Plan: `docs/superpowers/specs/2026-07-11-layout-optimization-plan.md`
-  - Default scheme **α** (action-first flow): site filter on accounts, fold form/insights,
-    card primary CTA ≤3, dashboard collapse, sidebar groups.
-  - Scheme **β** (site master-detail) gated until α metrics + ops feedback.
-  - Next code slice: plan **S1** (AccountsPanel site filter + fold + card actions).
-- Lightweight handoff state remains frozen for unrelated slimming.
-- Preserved local state: `vendor\`, `data\`, and `frontend\dist\`.
-- Before frontend test/build/smoke work, restore dependencies with
-  `cd frontend; npm ci` if `node_modules` missing.
-- Final operator approval remains pending; see
-  `docs/OPERATOR_ACCEPTANCE_RECORD_DRAFT_2026-07-06.md`.
+### Alpha slice checklist
 
-Latest engineering changes:
+| Slice | Summary | Status |
+|-------|---------|--------|
+| S1 | Accounts site filter, fold form/insights, card CTAs, toolbar grid | done |
+| S2 | `NavigationIntent.upstreamSiteId`, Sites view-accounts jump | done |
+| S3 | `useSiteAccounts` -> `GET /api/accounts?upstreamSiteId=` (no full inventory reload) | done |
+| S4 | Dashboard: Radar -> todos -> compact metrics -> collapsible sys/ops/schedule + Analytics | done |
+| S5 | Sidebar ops/assets/tools groups; balances remapped to accounts + query | done |
+| S6 | CSS bridge: live `.sidebar` gets max-560 horizontal chip nav + mid-width stacking (keep `.sidebar-v4` history) | done |
 
-- Frontend query boundary: removed `frontend/src/hooks/useAppData.ts`; added
-  `useSystemOverview`, `useInventoryData`, `useOpsHealth`, and
-  `useModelUsageOverview`.
-- Frontend abort/cache fix: `frontend/src/api/client.ts` no longer caches GET
-  requests that carry an `AbortSignal`, preventing StrictMode aborted requests
-  from poisoning later reads.
-- Post-review frontend refresh hardening: `useApi` now preserves the last
-  successful data on later refresh failures, App-level startup loading only
-  applies before the initial resource groups finish, and the global refresh
-  includes model/pricing/usage radar data.
-- Setup/onboarding closure: Action Center now emits setup next-step items for
-  empty workspace states; Dashboard labels setup items as 接入.
-- Scheduler boundary: added `internal/core/scheduler_jobs.go` lightweight
-  scheduler tick/status registry and ADR-005.
-- CSS structure: `frontend/src/styles.css` is now an import index; rules moved
-  into `frontend/src/styles/` split by tokens/base/layout/components/domains/layers.
-- Slimming cleanup: generated `dist\` release artifacts, historical package
-  extracts, docs reports, and `frontend\node_modules` were removed. Run
-  `cd frontend; npm ci` before frontend test/build/smoke work.
-- Release docs: global optimization record, backend A3 audit, launch readiness,
-  and operator acceptance draft are updated.
-- Layout IA design (2026-07-11): dashboard/sites/accounts diagnosis + α/β schemes
-  documented under `docs/superpowers/specs/2026-07-11-layout-optimization-*.md`.
+### Key files (alpha)
 
-Latest verification gates passed:
+- `frontend/src/hooks/useSiteAccounts.ts`
+- `frontend/src/components/accounts/AccountsPanel.tsx`
+- `frontend/src/components/layout/Sidebar.tsx`
+- `frontend/src/styles/layers/mobile-density.css`
+- `frontend/src/styles/components/drawers.css`, `numeric.css`
+- Tests under `frontend/src/components/**/__tests__/` and `hooks/__tests__/`
 
-```powershell
-rtk go test -mod=vendor -count=1 ./...           # 991 passed in 12 packages
-rtk go vet -mod=vendor ./...                     # no issues
-cd frontend; rtk npm test                        # 17 files / 220 tests passed
-cd frontend; rtk npm run build                   # tsc + vite passed
-cd frontend; rtk npm run smoke:schedules         # 1440x900 and 390x900 passed
-rtk go build -mod=vendor -o dist\relaycheck.exe .
-rtk git diff --check
-```
+### Next steps (priority)
 
-Current post-slimming verification note:
+1. **Optional:** rebuild `dist/relaycheck.exe` and manual 1440/900/390 walkthrough (site filter, sidebar groups, dashboard fold).
+2. **Metrics (1 week):** plan section 6 - ops feedback on site-first path.
+3. **beta** (site master-detail): gated - plan section 8; do **not** start until alpha feedback + scale triggers.
+4. Unrelated backlog (#8 new-api channel sync, #9 checkin re-login) stays outside layout alpha.
 
-- Frontend gates above passed before `frontend\node_modules\` was removed.
-- Run `cd frontend; npm ci` before repeating frontend gates.
-- Go verification remains runnable from the current checkout because `vendor\`
-  and `frontend\dist\` are preserved.
-
-Final packaging note:
+### Suggested verify after pull
 
 ```powershell
 cd E:\zidqiandao\relaycheck-desktop
-rtk git status --branch --short
-# Commit or explicitly approve dirty package build before packaging.
-cd frontend; npm ci
-cd ..
-powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1 -ProxyUrl http://127.0.0.1:7897
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\package-release.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1
+go test -mod=vendor -count=1 -run TestListAccounts ./internal/core/
+cd frontend
+npx tsc --noEmit
+npm test
+# optional: npm run build; npm run smoke:schedules
 ```
 
-Historical launch package evidence, cleaned during slimming:
-
-- Zip: cleaned from `dist\releases`; rebuild with `scripts\package-release.ps1`
-- SHA256: `67f342e52e5c7aa081cf8fd20b9ea8a0bed7dd89a747e9b22b6b481bc45cb83d`
-- Manifest commit: `338870bc315456b231194043abb045a15937c996`
-- Manifest dirty: `false`
-- Local monitor rerun: historical result `pass`; extracted launch records were cleaned with the old package directory
-- Important: this package predates the current uncommitted optimization diff.
-
 ---
+
+## Historical sessions (pre-layout-alpha)
 
 ## What landed this session
 
