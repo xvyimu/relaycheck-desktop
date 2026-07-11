@@ -9,6 +9,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "smoke": "node scripts/verify-navigation.mjs",
     "smoke:schedules": "node scripts/verify-site-schedules-layout.mjs",
+    "smoke:layout": "node scripts/verify-layout-alpha.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
