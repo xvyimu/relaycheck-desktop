@@ -2,9 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import {
   accountActionButtonLabel,
+  appendReloginHint,
   formatBrowserLoginOpenMessage,
   formatBrowserLoginSaveMessage,
   formatLoginStatusTestMessage,
+  isBrowserLoginOpenSuccess,
+  isBrowserLoginSaveSuccess,
+  isLikelyAuthFailureMessage,
+  isLoginStatusValid,
+  primaryActionsForRelogin,
+  reloginStepIndex,
+  shouldShowReloginSteps,
 } from "../accountActions";
 
 describe("accountActionButtonLabel", () => {
@@ -78,5 +86,48 @@ describe("formatLoginStatusTestMessage", () => {
     expect(formatLoginStatusTestMessage({ status: "expired", httpStatus: 401 })).toBe(
       "登录态已失效（HTTP 401）。请重新网页登录并保存授权。",
     );
+  });
+});
+
+describe("relogin state machine helpers", () => {
+  it("elevates save while browser is open", () => {
+    expect(primaryActionsForRelogin("browser_open")).toEqual(["open", "save", "detail"]);
+  });
+
+  it("elevates test after auth is saved", () => {
+    expect(primaryActionsForRelogin("auth_saved")).toEqual(["test", "checkin", "detail"]);
+  });
+
+  it("keeps open + checkin as idle primary set", () => {
+    expect(primaryActionsForRelogin("idle")).toEqual(["open", "checkin", "detail"]);
+  });
+
+  it("shows steps for problem login or active phase", () => {
+    expect(shouldShowReloginSteps("manual_required", undefined, "idle")).toBe(true);
+    expect(shouldShowReloginSteps("valid", "auth_expired", "idle")).toBe(true);
+    expect(shouldShowReloginSteps("valid", "success", "browser_open")).toBe(true);
+    expect(shouldShowReloginSteps("valid", "success", "idle")).toBe(false);
+  });
+
+  it("maps phase to step index", () => {
+    expect(reloginStepIndex("idle", "expired")).toBe(0);
+    expect(reloginStepIndex("browser_open", "manual_required")).toBe(1);
+    expect(reloginStepIndex("auth_saved", "valid")).toBe(2);
+    expect(reloginStepIndex("idle", "valid")).toBe(3);
+  });
+
+  it("detects open/save/valid statuses", () => {
+    expect(isBrowserLoginOpenSuccess("opened")).toBe(true);
+    expect(isBrowserLoginOpenSuccess("already_open")).toBe(true);
+    expect(isBrowserLoginOpenSuccess("failed")).toBe(false);
+    expect(isBrowserLoginSaveSuccess("saved")).toBe(true);
+    expect(isLoginStatusValid("valid")).toBe(true);
+  });
+
+  it("detects auth-ish failures and appends relogin hint once", () => {
+    expect(isLikelyAuthFailureMessage("登录态已失效")).toBe(true);
+    expect(isLikelyAuthFailureMessage("网络超时")).toBe(false);
+    expect(appendReloginHint("签到失败：401")).toContain("网页登录");
+    expect(appendReloginHint("请重新网页登录")).toBe("请重新网页登录");
   });
 });

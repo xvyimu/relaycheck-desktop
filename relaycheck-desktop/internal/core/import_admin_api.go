@@ -44,12 +44,15 @@ func (a *App) handleImportFromAdminAPI(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	a.audit("import.admin_api", "info", "", "local_newapi_instance", stringFromResult(result, "instanceId"), "NewAPI 后台导入完成。", map[string]interface{}{
-		"importedCount":  intFromResult(result, "importedCount"),
-		"sitesCreated":   intFromResult(result, "sitesCreated"),
-		"sitesMerged":    intFromResult(result, "sitesMerged"),
-		"detectedCount":  intFromResult(result, "detectedCount"),
-		"importKeys":     input.ImportKeys,
-		"syncTokenSaved": input.SaveAccessToken,
+		"fetchedCount":     intFromResult(result, "fetchedCount"),
+		"importedCount":    intFromResult(result, "importedCount"),
+		"skippedExcluded":  intFromResult(result, "skippedExcluded"),
+		"skippedNoBaseURL": intFromResult(result, "skippedNoBaseURL"),
+		"sitesCreated":     intFromResult(result, "sitesCreated"),
+		"sitesMerged":      intFromResult(result, "sitesMerged"),
+		"detectedCount":    intFromResult(result, "detectedCount"),
+		"importKeys":       input.ImportKeys,
+		"syncTokenSaved":   input.SaveAccessToken,
 	})
 	a.invalidateReadCache()
 	writeJSON(w, http.StatusOK, result)

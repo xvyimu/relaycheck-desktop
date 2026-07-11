@@ -17,6 +17,9 @@ func (s *Service) ImportChannelsFromAdminAPI(ctx context.Context, rawBaseURL str
 
 // ImportChannelsFromAdminAPIWithOptions imports channels from a NewAPI admin
 // API endpoint, with a flag to suppress notifications (used by scheduled sync).
+// Result map includes diagnostic counters:
+// fetchedCount, importedCount, skippedExcluded, skippedNoBaseURL,
+// sitesCreated, sitesMerged, detectedCount.
 func (s *Service) ImportChannelsFromAdminAPIWithOptions(ctx context.Context, rawBaseURL string, accessToken string, userID string, instanceName string, importKeys bool, createSites bool, detectAfterImport bool, pageSize int, notify bool) (map[string]interface{}, error) {
 	baseURL := normalizeBaseURL(rawBaseURL)
 	if instanceName == "" {
@@ -36,7 +39,10 @@ func (s *Service) ImportChannelsFromAdminAPIWithOptions(ctx context.Context, raw
 		return nil, err
 	}
 
+	fetched := 0
 	imported := 0
+	skippedExcluded := 0
+	skippedNoBaseURL := 0
 	sitesCreated := 0
 	sitesMerged := 0
 	detected := 0
@@ -49,22 +55,28 @@ func (s *Service) ImportChannelsFromAdminAPIWithOptions(ctx context.Context, raw
 			break
 		}
 		for _, record := range items {
-			channelID, created, merged, didDetect, err := s.importChannelRecord(ctx, instanceID, record, importKeys, createSites, detectAfterImport)
+			fetched++
+			outcome, err := s.importChannelRecordOutcome(ctx, instanceID, record, importKeys, createSites, detectAfterImport, "admin_api")
 			if err != nil {
 				return nil, err
 			}
-			if channelID == "" {
-				continue
-			}
-			imported++
-			if created {
-				sitesCreated++
-			}
-			if merged {
-				sitesMerged++
-			}
-			if didDetect {
-				detected++
+			switch outcome.Skip {
+			case importSkipExcluded:
+				skippedExcluded++
+			case importSkipNone:
+				imported++
+				if outcome.NoBaseURL {
+					skippedNoBaseURL++
+				}
+				if outcome.Created {
+					sitesCreated++
+				}
+				if outcome.Merged {
+					sitesMerged++
+				}
+				if outcome.DidDetect {
+					detected++
+				}
 			}
 		}
 		if len(items) < pageSize {
@@ -72,14 +84,17 @@ func (s *Service) ImportChannelsFromAdminAPIWithOptions(ctx context.Context, raw
 		}
 	}
 	if notify {
-		s.infra.Notify("channels_imported", "success", "NewAPI 后台导入完成", fmt.Sprintf("从 %s 导入 %d 条渠道，生成 %d 个站点，合并 %d 个站点。", baseURL, imported, sitesCreated, sitesMerged), "local_newapi_instance", instanceID)
+		s.infra.Notify("channels_imported", "success", "NewAPI 后台导入完成", fmt.Sprintf("从 %s 导入 %d 条渠道（拉取 %d，排除 %d，无地址 %d），生成 %d 个站点，合并 %d 个站点。", baseURL, imported, fetched, skippedExcluded, skippedNoBaseURL, sitesCreated, sitesMerged), "local_newapi_instance", instanceID)
 	}
 	return map[string]interface{}{
-		"instanceId":    instanceID,
-		"importedCount": imported,
-		"sitesCreated":  sitesCreated,
-		"sitesMerged":   sitesMerged,
-		"detectedCount": detected,
+		"instanceId":       instanceID,
+		"fetchedCount":     fetched,
+		"importedCount":    imported,
+		"skippedExcluded":  skippedExcluded,
+		"skippedNoBaseURL": skippedNoBaseURL,
+		"sitesCreated":     sitesCreated,
+		"sitesMerged":      sitesMerged,
+		"detectedCount":    detected,
 	}, nil
 }
 
@@ -132,9 +147,28 @@ func (s *Service) fetchAdminAPIChannels(ctx context.Context, baseURL string, acc
 	return items, nil
 }
 
-// importChannelRecord inserts/updates a single imported_channels row from an
-// admin API record, optionally creating an upstream_site.
-func (s *Service) importChannelRecord(ctx context.Context, instanceID string, record map[string]interface{}, importKeys bool, createSites bool, detectAfterImport bool) (string, bool, bool, bool, error) {
+// importSkipReason classifies why a channel record was not fully usable.
+type importSkipReason string
+
+const (
+	importSkipNone     importSkipReason = ""
+	importSkipExcluded importSkipReason = "excluded"
+)
+
+// importChannelOutcome is the structured result of importing one channel record.
+type importChannelOutcome struct {
+	ChannelID string
+	Created   bool
+	Merged    bool
+	DidDetect bool
+	NoBaseURL bool
+	Skip      importSkipReason
+}
+
+// importChannelRecordOutcome inserts/updates a single imported_channels row and
+// reports skip / site-creation diagnostics for structured sync counters.
+func (s *Service) importChannelRecordOutcome(ctx context.Context, instanceID string, record map[string]interface{}, importKeys bool, createSites bool, detectAfterImport bool, importSource string) (importChannelOutcome, error) {
+	var out importChannelOutcome
 	sourceID := stringValue(record, "id")
 	if sourceID == "" {
 		sourceID = s.infra.NewID()
@@ -145,7 +179,11 @@ func (s *Service) importChannelRecord(ctx context.Context, instanceID string, re
 	}
 	channelBaseURL := extractImportedBaseURL(record)
 	if isExcludedRelaySite(name, channelBaseURL) {
-		return "", false, false, false, nil
+		out.Skip = importSkipExcluded
+		return out, nil
+	}
+	if channelBaseURL == "" {
+		out.NoBaseURL = true
 	}
 	status := stringValue(record, "status")
 	keyValue := stringValue(record, "key")
@@ -155,11 +193,11 @@ func (s *Service) importChannelRecord(ctx context.Context, instanceID string, re
 		var err error
 		keyEncrypted, err = s.infra.EncryptText(keyValue)
 		if err != nil {
-			return "", false, false, false, err
+			return out, err
 		}
 		keyMasked = maskSecret(keyValue)
 	}
-	rawJSON, _ := marshalImportedRecord(record, "admin_api")
+	rawJSON, _ := marshalImportedRecord(record, importSource)
 	kind := inferImportedKind(record, channelBaseURL)
 
 	channelID := s.infra.NewID()
@@ -180,44 +218,56 @@ func (s *Service) importChannelRecord(ctx context.Context, instanceID string, re
 			updated_at=excluded.updated_at
 	`, channelID, instanceID, sourceID, name, channelBaseURL, status, kind, keyEncrypted, keyMasked, rawJSON, s.infra.Now(), s.infra.Now())
 	if err != nil {
-		return "", false, false, false, err
+		return out, err
 	}
 	if err := s.infra.DB().QueryRowContext(ctx, `
 		SELECT id FROM imported_channels
 		WHERE local_instance_id=? AND source_channel_id=?
 	`, instanceID, sourceID).Scan(&channelID); err != nil {
-		return "", false, false, false, err
+		return out, err
 	}
+	out.ChannelID = channelID
 
-	created := false
-	merged := false
-	didDetect := false
 	if createSites && channelBaseURL != "" {
 		var detection *Detection
 		if detectAfterImport {
 			nextDetection, detectErr := s.infra.DetectUpstreamForImport(ctx, channelBaseURL)
 			if detectErr != nil {
-				return "", false, false, false, detectErr
+				return out, detectErr
 			}
 			detection = &nextDetection
-			didDetect = true
+			out.DidDetect = true
 			_, err = s.infra.DB().ExecContext(ctx, `
 				UPDATE imported_channels
 				SET base_url=?, upstream_kind=?, supports_checkin=?, supports_balance=?, supports_models=?, supports_pricing=?, detection_json=?, last_detected_at=?, updated_at=?
 				WHERE id=?
 			`, nextDetection.BaseURL, nextDetection.Kind, boolInt(nextDetection.SupportsCheckin), boolInt(nextDetection.SupportsBalance), boolInt(nextDetection.SupportsModels), boolInt(nextDetection.SupportsPricing), mustJSON(nextDetection), s.infra.Now(), s.infra.Now(), channelID)
 			if err != nil {
-				return "", false, false, false, err
+				return out, err
 			}
 		}
 		_, wasCreated, err := s.infra.EnsureChannelSiteForImport(ctx, channelID, name, channelBaseURL, kind, detection)
 		if err != nil {
-			return "", false, false, false, err
+			return out, err
 		}
-		created = wasCreated
-		merged = !wasCreated
+		out.Created = wasCreated
+		out.Merged = !wasCreated
 	}
-	return channelID, created, merged, didDetect, nil
+	return out, nil
+}
+
+// importChannelRecord inserts/updates a single imported_channels row from an
+// admin API record, optionally creating an upstream_site.
+// Prefer importChannelRecordOutcome for structured counters.
+func (s *Service) importChannelRecord(ctx context.Context, instanceID string, record map[string]interface{}, importKeys bool, createSites bool, detectAfterImport bool) (string, bool, bool, bool, error) {
+	out, err := s.importChannelRecordOutcome(ctx, instanceID, record, importKeys, createSites, detectAfterImport, "admin_api")
+	if err != nil {
+		return "", false, false, false, err
+	}
+	if out.Skip != importSkipNone {
+		return "", false, false, false, nil
+	}
+	return out.ChannelID, out.Created, out.Merged, out.DidDetect, nil
 }
 
 // fetchAllAdminAPIChannelRecords paginates through all admin API channel

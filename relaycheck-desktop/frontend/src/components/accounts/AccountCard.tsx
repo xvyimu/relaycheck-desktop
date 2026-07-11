@@ -1,6 +1,22 @@
 import { useEffect, useState } from "react";
 import { api } from "@/api/client";
-import { accountActionButtonLabel, formatBrowserLoginOpenMessage, formatBrowserLoginSaveMessage, formatLoginStatusTestMessage } from "@/lib/accountActions";
+import {
+  accountActionButtonLabel,
+  appendReloginHint,
+  formatBrowserLoginOpenMessage,
+  formatBrowserLoginSaveMessage,
+  formatLoginStatusTestMessage,
+  isBrowserLoginOpenSuccess,
+  isBrowserLoginSaveSuccess,
+  isLikelyAuthFailureMessage,
+  isLoginStatusValid,
+  primaryActionsForRelogin,
+  RELOGIN_STEPS,
+  reloginStepIndex,
+  shouldShowReloginSteps,
+  type PrimaryActionKey,
+  type ReloginUiPhase,
+} from "@/lib/accountActions";
 import { formatBalanceValue, formatTime } from "@/lib/format";
 import { apiKeyStatusLabel, formatAPIKeyTestMessage, loginStatusLabel, statusLabel, upstreamKindLabel } from "@/lib/labels";
 import type { Account, APIKeyTestResult, BrowserLoginOpenResponse, BrowserLoginSaveResponse, LoginStatusTestResponse } from "@/types";
@@ -20,6 +36,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
   const [moreOpen, setMoreOpen] = useState(false);
   const [showTwoFactorGuide, setShowTwoFactorGuide] = useState(false);
   const [dismissedTwoFactor, setDismissedTwoFactor] = useState(false);
+  const [reloginPhase, setReloginPhase] = useState<ReloginUiPhase>("idle");
   const [displayName, setDisplayName] = useState(account.displayName);
   const [siteName, setSiteName] = useState(account.upstreamSiteName);
   const [baseUrl, setBaseUrl] = useState(account.upstreamSiteBaseUrl || "");
@@ -36,7 +53,13 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
   const [busy, setBusy] = useState("");
   const isProblem = isProblemAccount(account);
   const isBusy = busy !== "";
-  const isMessageError = message.includes("失败") || message.includes("错误") || message.includes("失效");
+  const isMessageError =
+    message.includes("失败") || message.includes("错误") || message.includes("失效") || isLikelyAuthFailureMessage(message);
+  const primaryKeys = primaryActionsForRelogin(reloginPhase);
+  const showReloginSteps = shouldShowReloginSteps(account.loginStatus, account.lastCheckinStatus, reloginPhase);
+  const activeStep = reloginStepIndex(reloginPhase, account.loginStatus);
+  const saveIsPrimary = primaryKeys.includes("save");
+  const testIsPrimary = primaryKeys.includes("test");
 
   useEffect(() => {
     setDisplayName(account.displayName);
@@ -54,6 +77,12 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     setDismissedTwoFactor(false);
   }, [account.id, account.displayName, account.upstreamSiteName, account.upstreamSiteBaseUrl, account.upstreamSiteLoginUrl, account.upstreamSiteKind, account.email, account.username, account.authType]);
 
+  useEffect(() => {
+    setReloginPhase("idle");
+    setMessage("");
+    setMoreOpen(false);
+  }, [account.id]);
+
   async function runAction<T>(label: string, action: () => Promise<T>, formatSuccess?: (result: T) => string) {
     if (isBusy) return;
     setBusy(label);
@@ -63,10 +92,61 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
       await onDone();
       setMessage(formatSuccess ? formatSuccess(result) : `${label}完成。`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : `${label}失败`);
+      const raw = error instanceof Error ? error.message : `${label}失败`;
+      const withHint =
+        (label === "签到" || label === "刷新余额" || label === "测试登录态") && isLikelyAuthFailureMessage(raw)
+          ? appendReloginHint(raw)
+          : raw;
+      setMessage(withHint);
     } finally {
       setBusy("");
     }
+  }
+
+  async function openBrowserLogin() {
+    await runAction(
+      "网页登录",
+      async () => {
+        const result = await api<BrowserLoginOpenResponse>(`/api/accounts/${account.id}/open-browser-login`, {
+          method: "POST",
+        });
+        if (isBrowserLoginOpenSuccess(result.status)) {
+          setReloginPhase("browser_open");
+        }
+        return result;
+      },
+      formatBrowserLoginOpenMessage,
+    );
+  }
+
+  async function finishBrowserLogin() {
+    await runAction(
+      "保存授权",
+      async () => {
+        const result = await api<BrowserLoginSaveResponse>(`/api/accounts/${account.id}/finish-browser-login`, {
+          method: "POST",
+        });
+        if (isBrowserLoginSaveSuccess(result.status)) {
+          setReloginPhase("auth_saved");
+        }
+        return result;
+      },
+      formatBrowserLoginSaveMessage,
+    );
+  }
+
+  async function testLoginStatus() {
+    await runAction(
+      "测试登录态",
+      async () => {
+        const result = await api<LoginStatusTestResponse>(`/api/accounts/${account.id}/test-login`, { method: "POST" });
+        if (isLoginStatusValid(result.status)) {
+          setReloginPhase("idle");
+        }
+        return result;
+      },
+      formatLoginStatusTestMessage,
+    );
   }
 
   async function saveAccount() {
@@ -106,6 +186,67 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     const confirmed = window.confirm(`确认删除账号"${account.displayName}"？这会删除该账号保存的密码、Cookie、Token 和 API Key 等凭据。`);
     if (!confirmed) return;
     await runAction("删除账号", () => api(`/api/accounts/${account.id}`, { method: "DELETE" }));
+  }
+
+  function renderPrimaryButton(key: PrimaryActionKey) {
+    switch (key) {
+      case "open":
+        return (
+          <button
+            key="open"
+            type="button"
+            disabled={isBusy}
+            aria-label={`打开 ${account.displayName} 的网页登录`}
+            onClick={() => void openBrowserLogin()}
+          >
+            {accountActionButtonLabel("网页登录", busy)}
+          </button>
+        );
+      case "save":
+        return (
+          <button
+            key="save"
+            type="button"
+            disabled={isBusy}
+            aria-label={`保存 ${account.displayName} 的浏览器授权`}
+            onClick={() => void finishBrowserLogin()}
+          >
+            {accountActionButtonLabel("保存授权", busy)}
+          </button>
+        );
+      case "test":
+        return (
+          <button
+            key="test"
+            type="button"
+            disabled={isBusy}
+            aria-label={`测试 ${account.displayName} 的登录态`}
+            onClick={() => void testLoginStatus()}
+          >
+            {accountActionButtonLabel("测试登录态", busy, "检测中…")}
+          </button>
+        );
+      case "checkin":
+        return (
+          <button
+            key="checkin"
+            type="button"
+            disabled={isBusy}
+            aria-label={`为 ${account.displayName} 执行签到`}
+            onClick={() => void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))}
+          >
+            {accountActionButtonLabel("签到", busy)}
+          </button>
+        );
+      case "detail":
+        return (
+          <button key="detail" type="button" className="ghost" disabled={isBusy} onClick={onOpenDetail}>
+            详情
+          </button>
+        );
+      default:
+        return null;
+    }
   }
 
   return (
@@ -154,6 +295,20 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
 
       {account.lastCheckinMessage ? <div className="problem-hint">{account.lastCheckinMessage}</div> : null}
 
+      {showReloginSteps ? (
+        <div className="account-relogin-steps" aria-label="会话重登步骤">
+          {RELOGIN_STEPS.map((label, index) => {
+            const stateClass = index < activeStep ? "is-done" : index === activeStep ? "is-current" : "";
+            return (
+              <span key={label} className={`account-relogin-step ${stateClass}`.trim()}>
+                <b aria-hidden="true">{index + 1}</b>
+                {label}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+
       {account.loginStatus === "two_factor_required" && !dismissedTwoFactor ? (
         <TwoFactorGuide
           variant="inline"
@@ -161,11 +316,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
           baseUrl={account.upstreamSiteBaseUrl}
           loginUrl={account.upstreamSiteLoginUrl || defaultLoginUrl(account.upstreamSiteBaseUrl || "")}
           onClose={() => setDismissedTwoFactor(true)}
-          onOpenBrowserLogin={() => void runAction(
-            "网页登录",
-            () => api<BrowserLoginOpenResponse>(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" }),
-            formatBrowserLoginOpenMessage,
-          )}
+          onOpenBrowserLogin={() => void openBrowserLogin()}
         />
       ) : null}
 
@@ -250,27 +401,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
 
       <div className="account-card-actions">
         <div className="account-action-group primary">
-          <button
-            type="button"
-            disabled={isBusy}
-            aria-label={`打开 ${account.displayName} 的网页登录`}
-            onClick={() => void runAction(
-              "网页登录",
-              () => api<BrowserLoginOpenResponse>(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" }),
-              formatBrowserLoginOpenMessage,
-            )}
-          >
-            {accountActionButtonLabel("网页登录", busy)}
-          </button>
-          <button
-            type="button"
-            disabled={isBusy}
-            aria-label={`为 ${account.displayName} 执行签到`}
-            onClick={() => void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))}
-          >
-            {accountActionButtonLabel("签到", busy)}
-          </button>
-          <button type="button" className="ghost" disabled={isBusy} onClick={onOpenDetail}>详情</button>
+          {primaryKeys.map((key) => renderPrimaryButton(key))}
           <button
             type="button"
             className={`ghost more-toggle ${moreOpen ? "active" : ""}`}
@@ -285,32 +416,39 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
           <div className="account-more-panel">
             <div className="account-action-label">会话与余额</div>
             <div className="account-action-group secondary">
-              <button
-                type="button"
-                className="ghost"
-                disabled={isBusy}
-                aria-label={`保存 ${account.displayName} 的浏览器授权`}
-                onClick={() => void runAction(
-                  "保存授权",
-                  () => api<BrowserLoginSaveResponse>(`/api/accounts/${account.id}/finish-browser-login`, { method: "POST" }),
-                  formatBrowserLoginSaveMessage,
-                )}
-              >
-                {accountActionButtonLabel("保存授权", busy)}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                disabled={isBusy}
-                aria-label={`测试 ${account.displayName} 的登录态`}
-                onClick={() => void runAction(
-                  "测试登录态",
-                  () => api<LoginStatusTestResponse>(`/api/accounts/${account.id}/test-login`, { method: "POST" }),
-                  formatLoginStatusTestMessage,
-                )}
-              >
-                {accountActionButtonLabel("测试登录态", busy, "检测中…")}
-              </button>
+              {!saveIsPrimary ? (
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={isBusy}
+                  aria-label={`保存 ${account.displayName} 的浏览器授权`}
+                  onClick={() => void finishBrowserLogin()}
+                >
+                  {accountActionButtonLabel("保存授权", busy)}
+                </button>
+              ) : null}
+              {!testIsPrimary ? (
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={isBusy}
+                  aria-label={`测试 ${account.displayName} 的登录态`}
+                  onClick={() => void testLoginStatus()}
+                >
+                  {accountActionButtonLabel("测试登录态", busy, "检测中…")}
+                </button>
+              ) : null}
+              {!primaryKeys.includes("checkin") ? (
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={isBusy}
+                  aria-label={`为 ${account.displayName} 执行签到`}
+                  onClick={() => void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))}
+                >
+                  {accountActionButtonLabel("签到", busy)}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="ghost"
@@ -349,11 +487,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
           onClose={() => setShowTwoFactorGuide(false)}
           onOpenBrowserLogin={() => {
             setShowTwoFactorGuide(false);
-            void runAction(
-              "网页登录",
-              () => api<BrowserLoginOpenResponse>(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" }),
-              formatBrowserLoginOpenMessage,
-            );
+            void openBrowserLogin();
           }}
         />
       ) : null}

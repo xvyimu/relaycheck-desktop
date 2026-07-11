@@ -45,8 +45,12 @@ Layout optimization **alpha** (action-first flow) is **fully implemented** on br
 
 1. **Optional:** rebuild `dist/relaycheck.exe` and manual 1440/900/390 walkthrough (site filter, sidebar groups, dashboard fold).
 2. **Metrics (1 week):** plan section 6 - ops feedback on site-first path.
-3. **beta** (site master-detail): gated - plan section 8; do **not** start until alpha feedback + scale triggers.
-4. Unrelated backlog (#8 new-api channel sync, #9 checkin re-login) stays outside layout alpha.
+3. **beta** (site master-detail): gated - plan section 8; do **not** start until alpha feedback + scale triggers. Design review draft: `docs/superpowers/specs/2026-07-11-layout-beta-design-review-draft.md` (docs only).
+4. Backlog:
+   - **#8** NewAPI channel sync: **8.1 counters + 8.5 skip messages done** — Admin/SQLite import returns `fetchedCount` / `skippedExcluded` / `skippedNoBaseURL`; scheduler skip includes reason text. Spec: `docs/superpowers/specs/2026-07-11-newapi-channel-sync-exploration.md`. Remaining: 8.3 UI feedback, 8.4 exclude audit, optional 8.2 last-sync summary.
+   - **#9** session re-login: **frontend 9.1–9.5 done** — `AccountCard` elevates 保存授权 after open, step strip, auth failure hints; plan `docs/superpowers/specs/2026-07-11-session-relogin-plan.md`. No auto-login / 2FA bypass. Phase 2 (bulk wizard) still open.
+
+
 
 ### Suggested verify after pull
 

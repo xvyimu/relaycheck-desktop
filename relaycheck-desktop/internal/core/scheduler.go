@@ -402,6 +402,11 @@ func (a *App) runScheduledLocalNewAPISync(ctx context.Context) scheduledSyncResu
 		}
 		if strings.TrimSpace(instance.DatabasePath) == "" && (!isHTTPURL(instance.BaseURL) || !instance.HasSyncToken) {
 			result.SkippedInstances++
+			label := strings.TrimSpace(instance.Name)
+			if label == "" {
+				label = instance.ID
+			}
+			result.Messages = append(result.Messages, label+"：无数据库路径且无同步令牌，已跳过")
 			continue
 		}
 		syncResult, err := a.syncLocalNewAPIInstanceData(ctx, instance.ID, input, false)

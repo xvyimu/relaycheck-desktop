@@ -14,6 +14,7 @@ func (s *Service) ImportChannelsFromSQLite(ctx context.Context, dbPath string, i
 
 // ImportChannelsFromSQLiteWithOptions imports channels from a local NewAPI
 // SQLite DB, with a flag to suppress notifications (used by scheduled sync).
+// Result map includes the same diagnostic counters as Admin API import.
 func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPath string, importKeys bool, instanceName string, baseURL string, createSites bool, detectAfterImport bool, notify bool) (map[string]interface{}, error) {
 	cleanPath, err := filepath.Abs(dbPath)
 	if err != nil {
@@ -60,7 +61,10 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 		return nil, err
 	}
 
+	fetched := 0
 	imported := 0
+	skippedExcluded := 0
+	skippedNoBaseURL := 0
 	sitesCreated := 0
 	sitesMerged := 0
 	detected := 0
@@ -79,103 +83,46 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 			record[col] = normalizeDBValue(values[i])
 		}
 
-		sourceID := stringValue(record, "id")
-		if sourceID == "" {
-			sourceID = fmt.Sprintf("row-%d", imported+1)
-		}
-		name := stringValue(record, "name")
-		if name == "" {
-			name = "渠道 " + sourceID
-		}
-		channelBaseURL := extractImportedBaseURL(record)
-		if isExcludedRelaySite(name, channelBaseURL) {
-			continue
-		}
-		status := stringValue(record, "status")
-		keyValue := stringValue(record, "key")
-		keyEncrypted := ""
-		keyMasked := ""
-		if importKeys && keyValue != "" {
-			keyEncrypted, err = s.infra.EncryptText(keyValue)
-			if err != nil {
-				return nil, err
-			}
-			keyMasked = maskSecret(keyValue)
-		}
-		rawJSON, _ := marshalImportedRecord(record, "sqlite")
-		kind := inferImportedKind(record, channelBaseURL)
-
-		channelID := s.infra.NewID()
-		_, err = s.infra.DB().ExecContext(ctx, `
-			INSERT INTO imported_channels (id, local_instance_id, source_channel_id, name, base_url, status, upstream_kind, channel_key_encrypted, channel_key_masked, raw_json, detection_json, source_sync_status, source_missing_at, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'active', '', ?, ?)
-			ON CONFLICT(local_instance_id, source_channel_id) DO UPDATE SET
-				name=excluded.name,
-				base_url=excluded.base_url,
-				status=excluded.status,
-				upstream_kind=excluded.upstream_kind,
-				channel_key_encrypted=CASE WHEN excluded.channel_key_encrypted='' THEN imported_channels.channel_key_encrypted ELSE excluded.channel_key_encrypted END,
-				channel_key_masked=CASE WHEN excluded.channel_key_masked='' THEN imported_channels.channel_key_masked ELSE excluded.channel_key_masked END,
-				raw_json=excluded.raw_json,
-				detection_json=CASE WHEN excluded.detection_json='' THEN imported_channels.detection_json ELSE excluded.detection_json END,
-				source_sync_status='active',
-				source_missing_at='',
-				updated_at=excluded.updated_at
-		`, channelID, instanceID, sourceID, name, channelBaseURL, status, kind, keyEncrypted, keyMasked, rawJSON, s.infra.Now(), s.infra.Now())
+		fetched++
+		outcome, err := s.importChannelRecordOutcome(ctx, instanceID, record, importKeys, createSites, detectAfterImport, "sqlite")
 		if err != nil {
 			return nil, err
 		}
-		if err := s.infra.DB().QueryRowContext(ctx, `
-			SELECT id FROM imported_channels
-			WHERE local_instance_id=? AND source_channel_id=?
-		`, instanceID, sourceID).Scan(&channelID); err != nil {
-			return nil, err
-		}
-
-		if createSites && channelBaseURL != "" {
-			var detection *Detection
-			if detectAfterImport {
-				nextDetection, detectErr := s.infra.DetectUpstreamForImport(ctx, channelBaseURL)
-				if detectErr != nil {
-					return nil, detectErr
-				}
-				detection = &nextDetection
-				kind = nextDetection.Kind
-				detected++
-				_, err = s.infra.DB().ExecContext(ctx, `
-					UPDATE imported_channels
-					SET base_url=?, upstream_kind=?, supports_checkin=?, supports_balance=?, supports_models=?, supports_pricing=?, detection_json=?, last_detected_at=?, updated_at=?
-					WHERE id=?
-				`, nextDetection.BaseURL, nextDetection.Kind, boolInt(nextDetection.SupportsCheckin), boolInt(nextDetection.SupportsBalance), boolInt(nextDetection.SupportsModels), boolInt(nextDetection.SupportsPricing), mustJSON(nextDetection), s.infra.Now(), s.infra.Now(), channelID)
-				if err != nil {
-					return nil, err
-				}
+		switch outcome.Skip {
+		case importSkipExcluded:
+			skippedExcluded++
+		case importSkipNone:
+			imported++
+			if outcome.NoBaseURL {
+				skippedNoBaseURL++
 			}
-			_, created, err := s.infra.EnsureChannelSiteForImport(ctx, channelID, name, channelBaseURL, kind, detection)
-			if err != nil {
-				return nil, err
-			}
-			if created {
+			if outcome.Created {
 				sitesCreated++
-			} else {
+			}
+			if outcome.Merged {
 				sitesMerged++
 			}
+			if outcome.DidDetect {
+				detected++
+			}
 		}
-		imported++
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
 	if notify {
-		s.infra.Notify("channels_imported", "success", "渠道导入完成", fmt.Sprintf("从 SQLite 导入 %d 条渠道，生成 %d 个站点，合并 %d 个站点。", imported, sitesCreated, sitesMerged), "local_newapi_instance", instanceID)
+		s.infra.Notify("channels_imported", "success", "渠道导入完成", fmt.Sprintf("从 SQLite 导入 %d 条渠道（拉取 %d，排除 %d，无地址 %d），生成 %d 个站点，合并 %d 个站点。", imported, fetched, skippedExcluded, skippedNoBaseURL, sitesCreated, sitesMerged), "local_newapi_instance", instanceID)
 	}
 	return map[string]interface{}{
-		"instanceId":    instanceID,
-		"importedCount": imported,
-		"sitesCreated":  sitesCreated,
-		"sitesMerged":   sitesMerged,
-		"detectedCount": detected,
+		"instanceId":       instanceID,
+		"fetchedCount":     fetched,
+		"importedCount":    imported,
+		"skippedExcluded":  skippedExcluded,
+		"skippedNoBaseURL": skippedNoBaseURL,
+		"sitesCreated":     sitesCreated,
+		"sitesMerged":      sitesMerged,
+		"detectedCount":    detected,
 	}, nil
 }
 
