@@ -99,13 +99,13 @@ describe("actionItemNavigationIntent", () => {
 });
 
 describe("siteAccountsNavigationIntent", () => {
-  it("targets accounts with the given upstream site id", () => {
+  it("targets sites master-detail with the given upstream site id (S7.3)", () => {
     const result = siteAccountsNavigationIntent("site-abc");
-    expect(result).toEqual({ target: "accounts", upstreamSiteId: "site-abc" });
+    expect(result).toEqual({ target: "sites", upstreamSiteId: "site-abc" });
   });
 
   it("preserves empty string site id (caller may normalize)", () => {
     const result = siteAccountsNavigationIntent("");
-    expect(result).toEqual({ target: "accounts", upstreamSiteId: "" });
+    expect(result).toEqual({ target: "sites", upstreamSiteId: "" });
   });
 });

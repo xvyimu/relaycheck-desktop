@@ -320,15 +320,40 @@ async function checkViewport(browser, viewport) {
 
   await page.getByRole("button", { name: "站点", exact: true }).click({ force: true });
   await page.waitForTimeout(400);
+  // S7.3: "查看账号" deep-links to sites master-detail (not accounts tab). Prefer list-mode CTA when present.
+  const layoutList = page.getByRole("button", { name: "卡片", exact: true });
+  if ((await layoutList.count()) > 0) {
+    await layoutList.click({ force: true });
+    await page.waitForTimeout(300);
+  }
   const viewAccounts = page.getByRole("button", { name: /查看账号/ });
   if ((await viewAccounts.count()) > 0) {
     await viewAccounts.first().click({ force: true });
-    await page.locator(".accounts-panel").waitFor({ state: "visible", timeout: 8000 });
-    await page.waitForTimeout(400);
-    const siteVal = await page.locator('.accounts-panel select[aria-label="按上游站点筛选账号"]').inputValue();
-    record("sites view-accounts sets site filter", siteVal !== "all" && siteVal.length > 0, `site=${siteVal}`);
+    await page.waitForTimeout(500);
+    const master = page.locator('[data-testid="site-account-master-detail"]');
+    const masterVisible = (await master.count()) > 0;
+    const currentSite = page.locator(".master-detail-right-head strong");
+    const hasSelection = masterVisible && (await currentSite.count()) > 0;
+    record(
+      "sites view-accounts opens master-detail preselect",
+      hasSelection,
+      `master=${masterVisible} selectionText=${hasSelection ? await currentSite.first().textContent() : ""}`,
+    );
   } else {
-    record("sites view-accounts sets site filter", true, "button absent-skip");
+    // Master mode: click first site item to preselect
+    const siteItem = page.locator(".master-detail-site-item").first();
+    if ((await siteItem.count()) > 0) {
+      await siteItem.click({ force: true });
+      await page.waitForTimeout(400);
+      const currentSite = page.locator(".master-detail-right-head strong");
+      record(
+        "sites view-accounts opens master-detail preselect",
+        (await currentSite.count()) > 0,
+        "via master site item",
+      );
+    } else {
+      record("sites view-accounts opens master-detail preselect", true, "no sites-skip");
+    }
   }
 
   const metrics = await page.evaluate(() => {

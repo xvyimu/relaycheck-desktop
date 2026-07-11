@@ -1,7 +1,7 @@
 # 布局 β 设计评审草稿（主从：站点中轴）
 
 **日期：** 2026-07-11  
-**状态：** 评审草稿 · **仍不写代码**  
+**状态：** β-MVP（S7.1/S7.2/S7.4）已实现；S7.3 deep-link 于 2026-07-11 补齐 · IA-2/Tab 合并仍待  
 **前置：** 布局 α（S1–S6）已实现并验证（见 HANDOFF / commits `4c1318e` + `c8f35fa` + docs `458a6c6`）  
 **设计母本：** `2026-07-11-layout-optimization-design.md` §3.2  
 **门禁母本：** `2026-07-11-layout-optimization-plan.md` §8  

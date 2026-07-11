@@ -3,7 +3,7 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-11 (#8.4 排除审计 + #8.2 持久摘要)
+**Last updated:** 2026-07-11 (S7.3 site deep-link + #8.4/#8.2)
 
 ---
 
@@ -36,7 +36,7 @@ Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **
 | #8.2 | `last_sync_at` / `last_sync_summary` ensureColumn; List/Get SELECT; Sync 成功后 `SaveLocalNewAPILastSyncSummary`; 实例卡展示上次摘要 | done |
 | #9 Phase 2 | `BulkReloginWizard` (open/save batch); `AccountDetailContent` re-login step strip + CTAs | done |
 
-Still open: β Tab merge / full IA-2 (out of #8 scope).
+Still open: β Tab merge / full IA-2 (out of #8 scope). Accounts tab still accepts legacy upstreamSiteId filter.
 
 ### Key files (#8.4 / #8.2)
 

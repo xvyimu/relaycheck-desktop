@@ -31,12 +31,16 @@ export function actionItemNavigationIntent(item: NavigableAction): NavigationInt
   }
 }
 
-/** Jump to accounts tab with a site filter applied (sites card / detail CTA). */
+/**
+ * Jump into Sites master-detail with a site preselected (S7.3 / β IA-1).
+ * Prefer sites tab over accounts tab so left/right panes open on the site.
+ * Accounts tab still accepts upstreamSiteId for legacy intents.
+ */
 export function siteAccountsNavigationIntent(
   upstreamSiteId: string,
-): Omit<NavigationIntent, "target"> & { target: "accounts" } {
+): Omit<NavigationIntent, "target"> & { target: "sites" } {
   return {
-    target: "accounts",
+    target: "sites",
     upstreamSiteId,
   };
 }
