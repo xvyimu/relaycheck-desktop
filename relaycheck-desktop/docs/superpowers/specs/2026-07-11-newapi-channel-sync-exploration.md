@@ -1,7 +1,7 @@
 # #8 NewAPI 渠道同步 · 探查与方案
 
 **日期：** 2026-07-11  
-**状态：** 8.1 结构化计数 + 8.5 skip 文案已实现 · 8.3/8.4/8.2 仍待  
+**状态：** 8.1 结构化计数 + 8.5 skip 文案 + 8.3 前端同步反馈已实现 · 8.4/8.2 仍待  
 **范围：** 本机 / 远程 NewAPI 实例 → `imported_channels`（及可选上游站点）同步链路  
 **关联代码：** `internal/accounts/import_admin_api.go`、`local_newapi.go`、`import_sqlite.go`、`sync_preview.go`；`internal/core/local_newapi.go`、`import_admin_api.go`、`scheduler.go`（job `sync.local_newapi`）  
 **安全：** 本文不出现真实 token / 密钥 / 库路径中的敏感段；示例仅用占位符
@@ -203,3 +203,4 @@ instance 存在？
 |------|------|
 | 2026-07-11 | 初稿：基于 import_admin_api / local_newapi / scheduler 源码探查；docs-only |
 | 2026-07-11 | 8.1：Admin/SQLite 导入返回 fetched/skippedExcluded/skippedNoBaseURL；8.5：定时无凭证 skip 写入 Messages；单测 import_counters_test |
+| 2026-07-11 | 8.3：LocalNewAPISyncPanel + syncFeedback（空源/排除/需令牌）；Scan 页挂载；禁止关闭 2FA 文案 |

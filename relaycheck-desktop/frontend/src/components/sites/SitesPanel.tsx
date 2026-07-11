@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "@/api/client";
+import { SiteAccountMasterDetail } from "@/components/sites/SiteAccountMasterDetail";
 import { formatConfidence, formatDuration, formatTime } from "@/lib/format";
 import { loginDiscoverySourceLabel, normalizeLoginDiscovery, parseLoginDiscovery } from "@/lib/loginDiscovery";
 import type { LoginDiscovery, NextRunItem, NavigationIntent, SiteDetail, TabKey, UpstreamSite } from "@/types";
@@ -44,6 +45,7 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProp
   const [message, setMessage] = useState("");
   const [healthFilter, setHealthFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
+  const [layoutMode, setLayoutMode] = useState<"list" | "master">("master");
   const detailRequestRef = useRef(0);
   const detailCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const detailTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -101,6 +103,9 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProp
     if (!intent) return;
     if (intent.siteHealth === "unreachable") setHealthFilter("unreachable");
     if (typeof intent.query === "string") setQuery(intent.query);
+    if (typeof intent.upstreamSiteId === "string" && intent.upstreamSiteId.trim()) {
+      setLayoutMode("master");
+    }
   }, [intent]);
 
   async function detect(site: UpstreamSite) {
@@ -200,6 +205,22 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProp
         >
           {task.loading || task.progress?.status === "running" ? "探测中…" : "批量探测"}
         </button>
+        <div className="segmented" role="group" aria-label="站点布局">
+          <button
+            type="button"
+            className={layoutMode === "master" ? "active" : ""}
+            onClick={() => setLayoutMode("master")}
+          >
+            主从
+          </button>
+          <button
+            type="button"
+            className={layoutMode === "list" ? "active" : ""}
+            onClick={() => setLayoutMode("list")}
+          >
+            卡片
+          </button>
+        </div>
       </div>
 
       <TaskProgressView
@@ -213,7 +234,13 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProp
 
       {message ? <div className="problem-hint">{message}</div> : null}
 
-      <div className="site-toolbar card">
+      
+
+      {layoutMode === "master" ? (
+        <SiteAccountMasterDetail sites={sites} onRefresh={onRefresh} intent={intent} />
+      ) : (
+        <>
+<div className="site-toolbar card">
         <div className="proxy-form-grid">
           <label className="field">
             <span>搜索</span>
@@ -359,7 +386,8 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProp
           </div>
         ) : null}
       </div>
-
+        </>
+      )}
       {detail ? (
         <div className="drawer-backdrop" role="presentation" onClick={closeDetail}>
           <aside

@@ -219,3 +219,8 @@ states:
 | 日期 | 说明 |
 |------|------|
 | 2026-07-11 | 初稿：对齐现网 BrowserLogin/AccountCard 与 07-03 闭环设计；明确非自动登录；docs-only |
+
+## Implementation note (2026-07-11)
+
+- Phase 2: BulkReloginWizard on Accounts tab; detail drawer re-login steps/CTAs in AccountDetailContent.
+- Still **no** auto-login / 2FA bypass.

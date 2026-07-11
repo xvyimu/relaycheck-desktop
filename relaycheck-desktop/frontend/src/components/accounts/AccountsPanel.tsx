@@ -3,6 +3,7 @@ import { AccountCard } from "@/components/accounts/AccountCard";
 import { AccountDetailContent } from "@/components/accounts/AccountDetailContent";
 import { AccountForm } from "@/components/accounts/AccountForm";
 import { AccountInsights } from "@/components/accounts/AccountInsights";
+import { BulkReloginWizard } from "@/components/accounts/BulkReloginWizard";
 import { isProblemAccount } from "@/components/accounts/helpers";
 import { Empty } from "@/components/ui/empty";
 import { useSiteAccounts } from "@/hooks/useSiteAccounts";
@@ -113,6 +114,7 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
   return (
     <section className="accounts-panel">
       <AccountInsights accounts={accounts} onDone={handleDone} />
+      <BulkReloginWizard accounts={accounts} onDone={handleDone} />
       <AccountForm sites={sites} onDone={handleDone} />
       <div className="account-toolbar card">
         <div className="channel-summary compact-summary">

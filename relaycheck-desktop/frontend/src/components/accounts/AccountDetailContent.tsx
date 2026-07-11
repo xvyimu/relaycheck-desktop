@@ -1,6 +1,26 @@
+import { useState } from "react";
+
+import { api } from "@/api/client";
+import {
+  formatBrowserLoginOpenMessage,
+  formatBrowserLoginSaveMessage,
+  formatLoginStatusTestMessage,
+  isBrowserLoginOpenSuccess,
+  isBrowserLoginSaveSuccess,
+  isLoginStatusValid,
+  RELOGIN_STEPS,
+  reloginStepIndex,
+  shouldShowReloginSteps,
+  type ReloginUiPhase,
+} from "@/lib/accountActions";
 import { formatBalanceValue, formatTime } from "@/lib/format";
 import { apiKeyStatusLabel, loginStatusLabel, statusLabel } from "@/lib/labels";
-import type { Account } from "@/types";
+import type {
+  Account,
+  BrowserLoginOpenResponse,
+  BrowserLoginSaveResponse,
+  LoginStatusTestResponse,
+} from "@/types";
 import { TwoFactorGuide } from "@/components/ui/TwoFactorGuide";
 
 export function AccountDetailContent({ account, onClose }: { account: Account; onClose: () => void }) {
@@ -8,6 +28,73 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
   const checkinState = account.lastCheckinStatus || "";
   const keyState = account.apiKeyFingerprint ? apiKeyStatusLabel(account.apiKeyStatus || "unchecked") : "未保存";
   const needsTwoFactor = account.loginStatus === "two_factor_required";
+  const [reloginPhase, setReloginPhase] = useState<ReloginUiPhase>("idle");
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+  const showReloginSteps = shouldShowReloginSteps(account.loginStatus, account.lastCheckinStatus, reloginPhase);
+  const activeStep = reloginStepIndex(reloginPhase, account.loginStatus);
+  const isBusy = busy !== "";
+
+  async function openBrowserLogin() {
+    if (isBusy) return;
+    setBusy("open");
+    setMessage("");
+    try {
+      const result = await api<BrowserLoginOpenResponse>(`/api/accounts/${account.id}/open-browser-login`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      if (isBrowserLoginOpenSuccess(result.status)) {
+        setReloginPhase("browser_open");
+      }
+      setMessage(formatBrowserLoginOpenMessage(result));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "打开网页登录失败");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function saveAuth() {
+    if (isBusy) return;
+    setBusy("save");
+    setMessage("");
+    try {
+      const result = await api<BrowserLoginSaveResponse>(`/api/accounts/${account.id}/finish-browser-login`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      if (isBrowserLoginSaveSuccess(result.status)) {
+        setReloginPhase("auth_saved");
+      }
+      setMessage(formatBrowserLoginSaveMessage(result));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "保存授权失败");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function testLogin() {
+    if (isBusy) return;
+    setBusy("test");
+    setMessage("");
+    try {
+      const result = await api<LoginStatusTestResponse>(`/api/accounts/${account.id}/test-login-status`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      if (isLoginStatusValid(result.status)) {
+        setReloginPhase("auth_saved");
+      }
+      setMessage(formatLoginStatusTestMessage(result));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "测试登录态失败");
+    } finally {
+      setBusy("");
+    }
+  }
+
   return (
     <>
       <div className="detail-header">
@@ -17,9 +104,42 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
           <p>{account.upstreamSiteName || "未记录站点"}</p>
         </div>
         <div className="detail-actions">
-          <button className="ghost" onClick={onClose}>关闭</button>
+          <button type="button" className="ghost" onClick={onClose}>关闭</button>
         </div>
       </div>
+
+      {showReloginSteps ? (
+        <div className="account-relogin-steps" aria-label="重登步骤">
+          {RELOGIN_STEPS.map((label, index) => {
+            const stateClass =
+              index < activeStep ? "is-done" : index === activeStep ? "is-current" : "";
+            return (
+              <span key={label} className={`account-relogin-step ${stateClass}`.trim()}>
+                <b aria-hidden="true">{index + 1}</b>
+                {label}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div className="toolbar detail-relogin-actions">
+        <button type="button" disabled={isBusy} onClick={() => void openBrowserLogin()}>
+          {busy === "open" ? "打开中…" : "网页登录"}
+        </button>
+        <button type="button" disabled={isBusy || reloginPhase === "idle"} onClick={() => void saveAuth()}>
+          {busy === "save" ? "保存中…" : "保存授权"}
+        </button>
+        <button type="button" className="ghost" disabled={isBusy} onClick={() => void testLogin()}>
+          {busy === "test" ? "测试中…" : "测试登录态"}
+        </button>
+      </div>
+
+      {message ? (
+        <div className="note" role="status" aria-live="polite">
+          {message}
+        </div>
+      ) : null}
 
       <div className="detail-grid">
         <section className="detail-card">
@@ -64,11 +184,23 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
                 loginUrl={account.upstreamSiteLoginUrl}
               />
             ) : null}
-            {account.loginStatus !== "valid" && !needsTwoFactor ? <div className="problem-hint detail-hint">登录态异常，需重新登录或保存授权。</div> : null}
-            {!["success", "already_checked"].includes(checkinState) ? <div className="problem-hint detail-hint">最近签到未确认成功，建议在签到页查看返回消息。</div> : null}
-            {account.apiKeyFingerprint && account.apiKeyStatus !== "valid" ? <div className="problem-hint detail-hint">API Key 状态异常，需要重新检测。</div> : null}
-            {account.balance === undefined ? <div className="problem-hint detail-hint">暂无余额快照，刷新余额后再做趋势判断。</div> : null}
-            {account.loginStatus === "valid" && ["success", "already_checked"].includes(checkinState) && (!account.apiKeyFingerprint || account.apiKeyStatus === "valid") ? <div className="note">账号状态正常，已是最佳状态。</div> : null}
+            {account.loginStatus !== "valid" && !needsTwoFactor ? (
+              <div className="problem-hint detail-hint">登录态异常，需重新登录或保存授权。不自动填密码、不绕过 2FA。</div>
+            ) : null}
+            {!["success", "already_checked"].includes(checkinState) ? (
+              <div className="problem-hint detail-hint">最近签到未确认成功，建议在签到页查看返回消息。</div>
+            ) : null}
+            {account.apiKeyFingerprint && account.apiKeyStatus !== "valid" ? (
+              <div className="problem-hint detail-hint">API Key 状态异常，需要重新检测。</div>
+            ) : null}
+            {account.balance === undefined ? (
+              <div className="problem-hint detail-hint">暂无余额快照，刷新余额后再做趋势判断。</div>
+            ) : null}
+            {account.loginStatus === "valid" &&
+            ["success", "already_checked"].includes(checkinState) &&
+            (!account.apiKeyFingerprint || account.apiKeyStatus === "valid") ? (
+              <div className="note">账号状态正常，已是最佳状态。</div>
+            ) : null}
           </div>
         </section>
       </div>

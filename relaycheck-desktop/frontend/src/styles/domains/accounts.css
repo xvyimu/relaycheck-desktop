@@ -821,3 +821,340 @@
   color: var(--primary-strong);
 }
 
+/* Layout β master-detail */
+.master-detail {
+  display: grid;
+  grid-template-columns: minmax(260px, 32%) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  min-height: 420px;
+}
+
+.master-detail-left,
+.master-detail-right {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.master-detail-toolbar,
+.master-detail-right-head {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.master-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.master-detail-summary div {
+  display: grid;
+  gap: 4px;
+}
+
+.master-detail-summary span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.master-detail-summary strong {
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.master-detail-site-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(70vh, 720px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.master-detail-site-item {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(99, 115, 138, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 12px 12px 10px;
+  box-shadow: 0 6px 16px rgba(25, 58, 99, 0.04);
+  cursor: pointer;
+}
+
+.master-detail-site-item:hover {
+  border-color: rgba(15, 110, 234, 0.28);
+}
+
+.master-detail-site-item.is-selected {
+  border-color: rgba(15, 110, 234, 0.42);
+  background: rgba(239, 247, 255, 0.96);
+  box-shadow: 0 10px 22px rgba(15, 110, 234, 0.1);
+}
+
+.master-detail-site-item.is-unhealthy {
+  border-color: rgba(220, 80, 80, 0.22);
+}
+
+.master-detail-site-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.master-detail-site-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.master-detail-site-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 750;
+}
+
+.master-detail-site-item em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.master-detail-empty {
+  display: grid;
+  gap: 6px;
+  padding: 18px 12px;
+  color: var(--muted-strong);
+  text-align: center;
+}
+
+.master-detail-empty strong {
+  color: var(--v4-text);
+}
+
+.master-detail-back-row {
+  display: none;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.master-detail-account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.master-detail-account-filter {
+  max-width: 220px;
+}
+
+.site-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 1180px) {
+  .master-detail {
+    grid-template-columns: minmax(240px, 36%) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .master-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .master-detail-back-row {
+    display: flex;
+  }
+
+  .master-detail:not(.master-detail-subview) .master-detail-right {
+    display: none;
+  }
+
+  .master-detail.master-detail-subview .master-detail-left {
+    display: none;
+  }
+}
+
+/* #8.3 NewAPI instance sync panel */
+.local-newapi-sync-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.local-newapi-sync-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+}
+
+.local-newapi-sync-head p {
+  margin: 6px 0 0;
+  color: var(--muted-strong);
+  font-size: 13px;
+  line-height: 1.55;
+  max-width: 64ch;
+}
+
+.local-newapi-instance-list {
+  display: grid;
+  gap: 12px;
+}
+
+.local-newapi-instance-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.local-newapi-instance-card.needs-credential {
+  border-color: rgba(200, 140, 20, 0.28);
+  background: linear-gradient(180deg, rgba(255, 250, 235, 0.55), rgba(255, 255, 255, 0.9));
+}
+
+.local-newapi-instance-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.local-newapi-instance-head > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.local-newapi-instance-head span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.local-newapi-instance-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+
+.local-newapi-instance-head em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.local-newapi-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.local-newapi-chips .chip.ok {
+  border-color: rgba(8, 132, 93, 0.22);
+  background: rgba(240, 250, 246, 0.92);
+  color: #0f6b4c;
+}
+
+.local-newapi-chips .chip.warn {
+  border-color: rgba(200, 140, 20, 0.28);
+  background: rgba(255, 248, 230, 0.92);
+  color: #8a5a00;
+}
+
+.local-newapi-hint,
+.local-newapi-db {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.local-newapi-token-row .field {
+  max-width: 480px;
+}
+
+/* #9 bulk re-login wizard */
+.bulk-relogin-wizard {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.bulk-relogin-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bulk-relogin-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bulk-relogin-head span {
+  color: var(--muted-strong);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.bulk-relogin-steps {
+  margin-top: 2px;
+}
+
+.bulk-relogin-guide {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted-strong);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.bulk-relogin-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.bulk-relogin-controls .field {
+  max-width: 160px;
+}
+
+.bulk-relogin-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 750;
+}

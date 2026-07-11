@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineIcon } from "@/components/ui/line-icon";
+import { LocalNewAPISyncPanel } from "@/components/scan/LocalNewAPISyncPanel";
 
 type AutoDetectResultItem = {
   dbPath: string;
@@ -161,6 +162,8 @@ function ScanPanelBase({ onRefresh }: ScanPanelProps) {
           </CardContent>
         </Card>
       ) : null}
+
+      <LocalNewAPISyncPanel onRefresh={onRefresh} />
     </section>
   );
 }
