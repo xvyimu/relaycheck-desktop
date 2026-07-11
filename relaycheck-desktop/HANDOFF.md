@@ -3,34 +3,33 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-10
+**Last updated:** 2026-07-11
 
 ---
 
 ## Current state
 
-The project is stable after the 2026-07-06 global optimization slice, but the
-worktree is intentionally dirty and has not been committed or packaged as a
-final release.
+The project is stable after the 2026-07-06 global optimization slice. Git tree was
+clean on `main`/`origin/main` at `98cb94e` when layout design was written; rebuild
+`dist\relaycheck.exe` for local launch (done once for accounts filter live test on
+2026-07-11).
 
-Current local state:
+Current local notes:
 
 - Branch: `main` tracking `origin/main`.
-- Worktree has uncommitted source/docs changes from the global optimization
-  slice.
-- Lightweight handoff state is now frozen. Do not keep slimming unless the
-  operator explicitly changes direction.
+- Accounts server filter (`?upstreamSiteId=`) already shipped in `e12aca5`; live
+  API check on 2026-07-11: PASS (25 accounts, multi-site filter correct).
+- **Layout optimization design complete (docs only, not yet coded):**
+  - Design: `docs/superpowers/specs/2026-07-11-layout-optimization-design.md`
+  - Plan: `docs/superpowers/specs/2026-07-11-layout-optimization-plan.md`
+  - Default scheme **α** (action-first flow): site filter on accounts, fold form/insights,
+    card primary CTA ≤3, dashboard collapse, sidebar groups.
+  - Scheme **β** (site master-detail) gated until α metrics + ops feedback.
+  - Next code slice: plan **S1** (AccountsPanel site filter + fold + card actions).
+- Lightweight handoff state remains frozen for unrelated slimming.
 - Preserved local state: `vendor\`, `data\`, and `frontend\dist\`.
-- Removed/generated state: `dist\`, `frontend\node_modules\`, `.tmp\`,
-  `docs\reports\`, smoke canary/output files, and TypeScript build info.
 - Before frontend test/build/smoke work, restore dependencies with
-  `cd frontend; npm ci`.
-- Before local executable launch or packaging, rebuild generated artifacts with
-  `cd frontend; npm run build` and
-  `go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .`.
-- Historical `338870bc3154` release artifacts were cleaned from `dist\releases`
-  during slimming. Rebuild a final package from the intended final tree before
-  operator handoff.
+  `cd frontend; npm ci` if `node_modules` missing.
 - Final operator approval remains pending; see
   `docs/OPERATOR_ACCEPTANCE_RECORD_DRAFT_2026-07-06.md`.
 
@@ -57,6 +56,8 @@ Latest engineering changes:
   `cd frontend; npm ci` before frontend test/build/smoke work.
 - Release docs: global optimization record, backend A3 audit, launch readiness,
   and operator acceptance draft are updated.
+- Layout IA design (2026-07-11): dashboard/sites/accounts diagnosis + α/β schemes
+  documented under `docs/superpowers/specs/2026-07-11-layout-optimization-*.md`.
 
 Latest verification gates passed:
 

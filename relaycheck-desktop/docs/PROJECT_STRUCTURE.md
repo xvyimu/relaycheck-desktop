@@ -48,6 +48,8 @@ Last updated: 2026-07-10
 | `CLAUDE.md` | AI agent / Claude Code onboarding: architecture, verification, conventions. |
 | `docs/manual-test-record.md` | Manual test record with before/after comparisons. |
 | `docs/reports/` | Generated/local progress reports, ignored by Git. May be absent after slimming. |
+| `docs/superpowers/specs/2026-07-11-layout-optimization-design.md` | Layout optimization design: dashboard/sites/accounts shell diagnosis, scheme α/β, metrics, DoD. |
+| `docs/superpowers/specs/2026-07-11-layout-optimization-plan.md` | Layout optimization implementation slices S1–S6, PR order, verification matrix. |
 
 ## Local And Generated Paths
 
