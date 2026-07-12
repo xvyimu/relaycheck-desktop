@@ -9,8 +9,10 @@ Read this first, then `CLAUDE.md` for architecture.
 
 ## ⏳ TODO (next session)
 
-- [x] **Push** — `c517226` (IA-2) + `b533653` (frontend opt) + `2611e3a` (handoff) on `origin/main` (direct push, proxy bypassed).
-- [x] **Release zip (post frontend opt)** — rebuild after CSP theme-bootstrap if shipping; prior zip `…-2611e3a5c9c4-…` / `a7990685…` is pre-bootstrap-external.
+- [ ] **Push `00529ee`** — CSP theme-bootstrap + visual smoke + session runbook. BLOCKED: `127.0.0.1:7897` proxy down and direct `github.com:443` connect fail. When network/proxy up: `git -c http.proxy= -c https.proxy= push` or start Clash then `git push`.
+- [x] **Release zip (post CSP bootstrap)** — `dist/releases/relaycheck-desktop-1.1.0-00529ee1ca70-20260712-145035.zip`  
+  Zip SHA256 `8b8b7efe3e018e9c6b0026043f30ecf44de2441a151fe7b6c3cb7a7d674a01a3` · `verify-package` PASS  
+  (supersedes `…-2611e3a5c9c4-…` / `a7990685…`)
 - [x] **Visual smoke** — `scripts/visual-smoke-theme.mjs` PASS (light/dark token L, 6 nav tabs, no hard console/CSP after external bootstrap). Screenshots local `.tmp/visual-smoke/` only.
 - [x] **Operator session-expiry runbook** — `docs/OPERATOR_SESSION_EXPIRY_RUNBOOK.md` tracked; linked from `OPERATOR_RUNBOOK.md`.
 
