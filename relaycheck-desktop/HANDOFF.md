@@ -9,8 +9,8 @@ Read this first, then `CLAUDE.md` for architecture.
 
 ## ⏳ TODO (next session)
 
-- [ ] **Push local commits** — branch is ahead of `origin/main` (IA-2 `c517226` + frontend optimization). BLOCKED if git proxy `127.0.0.1:7897` has no listener. Start Clash/mihomo, then `git push`. Fallback: `git -c http.proxy= -c https.proxy= push`.
-- [ ] Verify v1.1.0 release zip after push: `dist/releases/relaycheck-desktop-1.1.0-c5172260b4bc-20260712-052033.zip` (Zip SHA256 `73ee77f9743c92d7b6dd34e6958fbfc7c6f6eb457fd71ab2dfebd9a695086090`).
+- [x] **Push** — `c517226` (IA-2) + `b533653` (frontend opt) on `origin/main` (direct push, proxy bypassed).
+- [ ] Verify v1.1.0 release zip: `dist/releases/relaycheck-desktop-1.1.0-c5172260b4bc-20260712-052033.zip` (Zip SHA256 `73ee77f9743c92d7b6dd34e6958fbfc7c6f6eb457fd71ab2dfebd9a695086090`). Zip is pre-`b533653` UI; rebuild release if packaging frontend opt.
 - [ ] Optional: true light/dark + drawer/onboarding/2FA visual smoke (not automated).
 
 ---
