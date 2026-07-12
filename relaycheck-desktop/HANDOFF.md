@@ -9,7 +9,7 @@ Read this first, then `CLAUDE.md` for architecture.
 
 ## ⏳ TODO (next session)
 
-- [x] **Push local commits** — `00529ee`+`bee1252`+`2c8afc3` (S0/S1 review) → `origin/main` (`47bf263..2c8afc3`)
+- [x] **Push local commits** — S0/S1 + S2 `91b9f40` → `origin/main` via `ssh://git@github.com-obsidian/...` (https 443/proxy dead)
 - [x] **Release zip (post CSP bootstrap)** — `dist/releases/relaycheck-desktop-1.1.0-00529ee1ca70-20260712-145035.zip`  
   Zip SHA256 `8b8b7efe3e018e9c6b0026043f30ecf44de2441a151fe7b6c3cb7a7d674a01a3` · `verify-package` PASS  
   (supersedes `…-2611e3a5c9c4-…` / `a7990685…`)
@@ -18,6 +18,7 @@ Read this first, then `CLAUDE.md` for architecture.
 - [x] **Full-stack review report** — `docs/code-review-optimization-2026-07-12.md`（FE/BE/Arch/Config；P0=0 / P1≈12）
 - [x] **S0 review fixes** — FE-1 trailing Button import；BE-1/BE-2 SSRF+redirect；BE-6 scheduler CAS
 - [x] **S1 review fixes** — RELAYCHECK_DATA_DIR / exe-dir data root；ldflags version；verify-release lint+embed smoke；graceful shutdown
+- [x] **S2 review polish** — BE-4/5 + FE-2/3/4/5/6/7（见下方 Current state）
 
 ---
 
