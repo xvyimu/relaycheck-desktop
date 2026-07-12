@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { AccountCard } from "@/components/accounts/AccountCard";
 import { AccountDetailContent } from "@/components/accounts/AccountDetailContent";
 import { isProblemAccount } from "@/components/accounts/helpers";
+import { DialogShell } from "@/components/ui/dialog-shell";
 import { Empty } from "@/components/ui/empty";
 import { useSiteAccounts } from "@/hooks/useSiteAccounts";
 import type { Account, NavigationIntent, UpstreamSite } from "@/types";
@@ -55,6 +56,7 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
   const [mobileSubview, setMobileSubview] = useState(false);
 
   const siteScoped = useSiteAccounts(selectedSiteId || "all");
+  const { enabled: siteScopedEnabled, refresh: refreshSiteScoped } = siteScoped;
 
   useEffect(() => {
     if (!intent) return;
@@ -114,19 +116,10 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
 
   const handleDone = useCallback(async () => {
     await onRefresh();
-    if (siteScoped.enabled) {
-      await siteScoped.refresh();
+    if (siteScopedEnabled) {
+      await refreshSiteScoped();
     }
-  }, [onRefresh, siteScoped.enabled, siteScoped.refresh]);
-
-  useEffect(() => {
-    if (!detailAccount) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setDetailAccount(null);
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [detailAccount]);
+  }, [onRefresh, refreshSiteScoped, siteScopedEnabled]);
 
   const shellClass = [
     "master-detail",
@@ -216,17 +209,14 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
       <section className="master-detail-right" aria-label="站点账号">
         <div className="master-detail-right-head card">
           <div className="master-detail-back-row">
-            <button
-              type="button"
-              className="ghost master-detail-back"
-              onClick={() => setMobileSubview(false)}
+            <Button variant="ghost" type="button" onClick={() => setMobileSubview(false)} className="master-detail-back"
             >
               返回站点
-            </button>
+            </Button>
             {selectedSiteId ? (
-              <button type="button" className="ghost" onClick={clearSelection}>
+              <Button variant="ghost" type="button" onClick={clearSelection}>
                 清除选中
-              </button>
+              </Button>
             ) : null}
           </div>
           {selectedSite ? (
@@ -284,15 +274,20 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
         ) : null}
       </section>
 
-      {detailAccount ? (
-        <div className="drawer-backdrop" role="presentation" onClick={() => setDetailAccount(null)}>
-          <aside className="detail-drawer" onClick={(event) => event.stopPropagation()}>
-            <AccountDetailContent account={detailAccount} onClose={() => setDetailAccount(null)} />
-          </aside>
-        </div>
-      ) : null}
+      <DialogShell
+        open={Boolean(detailAccount)}
+        onClose={() => setDetailAccount(null)}
+        variant="panel"
+        ariaLabel={detailAccount ? `账号详情 ${detailAccount.displayName || detailAccount.id}` : "账号详情"}
+        initialFocusSelector=".detail-header .ghost, .detail-header button, button.ghost"
+      >
+        {detailAccount ? (
+          <AccountDetailContent account={detailAccount} onClose={() => setDetailAccount(null)} />
+        ) : null}
+      </DialogShell>
     </div>
   );
 }
 
 export const SiteAccountMasterDetail = memo(SiteAccountMasterDetailBase);
+import { Button } from "@/components/ui/button";

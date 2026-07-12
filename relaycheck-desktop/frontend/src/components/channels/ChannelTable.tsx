@@ -13,6 +13,7 @@ import { LoadingSkeleton } from "../loading-skeleton";
 import type { DetailDrawerState, ImportedChannel } from "@/types";
 import type { ChannelActionsResult } from "@/hooks/useChannelActions";
 import type { ChannelFiltersResult } from "@/hooks/useChannelFilters";
+import { Button } from "@/components/ui/button";
 
 interface ChannelTableProps {
   channels: ImportedChannel[];
@@ -132,12 +133,10 @@ export function ChannelTable({
               </div>
             ) : null}
             <div className="channel-actions action-dock">
-              <button
-                className="ghost"
-                onClick={() => onSetDrawer({ kind: "channel", channel })}
+              <Button variant="ghost" onClick={() => onSetDrawer({ kind: "channel", channel })}
               >
                 详情
-              </button>
+              </Button>
               <button
                 className="channel-action"
                 disabled={!channel.baseUrl}
@@ -157,14 +156,12 @@ export function ChannelTable({
                 识别并生成站点
               </button>
               {channel.sourceSyncStatus === "missing" ? (
-                <button
-                  className="ghost"
-                  onClick={() =>
+                <Button variant="ghost" onClick={() =>
                     void onUpdateSourceStatus(channel, "restore-source-status")
                   }
                 >
                   恢复活跃
-                </button>
+                </Button>
               ) : null}
               {channel.sourceSyncStatus === "missing" ? (
                 <button
@@ -177,14 +174,12 @@ export function ChannelTable({
                 </button>
               ) : null}
               {channel.sourceSyncStatus === "archived" ? (
-                <button
-                  className="ghost"
-                  onClick={() =>
+                <Button variant="ghost" onClick={() =>
                     void onUpdateSourceStatus(channel, "restore-source-status")
                   }
                 >
                   恢复活跃
-                </button>
+                </Button>
               ) : null}
             </div>
           </article>
@@ -206,17 +201,14 @@ export function ChannelTable({
       </div>
       {hasMoreChannels ? (
         <div className="load-more-row">
-          <button
-            type="button"
-            className="ghost"
-            onClick={() =>
+          <Button variant="ghost" type="button" onClick={() =>
               setVisibleLimit(
                 (current: number) => current + CHANNELS_VISIBLE_INCREMENT,
               )
             }
           >
             加载更多渠道（已显示 {displayedChannels.length}/{visibleChannels.length}）
-          </button>
+          </Button>
         </div>
       ) : null}
     </>

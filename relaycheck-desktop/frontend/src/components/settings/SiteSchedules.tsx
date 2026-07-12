@@ -222,9 +222,9 @@ export function SiteSchedules() {
               已启用 {scheduledSiteIds.size} / {sites.length} 个站点 · 取消勾选"启用"即恢复全局调度
             </span>
           </div>
-          <button className="ghost" disabled={busy !== ""} onClick={() => { void refresh(); void refreshCalendar(); }}>
+          <Button variant="ghost" disabled={busy !== ""} onClick={() => { void refresh(); void refreshCalendar(); }}>
             刷新
-          </button>
+          </Button>
         </div>
 
         {sites.length === 0 ? (
@@ -338,27 +338,21 @@ export function SiteSchedules() {
                               }))
                             }
                           />
-                          <button
-                            className="ghost compact"
-                            onClick={() => addSkipDate(site.id)}
+                          <Button variant="ghost" onClick={() => addSkipDate(site.id)} className="compact"
                             disabled={!skipInputs[site.id]}
                           >
                             + 添加
-                          </button>
+                          </Button>
                         </div>
                         {skipDates.length > 0 ? (
                           <div className="skip-dates-list">
                             {skipDates.map((d) => (
                               <span key={d} className="skip-date-chip">
                                 {formatDate(d)}
-                                <button
-                                  className="ghost chip-remove"
-                                  onClick={() =>
-                                    removeSkipDate(site.id, d)
-                                  }
+                                <Button variant="ghost" onClick={() => removeSkipDate(site.id, d)} className="chip-remove"
                                 >
                                   ×
-                                </button>
+                                </Button>
                               </span>
                             ))}
                           </div>
@@ -384,13 +378,11 @@ export function SiteSchedules() {
                         </div>
                       ) : null}
 
-                      <button
-                        className="ghost"
-                        disabled={busy !== ""}
+                      <Button variant="ghost" disabled={busy !== ""}
                         onClick={() => void saveSchedule(site.id)}
                       >
                         {busy === "saving" ? "保存中…" : "保存排程"}
-                      </button>
+                      </Button>
                     </div>
                   ) : form && schedule ? (
                     <div className="site-schedule-times">
@@ -399,13 +391,11 @@ export function SiteSchedules() {
                           上次签到：{formatTime(schedule.lastRunAt)} · 排程已暂停
                         </span>
                       ) : null}
-                      <button
-                        className="ghost"
-                        disabled={busy !== ""}
+                      <Button variant="ghost" disabled={busy !== ""}
                         onClick={() => void saveSchedule(site.id)}
                       >
                         保存更改（暂停状态）
-                      </button>
+                      </Button>
                     </div>
                   ) : null}
                 </article>
@@ -505,3 +495,4 @@ export function SiteSchedules() {
     </>
   );
 }
+import { Button } from "@/components/ui/button";

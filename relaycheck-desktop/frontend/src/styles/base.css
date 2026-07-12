@@ -19,6 +19,15 @@ body {
   min-height: 100vh;
 }
 
+.panel-loading {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  padding: 24px;
+  color: var(--v4-muted, var(--muted));
+  font-size: 13px;
+}
+
 button,
 input,
 select,

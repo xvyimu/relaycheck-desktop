@@ -18,6 +18,7 @@ import type {
   NavigationIntent,
   TabKey,
 } from "@/types";
+import { Button } from "@/components/ui/button";
 
 export interface DashboardProps {
   system: SystemOverviewState;
@@ -61,9 +62,9 @@ function CollapsibleCard({
     <section className={`card dashboard-collapsible-card ${expanded ? "is-expanded" : "is-collapsed"}`}>
       <div className="section-heading dashboard-collapsible-head">
         <h2>{title}</h2>
-        <button type="button" className="ghost" aria-expanded={expanded} onClick={onToggle}>
+        <Button variant="ghost" type="button" aria-expanded={expanded} onClick={onToggle}>
           {expanded ? "收起" : "展开"}
-        </button>
+        </Button>
       </div>
       {expanded ? children : null}
     </section>
@@ -135,7 +136,6 @@ function DashboardBase({
     const unread = notifications.filter((item) => !item.read).length;
     return { problemChannels, problemAccounts, unread };
   }, [channels, accounts, notifications]);
-  const schedulerJobs = status?.scheduler?.jobs || [];
   const actionItems = actionCenter?.items || [];
   const priorityActions = actionItems;
 
@@ -152,6 +152,7 @@ function DashboardBase({
   }, [onRefresh]);
 
   const schedulerContent = useMemo<React.ReactNode>(() => {
+    const schedulerJobs = status?.scheduler?.jobs || [];
     if (nextRunsBusy) {
       return <Empty message="加载中…" />;
     }
@@ -193,7 +194,7 @@ function DashboardBase({
       );
     }
     return <Empty message="暂无调度数据。" />;
-  }, [nextRuns, nextRunsBusy, schedulerJobs]);
+  }, [nextRuns, nextRunsBusy, status?.scheduler?.jobs]);
 
   return (
     <>
@@ -219,7 +220,7 @@ function DashboardBase({
             <h2>运营待办</h2>
             <span>{actionCenterSubtitle(priorityActions)}</span>
           </div>
-          <button type="button" className="ghost" onClick={() => void onRefresh()}>刷新待办</button>
+          <Button variant="ghost" type="button" onClick={() => void onRefresh()}>刷新待办</Button>
         </div>
         {priorityActions.length ? (
           <div className="dashboard-priority-list">
@@ -256,7 +257,7 @@ function DashboardBase({
                 <em>{item.recommendedAction || item.action}</em>
                 <div className="dashboard-priority-actions">
                   <button type="button" onClick={() => navigateAction(onNavigate, item)}>处理</button>
-                  <button type="button" className="ghost" onClick={() => navigateAction(onNavigate, item)}>查看列表</button>
+                  <Button variant="ghost" type="button" onClick={() => navigateAction(onNavigate, item)}>查看列表</Button>
                 </div>
               </article>
             ))}
@@ -309,14 +310,11 @@ function DashboardBase({
             <h2>数据分析</h2>
             <span>余额趋势、签到分布与站点可靠性</span>
           </div>
-          <button
-            type="button"
-            className="ghost"
-            aria-expanded={analyticsOpen}
+          <Button variant="ghost" type="button" aria-expanded={analyticsOpen}
             onClick={() => setAnalyticsOpen((v) => !v)}
           >
             {analyticsOpen ? "收起分析" : "展开分析"}
-          </button>
+          </Button>
         </div>
         {analyticsOpen ? <AnalyticsPanel /> : null}
       </section>

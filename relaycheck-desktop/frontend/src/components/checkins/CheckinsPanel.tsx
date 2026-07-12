@@ -136,7 +136,7 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
           </label>
         </div>
         <div className="toolbar">
-          <button type="button" className="ghost" onClick={clearFilters}>清除筛选</button>
+          <Button variant="ghost" type="button" onClick={clearFilters}>清除筛选</Button>
         </div>
         {statusFilter !== "all" ? (
           <div className="channel-active-filter">
@@ -144,7 +144,7 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
               <strong>签到状态筛选已启用</strong>
               <span>仅显示 {statusFilter === "failed" ? "失败" : statusFilter === "unsupported" ? "不支持" : "需授权"} 的签到记录。</span>
             </div>
-            <button type="button" className="ghost" onClick={clearFilters}>清除</button>
+            <Button variant="ghost" type="button" onClick={clearFilters}>清除</Button>
           </div>
         ) : null}
       </div>
@@ -295,3 +295,4 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
 }
 
 export const CheckinsPanel = memo(CheckinsPanelBase);
+import { Button } from "@/components/ui/button";

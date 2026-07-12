@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { ChannelTable } from "@/components/channels/ChannelTable";
+import { DialogShell } from "@/components/ui/dialog-shell";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
 import { useApi } from "@/hooks/useApi";
 import { useChannelActions } from "@/hooks/useChannelActions";
@@ -43,30 +44,26 @@ function topHealthRisks(sites: ChannelHealthSite[]) {
 
 function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
   const actions = useChannelActions();
-  const filters = useChannelFilters(actions.channels, actions.accounts, intent);
+  const { refresh: refreshActions, channels, accounts } = actions;
+  const filters = useChannelFilters(channels, accounts, intent);
   const health = useApi<ChannelHealthOverview>("/api/channels/health/overview", emptyHealthOverview);
+  const { refresh: refreshHealth } = health;
   const healthTask = useTaskProgress();
   const [healthProbeMessage, setHealthProbeMessage] = useState("");
   const riskSites = useMemo(() => topHealthRisks(health.data.sites), [health.data.sites]);
+  const healthProgressStatus = healthTask.progress?.status;
+  const healthProgressCurrent = healthTask.progress?.current;
+  const healthProgressTotal = healthTask.progress?.total;
 
   useEffect(() => {
-    void actions.refresh();
-  }, [actions.refresh]);
-
-  useEffect(() => {
-    if (actions.drawer?.kind !== "channel") return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") actions.setDrawer(null);
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [actions.drawer, actions.setDrawer]);
+    void refreshActions();
+  }, [refreshActions]);
 
   const refreshAll = useCallback(async () => {
-    await actions.refresh();
-    await health.refresh();
+    await refreshActions();
+    await refreshHealth();
     await onRefresh();
-  }, [actions.refresh, health.refresh, onRefresh]);
+  }, [onRefresh, refreshActions, refreshHealth]);
 
   async function refreshHealthProbe() {
     setHealthProbeMessage("健康探测任务已启动，结果会自动刷新。");
@@ -75,22 +72,22 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
 
   async function syncModelsAndHealth() {
     await actions.syncChannelModels();
-    await health.refresh();
+    await refreshHealth();
   }
 
   useEffect(() => {
-    if (healthTask.progress?.status === "done") {
-      setHealthProbeMessage(`健康探测完成：已处理 ${healthTask.progress.current}/${healthTask.progress.total} 个站点。`);
+    if (healthProgressStatus === "done") {
+      setHealthProbeMessage(`健康探测完成：已处理 ${healthProgressCurrent}/${healthProgressTotal} 个站点。`);
       // actions.refresh and health.refresh catch internally, but onRefresh is
       // a parent prop whose implementation may reject; guard the call site so
       // a failure there doesn't surface as an unhandled promise rejection.
       void refreshAll().catch((err) => {
         setHealthProbeMessage(err instanceof Error ? `刷新失败：${err.message}` : "刷新失败");
       });
-    } else if (healthTask.progress?.status === "cancelled") {
+    } else if (healthProgressStatus === "cancelled") {
       setHealthProbeMessage("健康探测已取消。");
     }
-  }, [healthTask.progress?.status, healthTask.progress?.current, healthTask.progress?.total]);
+  }, [healthProgressCurrent, healthProgressStatus, healthProgressTotal, refreshAll]);
 
   return (
     <section className="channels-panel">
@@ -101,14 +98,11 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
             <span>{health.loading ? "正在刷新健康概览" : `站点 ${health.data.siteCount} · 渠道 ${health.data.channelCount}`}</span>
           </div>
           <div className="toolbar">
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => void refreshHealthProbe()}
+            <Button variant="ghost" type="button" onClick={() => void refreshHealthProbe()}
               disabled={healthTask.loading || healthTask.progress?.status === "running"}
             >
               {healthTask.loading || healthTask.progress?.status === "running" ? "探测中..." : "探测健康"}
-            </button>
+            </Button>
             <button type="button" onClick={() => void syncModelsAndHealth()} disabled={actions.modelSyncing}>
               {actions.modelSyncing ? "同步中…" : "同步模型"}
             </button>
@@ -191,8 +185,8 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
           <button type="button" onClick={() => void actions.syncChannelModels()} disabled={actions.modelSyncing}>
             {actions.modelSyncing ? "同步中…" : "同步模型"}
           </button>
-          <button type="button" className="ghost" onClick={() => void refreshAll()}>刷新</button>
-          <button type="button" className="ghost" onClick={filters.clearFilters}>清除筛选</button>
+          <Button variant="ghost" type="button" onClick={() => void refreshAll()}>刷新</Button>
+          <Button variant="ghost" type="button" onClick={filters.clearFilters}>清除筛选</Button>
         </div>
         {filters.healthFilter === "risk" ? (
           <div className="channel-active-filter">
@@ -200,7 +194,7 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
               <strong>健康风险筛选已启用</strong>
               <span>仅显示需要模型同步或 Key 健康复核的目标中转渠道。</span>
             </div>
-            <button type="button" className="ghost" onClick={filters.clearFilters}>清除</button>
+            <Button variant="ghost" type="button" onClick={filters.clearFilters}>清除</Button>
           </div>
         ) : null}
         {actions.message ? <div className="note">{actions.message}</div> : null}
@@ -215,26 +209,52 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
         onUpdateSourceStatus={actions.updateChannelSourceStatus}
         filters={filters}
       />
-      {actions.drawer?.kind === "channel" ? (
-        <div className="drawer-backdrop" role="presentation" onClick={() => actions.setDrawer(null)}>
-          <aside className="detail-drawer detail-drawer-wide" onClick={(event) => event.stopPropagation()}>
+      <DialogShell
+        open={actions.drawer?.kind === "channel"}
+        onClose={() => actions.setDrawer(null)}
+        variant="panel"
+        className="detail-drawer-wide"
+        ariaLabel={
+          actions.drawer?.kind === "channel" ? `渠道详情 ${actions.drawer.channel.name}` : "渠道详情"
+        }
+        initialFocusSelector=".detail-header .ghost, .detail-header button"
+      >
+        {actions.drawer?.kind === "channel" ? (
+          <>
             <div className="detail-header">
               <div>
                 <span className="eyebrow">渠道详情</span>
                 <h2>{actions.drawer.channel.name}</h2>
               </div>
-              <button className="ghost" onClick={() => actions.setDrawer(null)}>关闭</button>
+              <Button variant="ghost" type="button" onClick={() => actions.setDrawer(null)}>
+                关闭
+              </Button>
             </div>
             <div className="detail-grid">
               <section className="detail-card">
                 <h3>运行时</h3>
                 <div className="detail-list">
-                  <div><span>基础网址</span><strong>{actions.drawer.channel.baseUrl || "-"}</strong></div>
-                  <div><span>类型</span><strong>{actions.drawer.channel.upstreamKind || "未知"}</strong></div>
-                  <div><span>模型数</span><strong>{actions.drawer.channel.modelCount || 0}</strong></div>
-                  <div><span>源端</span><strong>{actions.drawer.channel.sourceSyncStatus || "活跃"}</strong></div>
+                  <div>
+                    <span>基础网址</span>
+                    <strong>{actions.drawer.channel.baseUrl || "-"}</strong>
+                  </div>
+                  <div>
+                    <span>类型</span>
+                    <strong>{actions.drawer.channel.upstreamKind || "未知"}</strong>
+                  </div>
+                  <div>
+                    <span>模型数</span>
+                    <strong>{actions.drawer.channel.modelCount || 0}</strong>
+                  </div>
+                  <div>
+                    <span>源端</span>
+                    <strong>{actions.drawer.channel.sourceSyncStatus || "活跃"}</strong>
+                  </div>
                   {actions.drawer.channel.channelKeyMasked ? (
-                    <div><span>API Key</span><strong className="font-mono text-xs">{actions.drawer.channel.channelKeyMasked}</strong></div>
+                    <div>
+                      <span>API Key</span>
+                      <strong className="font-mono text-xs">{actions.drawer.channel.channelKeyMasked}</strong>
+                    </div>
                   ) : null}
                 </div>
               </section>
@@ -252,7 +272,9 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
                 {actions.drawer.channel.sampleModels?.length ? (
                   <div className="model-list-detail">
                     {actions.drawer.channel.sampleModels.map((model) => (
-                      <span key={model} className="model-tag">{model}</span>
+                      <span key={model} className="model-tag">
+                        {model}
+                      </span>
                     ))}
                   </div>
                 ) : (
@@ -260,15 +282,27 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
                 )}
                 {actions.drawer.channel.modelsStatus ? (
                   <div className="detail-list" style={{ marginTop: 8 }}>
-                    <div><span>同步状态</span><strong>{actions.drawer.channel.modelsStatus}</strong></div>
+                    <div>
+                      <span>同步状态</span>
+                      <strong>{actions.drawer.channel.modelsStatus}</strong>
+                    </div>
                     {actions.drawer.channel.modelsSource ? (
-                      <div><span>来源</span><strong>{actions.drawer.channel.modelsSource}</strong></div>
+                      <div>
+                        <span>来源</span>
+                        <strong>{actions.drawer.channel.modelsSource}</strong>
+                      </div>
                     ) : null}
                     {actions.drawer.channel.modelsLastSyncedAt ? (
-                      <div><span>最近同步</span><strong>{formatTime(actions.drawer.channel.modelsLastSyncedAt)}</strong></div>
+                      <div>
+                        <span>最近同步</span>
+                        <strong>{formatTime(actions.drawer.channel.modelsLastSyncedAt)}</strong>
+                      </div>
                     ) : null}
                     {actions.drawer.channel.modelsMessage ? (
-                      <div><span>消息</span><strong className="text-xs">{actions.drawer.channel.modelsMessage}</strong></div>
+                      <div>
+                        <span>消息</span>
+                        <strong className="text-xs">{actions.drawer.channel.modelsMessage}</strong>
+                      </div>
                     ) : null}
                   </div>
                 ) : null}
@@ -277,16 +311,20 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
                 <section className="detail-card">
                   <h3>探测</h3>
                   <div className="detail-list">
-                    <div><span>最近识别</span><strong>{formatTime(actions.drawer.channel.lastDetectedAt)}</strong></div>
+                    <div>
+                      <span>最近识别</span>
+                      <strong>{formatTime(actions.drawer.channel.lastDetectedAt)}</strong>
+                    </div>
                   </div>
                 </section>
               ) : null}
             </div>
-          </aside>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+      </DialogShell>
     </section>
   );
 }
 
 export const ChannelsPanel = memo(ChannelsPanelBase);
+import { Button } from "@/components/ui/button";

@@ -7,6 +7,20 @@
     <meta name="theme-color" content="#eef3f8" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0f1729" media="(prefers-color-scheme: dark)" />
     <title>RelayCheck Desktop</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("relaycheck-theme");
+          var theme = stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+          var dark =
+            theme === "dark" ||
+            (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+          else document.documentElement.classList.remove("dark");
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (_) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

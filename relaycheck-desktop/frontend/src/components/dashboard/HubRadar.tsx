@@ -13,6 +13,7 @@ import type {
   TabKey,
   NavigationIntent,
 } from "@/types";
+import { Button } from "@/components/ui/button";
 
 export interface HubRadarProps {
   status: StatusPayload;
@@ -75,7 +76,7 @@ export function HubRadar({
           <span>AI API Hub Radar</span>
           <strong>资产、Key、成本和自动化</strong>
         </div>
-        <button type="button" className="ghost" onClick={onRefresh}>刷新雷达</button>
+        <Button variant="ghost" type="button" onClick={onRefresh}>刷新雷达</Button>
       </div>
       <div className="hub-radar-grid">
         {radarLoading ? <LoadingSkeleton variant="chart" title="正在生成模型、价格和用量雷达" /> : null}
@@ -91,7 +92,7 @@ export function HubRadar({
           </div>
           <div className="radar-actions">
             <button type="button" onClick={() => onNavigate("channels")}>渠道</button>
-            <button type="button" className="ghost" onClick={() => onNavigate("scan")}>同步</button>
+            <Button variant="ghost" type="button" onClick={() => onNavigate("scan")}>同步</Button>
           </div>
         </article>
 
@@ -107,7 +108,7 @@ export function HubRadar({
           </div>
           <div className="radar-actions">
             <button type="button" onClick={() => onNavigate("sites", { accountsView: "all", accountStatus: "all" })}>Key 库</button>
-            <button type="button" className="ghost" onClick={() => onNavigate("sites", { accountsView: "all", query: "unchecked" })}>待检测</button>
+            <Button variant="ghost" type="button" onClick={() => onNavigate("sites", { accountsView: "all", query: "unchecked" })}>待检测</Button>
           </div>
         </article>
 
@@ -123,7 +124,7 @@ export function HubRadar({
           </div>
           <div className="radar-actions">
             <button type="button" onClick={() => onNavigate("sites", { accountsView: "all", query: "余额" })}>余额用量</button>
-            <button type="button" className="ghost" onClick={() => onNavigate("sites", { accountsView: "all" })}>价格雷达</button>
+            <Button variant="ghost" type="button" onClick={() => onNavigate("sites", { accountsView: "all" })}>价格雷达</Button>
           </div>
         </article>
 
@@ -149,7 +150,7 @@ export function HubRadar({
             >
               {topIssue ? "处理问题" : "查看自检"}
             </button>
-            <button type="button" className="ghost" onClick={() => onNavigate("settings")}>调度</button>
+            <Button variant="ghost" type="button" onClick={() => onNavigate("settings")}>调度</Button>
           </div>
         </article>
 
@@ -182,7 +183,7 @@ export function HubRadar({
           )}
           <div className="radar-actions">
             <button type="button" onClick={() => onNavigate("settings")}>排程设置</button>
-            <button type="button" className="ghost" onClick={() => void refreshCalendar()}>刷新</button>
+            <Button variant="ghost" type="button" onClick={() => void refreshCalendar()}>刷新</Button>
           </div>
         </article>
       </div>

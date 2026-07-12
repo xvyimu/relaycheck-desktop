@@ -91,30 +91,24 @@ function NotificationsPanelBase({ items, onRefresh, intent }: NotificationsPanel
         >
           {busy === "全部标记已读" ? "标记中…" : "全部标记已读"}
         </button>
-        <button
-          className="ghost"
-          disabled={Boolean(busy) || summary.read === 0}
+        <Button variant="ghost" disabled={Boolean(busy) || summary.read === 0}
           onClick={() => void stowAndTrim()}
           type="button"
         >
           {busy === "收纳清理" ? "收纳中…" : `收纳已读`}
-        </button>
-        <button
-          className="ghost"
-          disabled={Boolean(busy) || summary.read === 0}
+        </Button>
+        <Button variant="ghost" disabled={Boolean(busy) || summary.read === 0}
           onClick={() => void clearRead()}
           type="button"
         >
           {busy === "清除已读" ? "清除中…" : "清除已读"}
-        </button>
-        <button
-          className="ghost"
-          onClick={() => setShowRead((prev) => !prev)}
+        </Button>
+        <Button variant="ghost" onClick={() => setShowRead((prev) => !prev)}
           type="button"
           style={{ marginLeft: "auto" }}
         >
           {showRead ? "仅未读" : "全部"}
-        </button>
+        </Button>
       </div>
 
       {message ? <div className="problem-hint">{message}</div> : null}
@@ -144,9 +138,9 @@ function NotificationsPanelBase({ items, onRefresh, intent }: NotificationsPanel
         })}
 
         {!showRead && summary.read > 0 ? (
-          <button className="ghost" onClick={() => setShowRead(true)} type="button" style={{ textAlign: "center", width: "100%", padding: "10px" }}>
+          <Button variant="ghost" onClick={() => setShowRead(true)} type="button" style={{ textAlign: "center", width: "100%", padding: "10px" }}>
             展开 {summary.read} 条已读通知
-          </button>
+          </Button>
         ) : null}
 
         {!visibleItems.length ? (
@@ -162,3 +156,4 @@ function NotificationsPanelBase({ items, onRefresh, intent }: NotificationsPanel
 }
 
 export const NotificationsPanel = memo(NotificationsPanelBase);
+import { Button } from "@/components/ui/button";

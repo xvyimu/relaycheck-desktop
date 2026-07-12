@@ -27,6 +27,7 @@ import { AccountKeySummary } from "@/components/accounts/AccountKeySummary";
 import { accountAvatarLabel, accountBackendShort, accountDomainLabel, defaultLoginUrl, isProblemAccount } from "@/components/accounts/helpers";
 import { StatusLabel } from "@/components/ui/status-label";
 import { TwoFactorGuide } from "@/components/ui/TwoFactorGuide";
+import { Button } from "@/components/ui/button";
 
 interface AccountCardProps {
   account: Account;
@@ -247,9 +248,9 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
         );
       case "detail":
         return (
-          <button key="detail" type="button" className="ghost" disabled={isBusy} onClick={onOpenDetail}>
+          <Button variant="ghost" key="detail" type="button" disabled={isBusy} onClick={onOpenDetail}>
             详情
-          </button>
+          </Button>
         );
       default:
         return null;
@@ -407,7 +408,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
           ) : null}
           <div className="toolbar">
             <button type="button" disabled={isBusy} onClick={() => void saveAccount()}>{accountActionButtonLabel("保存账号", busy, "保存中…")}</button>
-            <button type="button" className="ghost" disabled={isBusy} onClick={() => setEditing(false)}>取消</button>
+            <Button variant="ghost" type="button" disabled={isBusy} onClick={() => setEditing(false)}>取消</Button>
           </div>
         </div>
       ) : null}
@@ -415,68 +416,56 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
       <div className="account-card-actions">
         <div className="account-action-group primary">
           {primaryKeys.map((key) => renderPrimaryButton(key))}
-          <button
+          <Button variant="ghost"
             type="button"
-            className={`ghost more-toggle ${moreOpen ? "active" : ""}`}
+            className={`more-toggle ${moreOpen ? "active" : ""}`}
             disabled={isBusy}
             aria-expanded={moreOpen}
             onClick={() => setMoreOpen((current) => !current)}
           >
             {moreOpen ? "收起" : "更多"}
-          </button>
+          </Button>
         </div>
         {moreOpen ? (
           <div className="account-more-panel">
             <div className="account-action-label">会话与余额</div>
             <div className="account-action-group secondary">
               {!saveIsPrimary ? (
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={isBusy}
+                <Button variant="ghost" type="button" disabled={isBusy}
                   aria-label={`保存 ${account.displayName} 的浏览器授权`}
                   onClick={() => void finishBrowserLogin()}
                 >
                   {accountActionButtonLabel("保存授权", busy)}
-                </button>
+                </Button>
               ) : null}
               {!testIsPrimary ? (
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={isBusy}
+                <Button variant="ghost" type="button" disabled={isBusy}
                   aria-label={`测试 ${account.displayName} 的登录态`}
                   onClick={() => void testLoginStatus()}
                 >
                   {accountActionButtonLabel("测试登录态", busy, "检测中…")}
-                </button>
+                </Button>
               ) : null}
               {!primaryKeys.includes("checkin") ? (
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={isBusy}
+                <Button variant="ghost" type="button" disabled={isBusy}
                   aria-label={`为 ${account.displayName} 执行签到`}
                   onClick={() => void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))}
                 >
                   {accountActionButtonLabel("签到", busy)}
-                </button>
+                </Button>
               ) : null}
-              <button
-                type="button"
-                className="ghost"
-                disabled={isBusy}
+              <Button variant="ghost" type="button" disabled={isBusy}
                 aria-label={`刷新 ${account.displayName} 的余额`}
                 onClick={() => void runAction("刷新余额", () => api(`/api/accounts/${account.id}/refresh-balance`, { method: "POST" }))}
               >
                 {accountActionButtonLabel("刷新余额", busy)}
-              </button>
+              </Button>
             </div>
             <div className="account-action-label">维护操作</div>
             <div className="account-action-group secondary">
-              <button type="button" className="ghost" disabled={isBusy} onClick={() => setEditing((current) => !current)}>{editing ? "收起编辑" : "编辑账号"}</button>
-              <button type="button" className="ghost" disabled={!account.apiKeyFingerprint || isBusy} onClick={() => void testAPIKey()}>{accountActionButtonLabel("检测密钥", busy, "检测中…")}</button>
-              <button type="button" className="ghost" disabled={isBusy} onClick={() => setShowTwoFactorGuide(true)}>2FA 指引</button>
+              <Button variant="ghost" type="button" disabled={isBusy} onClick={() => setEditing((current) => !current)}>{editing ? "收起编辑" : "编辑账号"}</Button>
+              <Button variant="ghost" type="button" disabled={!account.apiKeyFingerprint || isBusy} onClick={() => void testAPIKey()}>{accountActionButtonLabel("检测密钥", busy, "检测中…")}</Button>
+              <Button variant="ghost" type="button" disabled={isBusy} onClick={() => setShowTwoFactorGuide(true)}>2FA 指引</Button>
             </div>
             <div className="account-action-label danger-label">危险操作</div>
             <div className="account-action-group danger-zone">

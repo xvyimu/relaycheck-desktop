@@ -69,10 +69,11 @@ export function UpdateBanner() {
             查看更新
           </a>
         ) : null}
-        <button type="button" className="ghost" onClick={handleDismiss}>
+        <Button variant="ghost" type="button" onClick={handleDismiss}>
           稍后提醒
-        </button>
+        </Button>
       </div>
     </div>
   );
 }
+import { Button } from "@/components/ui/button";

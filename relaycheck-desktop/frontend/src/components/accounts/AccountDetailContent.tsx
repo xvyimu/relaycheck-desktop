@@ -25,6 +25,7 @@ import type {
   LoginStatusTestResponse,
 } from "@/types";
 import { TwoFactorGuide } from "@/components/ui/TwoFactorGuide";
+import { Button } from "@/components/ui/button";
 
 export function AccountDetailContent({ account, onClose }: { account: Account; onClose: () => void }) {
   const identity = account.email || account.username || account.authType;
@@ -110,7 +111,7 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
           <p>{account.upstreamSiteName || "未记录站点"}</p>
         </div>
         <div className="detail-actions">
-          <button type="button" className="ghost" onClick={onClose}>关闭</button>
+          <Button variant="ghost" type="button" onClick={onClose}>关闭</Button>
         </div>
       </div>
 
@@ -142,9 +143,9 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
         <button type="button" disabled={isBusy || reloginPhase === "idle"} onClick={() => void saveAuth()}>
           {busy === "save" ? "保存中…" : "保存授权"}
         </button>
-        <button type="button" className="ghost" disabled={isBusy} onClick={() => void testLogin()}>
+        <Button variant="ghost" type="button" disabled={isBusy} onClick={() => void testLogin()}>
           {busy === "test" ? "测试中…" : "测试登录态"}
-        </button>
+        </Button>
       </div>
 
       {message ? (

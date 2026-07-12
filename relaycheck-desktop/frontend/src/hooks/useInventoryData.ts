@@ -7,10 +7,13 @@ export function useInventoryData() {
   const channels = useApi<ImportedChannel[]>("/api/channels", []);
   const sites = useApi<UpstreamSite[]>("/api/upstream-sites", []);
   const accounts = useApi<Account[]>("/api/accounts", []);
+  const { refresh: refreshChannels } = channels;
+  const { refresh: refreshSites } = sites;
+  const { refresh: refreshAccounts } = accounts;
 
   const refresh = useCallback(async () => {
-    await Promise.all([channels.refresh(), sites.refresh(), accounts.refresh()]);
-  }, [accounts.refresh, channels.refresh, sites.refresh]);
+    await Promise.all([refreshChannels(), refreshSites(), refreshAccounts()]);
+  }, [refreshAccounts, refreshChannels, refreshSites]);
 
   return {
     loading: channels.loading || sites.loading || accounts.loading,

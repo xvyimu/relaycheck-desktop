@@ -8,6 +8,25 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatusLabel } from "@/components/ui/status-label";
 import { SiteSchedules } from "@/components/settings/SiteSchedules";
 
+const DEFAULT_PROXY_CONFIG: NetworkProxyConfig = {
+  enabled: false,
+  url: "http://127.0.0.1:7897",
+  bypassLocal: true,
+};
+const DEFAULT_SYNC_SCHEDULE: SyncScheduleConfig = {
+  enabled: true,
+  intervalMinutes: 30,
+  mode: "local-newapi",
+  runOnStartup: false,
+};
+const DEFAULT_CHANNEL_HEALTH_SCHEDULE: ChannelHealthScheduleConfig = {
+  enabled: true,
+  intervalMinutes: 60,
+  runOnStartup: false,
+  limit: 20,
+  onlyRisky: false,
+};
+
 function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () => void }) {
   const [settings, setSettings] = useState<SystemSetting[]>([]);
   const [backups, setBackups] = useState<SystemBackup[]>([]);
@@ -34,34 +53,34 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
   const [exports, setExports] = useState<ExportResult[]>([]);
   const [importing, setImporting] = useState(false);
   const totalBackupSize = backups.reduce((sum, backup) => sum + backup.sizeBytes, 0);
-  const defaultProxyConfig: NetworkProxyConfig = { enabled: false, url: "http://127.0.0.1:7897", bypassLocal: true };
-  const defaultSyncSchedule: SyncScheduleConfig = { enabled: true, intervalMinutes: 30, mode: "local-newapi", runOnStartup: false };
-  const defaultChannelHealthSchedule: ChannelHealthScheduleConfig = { enabled: true, intervalMinutes: 60, runOnStartup: false, limit: 20, onlyRisky: false };
   const proxyConfig = useMemo(() => {
     const setting = settings.find((item) => item.key === "network.proxy");
-    if (!setting) return defaultProxyConfig;
+    if (!setting) return DEFAULT_PROXY_CONFIG;
     try {
-      return { ...defaultProxyConfig, ...(JSON.parse(setting.valueJson) as Partial<NetworkProxyConfig>) };
+      return { ...DEFAULT_PROXY_CONFIG, ...(JSON.parse(setting.valueJson) as Partial<NetworkProxyConfig>) };
     } catch {
-      return defaultProxyConfig;
+      return DEFAULT_PROXY_CONFIG;
     }
   }, [settings]);
   const syncSchedule = useMemo(() => {
     const setting = settings.find((item) => item.key === "sync.schedule");
-    if (!setting) return defaultSyncSchedule;
+    if (!setting) return DEFAULT_SYNC_SCHEDULE;
     try {
-      return { ...defaultSyncSchedule, ...(JSON.parse(setting.valueJson) as Partial<SyncScheduleConfig>) };
+      return { ...DEFAULT_SYNC_SCHEDULE, ...(JSON.parse(setting.valueJson) as Partial<SyncScheduleConfig>) };
     } catch {
-      return defaultSyncSchedule;
+      return DEFAULT_SYNC_SCHEDULE;
     }
   }, [settings]);
   const channelHealthSchedule = useMemo(() => {
     const setting = settings.find((item) => item.key === "channel.health.schedule");
-    if (!setting) return defaultChannelHealthSchedule;
+    if (!setting) return DEFAULT_CHANNEL_HEALTH_SCHEDULE;
     try {
-      return { ...defaultChannelHealthSchedule, ...(JSON.parse(setting.valueJson) as Partial<ChannelHealthScheduleConfig>) };
+      return {
+        ...DEFAULT_CHANNEL_HEALTH_SCHEDULE,
+        ...(JSON.parse(setting.valueJson) as Partial<ChannelHealthScheduleConfig>),
+      };
     } catch {
-      return defaultChannelHealthSchedule;
+      return DEFAULT_CHANNEL_HEALTH_SCHEDULE;
     }
   }, [settings]);
   const checkinJob = scheduler?.jobs.find((job) => job.key === "checkin.daily");
@@ -523,14 +542,11 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
                   <span>{exp.fileName}</span>
                   <strong>
                     {formatBytes(exp.sizeBytes)}
-                    <button
-                      type="button"
-                      className="ghost"
-                      style={{ marginLeft: 8, padding: "2px 8px", fontSize: 12 }}
+                    <Button variant="ghost" type="button" style={{ marginLeft: 8, padding: "2px 8px", fontSize: 12 }}
                       onClick={() => { setImportFileName(exp.fileName); }}
                     >
                       选择导入
-                    </button>
+                    </Button>
                   </strong>
                 </div>
               ))}
@@ -590,12 +606,12 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
               <span>把常用说明集中在本地设置页，避免需要翻目录才知道下一步。</span>
             </div>
             <div className="toolbar compact-toolbar">
-              <button className="ghost" type="button" onClick={() => setShowHelpGuide((current) => !current)}>
+              <Button variant="ghost" type="button" onClick={() => setShowHelpGuide((current) => !current)}>
                 {showHelpGuide ? "收起" : "查看指引"}
-              </button>
-              <button className="ghost" type="button" onClick={reopenOnboarding}>
+              </Button>
+              <Button variant="ghost" type="button" onClick={reopenOnboarding}>
                 重新查看引导
-              </button>
+              </Button>
             </div>
           </div>
           <div className="detail-list">
@@ -667,7 +683,7 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
             <button disabled={busy !== "" || !settings.length} onClick={() => void testProxy()}>
               {busy === "proxy" ? "测试中…" : "保存并测试代理"}
             </button>
-            <button className="ghost" disabled={busy !== ""} onClick={() => updateProxyConfig(defaultProxyConfig)}>恢复默认</button>
+            <Button variant="ghost" disabled={busy !== ""} onClick={() => updateProxyConfig(DEFAULT_PROXY_CONFIG)}>恢复默认</Button>
           </div>
           {proxyTestResult ? (
             <div className={"proxy-result " + (proxyTestResult.ok ? "success" : "warning")}>
@@ -763,7 +779,7 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
             <button disabled={busy !== "" || !settings.length} onClick={() => void saveSettings()}>
               {busy === "settings" ? "保存中…" : "保存健康探测计划"}
             </button>
-            <button className="ghost" disabled={busy !== ""} onClick={() => updateChannelHealthSchedule(defaultChannelHealthSchedule)}>恢复默认</button>
+            <Button variant="ghost" disabled={busy !== ""} onClick={() => updateChannelHealthSchedule(DEFAULT_CHANNEL_HEALTH_SCHEDULE)}>恢复默认</Button>
           </div>
         </article>
 
@@ -773,7 +789,7 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
               <strong>后台调度器</strong>
               <span>{scheduler ? ("状态刷新于 " + formatTime(scheduler.generatedAt)) : "读取自动签到和同步运行状态"}</span>
             </div>
-            <button className="ghost" disabled={busy !== ""} onClick={() => void refresh()}>刷新</button>
+            <Button variant="ghost" disabled={busy !== ""} onClick={() => void refresh()}>刷新</Button>
           </div>
           <div className="scheduler-job-grid">
             {[
@@ -805,7 +821,7 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
               <strong>审计日志</strong>
               <span>最近 {Math.min(auditLogs.length, 12)} 条安全与维护事件，只读留痕。</span>
             </div>
-            <button className="ghost" disabled={busy !== ""} onClick={() => void refresh()}>刷新</button>
+            <Button variant="ghost" disabled={busy !== ""} onClick={() => void refresh()}>刷新</Button>
           </div>
           <div className="list compact audit-log-list">
             {auditLogs.slice(0, 12).map((item) => (
@@ -828,10 +844,10 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
               <span>{multiSelectBackups ? ("已选择 " + selectedBackups.length + " 个备份") : "默认突出最新一个；可打开多选清理旧快照。"}</span>
             </div>
             <div className="toolbar compact-toolbar">
-              <button className="ghost" disabled={busy !== ""} onClick={() => void refresh()}>刷新</button>
-              <button className={multiSelectBackups ? "" : "ghost"} disabled={busy !== ""} onClick={() => setMultiSelectBackups((current) => !current)}>
+              <Button variant="ghost" disabled={busy !== ""} onClick={() => void refresh()}>刷新</Button>
+              <Button variant={multiSelectBackups ? "default" : "ghost"} disabled={busy !== ""} onClick={() => setMultiSelectBackups((current) => !current)}>
                 {multiSelectBackups ? "退出多选" : "多选管理"}
-              </button>
+              </Button>
               {multiSelectBackups ? (
                 <button className="danger" disabled={busy !== "" || !selectedBackups.length} onClick={() => void deleteSelectedBackups()}>
                   {busy === "delete" ? "删除中…" : "删除选中"}
@@ -894,3 +910,4 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
 }
 
 export const Settings = memo(SettingsBase);
+import { Button } from "@/components/ui/button";

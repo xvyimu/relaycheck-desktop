@@ -10,6 +10,7 @@ import {
   type ImportCounters,
 } from "@/lib/syncFeedback";
 import type { ExcludedRelaySiteRule, LocalNewAPIInstance } from "@/types";
+import { Button } from "@/components/ui/button";
 
 export type LocalNewAPISyncPanelProps = {
   onRefresh: () => Promise<void>;
@@ -137,22 +138,16 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
           </p>
         </div>
         <div className="toolbar">
-          <button
-            type="button"
-            className="ghost"
-            disabled={loading || Boolean(busyId)}
+          <Button variant="ghost" type="button" disabled={loading || Boolean(busyId)}
             onClick={() => setShowRules((current) => !current)}
           >
             {showRules ? "收起排除规则" : "排除规则"}
-          </button>
-          <button
-            type="button"
-            className="ghost"
-            disabled={loading || Boolean(busyId)}
+          </Button>
+          <Button variant="ghost" type="button" disabled={loading || Boolean(busyId)}
             onClick={() => void loadInstances()}
           >
             {loading ? "刷新中…" : "刷新实例"}
-          </button>
+          </Button>
         </div>
       </div>
 

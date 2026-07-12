@@ -9,12 +9,20 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: ButtonSize;
 };
 
+/**
+ * Ghost uses the project CSS class `button.ghost` (layers/base) so mass migration
+ * keeps Control Room chrome. Other variants use token utilities.
+ */
 const variantClasses: Record<ButtonVariant, string> = {
-  default: "border-primary/30 bg-primary text-primary-foreground shadow-[0_9px_22px_rgba(29,99,237,0.16)] hover:bg-[#1959d8]",
-  secondary: "border-blue-100 bg-secondary text-secondary-foreground hover:bg-blue-100/80",
-  outline: "border-border bg-white text-foreground shadow-[0_1px_0_rgba(255,255,255,0.75)_inset] hover:bg-slate-50",
-  ghost: "border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-slate-100 hover:text-foreground",
-  destructive: "border-red-200 bg-red-50 text-red-700 shadow-none hover:bg-red-100",
+  default:
+    "border-[color:color-mix(in_srgb,var(--v4-blue)_30%,transparent)] bg-[var(--v4-blue)] text-[var(--surface-solid)] shadow-[var(--v4-shadow-blue)] hover:bg-[var(--v4-blue-hover)]",
+  secondary:
+    "border-[color:color-mix(in_srgb,var(--v4-blue)_18%,transparent)] bg-[var(--v4-blue-soft)] text-[var(--v4-blue)] hover:bg-[var(--v4-blue-subtle)]",
+  outline:
+    "border-[var(--v4-border)] bg-[var(--v4-card)] text-[var(--v4-text)] shadow-[var(--v4-shadow-sm)] hover:bg-[var(--v4-card-hover)]",
+  ghost: "ghost",
+  destructive:
+    "border-[var(--v4-red-border)] bg-[var(--v4-red-bg)] text-[var(--v4-red)] shadow-none hover:border-[color:color-mix(in_srgb,var(--v4-red)_35%,transparent)]",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -23,14 +31,21 @@ const sizeClasses: Record<ButtonSize, string> = {
   lg: "h-10 px-5 text-sm",
 };
 
-export function Button({ className, variant = "default", size = "md", type = "button", ...props }: ButtonProps) {
+export function Button({
+  className,
+  variant = "default",
+  size = "md",
+  type = "button",
+  ...props
+}: ButtonProps) {
   return (
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[11px] border font-semibold tracking-[-0.01em] transition hover:-translate-y-px focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[11px] border font-semibold tracking-[-0.01em] transition hover:-translate-y-px focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--v4-input-focus-ring)] disabled:pointer-events-none disabled:opacity-50",
         variantClasses[variant],
-        sizeClasses[size],
+        // Ghost size/chrome come from CSS button.ghost layers — avoid fighting min-height.
+        variant === "ghost" ? undefined : sizeClasses[size],
         className,
       )}
       {...props}

@@ -60,7 +60,7 @@ export function TaskProgressView({
     return (
       <div className="task-progress-card" aria-live="polite">
         <div className="task-progress-error">{error}</div>
-        {onDismiss ? <button type="button" className="ghost" onClick={onDismiss}>关闭</button> : null}
+        {onDismiss ? <Button variant="ghost" type="button" onClick={onDismiss}>关闭</Button> : null}
       </div>
     );
   }
@@ -114,12 +114,13 @@ export function TaskProgressView({
 
       <div className="task-progress-footer">
         {isRunning && onCancel ? (
-          <button type="button" className="ghost" onClick={onCancel}>{labels?.cancel || "取消"}</button>
+          <Button variant="ghost" type="button" onClick={onCancel}>{labels?.cancel || "取消"}</Button>
         ) : null}
         {!isRunning && onDismiss ? (
-          <button type="button" className="ghost" onClick={onDismiss}>{labels?.close || "关闭"}</button>
+          <Button variant="ghost" type="button" onClick={onDismiss}>{labels?.close || "关闭"}</Button>
         ) : null}
       </div>
     </div>
   );
 }
+import { Button } from "@/components/ui/button";

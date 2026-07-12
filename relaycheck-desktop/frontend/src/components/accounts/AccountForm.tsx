@@ -116,9 +116,9 @@ export function AccountForm({
               自定义网址
             </button>
           </div>
-          <button type="button" className="ghost" onClick={() => setExpanded(false)} aria-expanded={true}>
+          <Button variant="ghost" type="button" onClick={() => setExpanded(false)} aria-expanded={true}>
             收起
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -250,3 +250,4 @@ export function AccountForm({
     </form>
   );
 }
+import { Button } from "@/components/ui/button";

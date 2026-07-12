@@ -17,8 +17,8 @@
 .detail-drawer.object-detail-drawer {
   border-left: 1px solid var(--v4-border);
   background:
-    radial-gradient(circle at 100% 0%, rgba(30, 100, 230, 0.1), transparent 18rem),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(246, 250, 255, 0.94));
+    radial-gradient(circle at 100% 0%, var(--v4-blue-subtle), transparent 18rem),
+    linear-gradient(180deg, var(--v4-card-hover), var(--v4-card-soft));
 }
 
 .object-detail-drawer .detail-grid {
@@ -38,10 +38,10 @@
   gap: 12px;
   align-items: center;
   width: min(920px, 100%);
-  border: 1px solid rgba(180, 83, 9, 0.26);
+  border: 1px solid var(--v4-amber-border);
   border-radius: var(--v4-radius-md);
   background:
-    linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(255, 247, 237, 0.94)),
+    linear-gradient(135deg, var(--v4-amber-bg), var(--v4-amber-bg)),
     var(--v4-card);
   box-shadow: var(--v4-shadow-danger);
   color: var(--v4-amber-ink);
@@ -88,7 +88,7 @@
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(circle at 20% 0%, rgba(30, 64, 175, 0.12), transparent 22rem),
+    radial-gradient(circle at 20% 0%, var(--v4-blue-subtle), transparent 22rem),
     linear-gradient(180deg, var(--v4-card-soft), var(--v4-neutral-bg));
 }
 

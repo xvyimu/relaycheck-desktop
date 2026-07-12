@@ -10,9 +10,7 @@
 @import "./styles/components/two-factor-guide.css";
 @import "./styles/domains/settings.css";
 @import "./styles/layers/control-room-finishing.css";
-@import "./styles/layers/control-room-redesign.css";
-@import "./styles/layers/layout-harmonization.css";
-@import "./styles/layers/linear-calibration.css";
+@import "./styles/layers/control-room.css";
 @import "./styles/domains/dashboard.css";
 @import "./styles/layers/radical-v4.css";
 @import "./styles/components/numeric.css";

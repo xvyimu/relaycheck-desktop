@@ -7,10 +7,13 @@ export function useModelUsageOverview() {
   const model = useApi<ModelOverview | null>("/api/models/overview", null);
   const pricing = useApi<ModelPricingOverview | null>("/api/models/pricing", null);
   const usage = useApi<UsageOverview | null>("/api/usage/overview", null);
+  const { refresh: refreshModel } = model;
+  const { refresh: refreshPricing } = pricing;
+  const { refresh: refreshUsage } = usage;
 
   const refresh = useCallback(async () => {
-    await Promise.all([model.refresh(), pricing.refresh(), usage.refresh()]);
-  }, [model.refresh, pricing.refresh, usage.refresh]);
+    await Promise.all([refreshModel(), refreshPricing(), refreshUsage()]);
+  }, [refreshModel, refreshPricing, refreshUsage]);
 
   return {
     modelOverview: model.data,

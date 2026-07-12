@@ -12,11 +12,11 @@
   position: relative;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--v4-border);
   border-radius: var(--radius-md);
   background:
-    radial-gradient(circle at 100% 0%, rgba(8, 145, 178, 0.08), transparent 8rem),
-    rgba(255, 255, 255, 0.82);
+    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 8rem),
+    var(--v4-card);
   padding: 13px 14px;
   box-shadow: var(--shadow-sm);
 }
@@ -43,9 +43,9 @@
   grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.35fr) minmax(150px, 0.35fr) auto;
   gap: 10px;
   align-items: center;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--v4-border);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--v4-card);
   padding: 12px;
   box-shadow: var(--shadow-sm);
 }
@@ -67,11 +67,11 @@
   flex-direction: column;
   gap: 14px;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.17);
+  border: 1px solid var(--v4-border);
   border-radius: var(--radius-lg);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9)),
-    radial-gradient(circle at 0% 0%, rgba(21, 94, 239, 0.07), transparent 12rem);
+    linear-gradient(180deg, var(--v4-card), var(--v4-card-soft)),
+    radial-gradient(circle at 0% 0%, var(--v4-blue-line), transparent 12rem);
   padding: 16px;
   box-shadow: var(--shadow-sm);
   transition:
@@ -89,39 +89,39 @@
   width: 132px;
   height: 132px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(8, 145, 178, 0.12), transparent 68%);
+  background: radial-gradient(circle, var(--v4-blue-line), transparent 68%);
   pointer-events: none;
 }
 
 .channel-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(21, 94, 239, 0.24);
+  border-color: var(--v4-blue-line);
   background: var(--surface-solid);
   box-shadow: var(--shadow-md);
 }
 
 .channel-card.is-incomplete {
-  border-color: rgba(183, 107, 0, 0.2);
+  border-color: var(--v4-amber-border);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 249, 235, 0.82)),
-    radial-gradient(circle at 0% 0%, rgba(183, 107, 0, 0.08), transparent 12rem);
+    linear-gradient(180deg, var(--v4-card), var(--v4-amber-bg)),
+    radial-gradient(circle at 0% 0%, var(--v4-amber-border), transparent 12rem);
 }
 
 .channel-card.is-source-missing {
   border-style: dashed;
-  border-color: rgba(88, 99, 119, 0.28);
+  border-color: var(--v4-border);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 248, 252, 0.86)),
-    radial-gradient(circle at 0% 0%, rgba(88, 99, 119, 0.08), transparent 12rem);
+    linear-gradient(180deg, var(--v4-card), var(--v4-card-soft)),
+    radial-gradient(circle at 0% 0%, var(--v4-border), transparent 12rem);
 }
 
 .channel-card.is-source-archived {
   opacity: 0.82;
   border-style: dashed;
-  border-color: rgba(99, 115, 138, 0.22);
+  border-color: var(--v4-border);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(239, 244, 249, 0.82)),
-    radial-gradient(circle at 0% 0%, rgba(99, 115, 138, 0.08), transparent 12rem);
+    linear-gradient(180deg, var(--v4-card), var(--v4-card-soft)),
+    radial-gradient(circle at 0% 0%, var(--v4-border), transparent 12rem);
 }
 
 .channel-card-head {
@@ -140,13 +140,13 @@
   place-items: center;
   border-radius: var(--radius-md);
   background:
-    radial-gradient(circle at 30% 16%, rgba(255, 255, 255, 0.32), transparent 34%),
+    radial-gradient(circle at 30% 16%, var(--v4-card-soft), transparent 34%),
     linear-gradient(135deg, var(--primary), var(--cyan));
   color: var(--surface-solid);
   font-size: 13px;
   font-weight: 900;
   letter-spacing: -0.02em;
-  box-shadow: 0 12px 24px rgba(21, 94, 239, 0.18);
+  box-shadow: var(--v4-shadow-blue);
 }
 
 .channel-card-head strong {
@@ -178,9 +178,9 @@
 
 .channel-card-metrics div {
   min-width: 0;
-  border: 1px solid rgba(99, 115, 138, 0.12);
+  border: 1px solid var(--v4-border);
   border-radius: var(--radius-sm);
-  background: rgba(248, 250, 252, 0.84);
+  background: var(--v4-card-soft);
   padding: 10px;
 }
 
@@ -220,19 +220,19 @@
 
 .account-card {
   --account-accent: var(--primary);
-  --account-accent-soft: rgba(21, 94, 239, 0.075);
+  --account-accent-soft: var(--v4-blue-line);
   position: relative;
   display: grid;
   isolation: isolate;
   gap: 10px;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--v4-border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+  background: linear-gradient(180deg, var(--v4-card), var(--v4-card-soft));
   padding: 12px 12px 11px 15px;
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.9) inset,
-    0 9px 24px rgba(15, 23, 42, 0.075);
+    0 1px 0 var(--v4-card) inset,
+    0 9px 24px var(--v4-neutral-bg);
   transition:
     transform 180ms ease,
     border-color 180ms ease,
@@ -246,7 +246,7 @@
   inset: 0 auto 0 0;
   width: 4px;
   border-radius: var(--radius-lg) 0 0 var(--radius-lg);
-  background: linear-gradient(180deg, var(--account-accent), rgba(8, 145, 178, 0.66));
+  background: linear-gradient(180deg, var(--account-accent), var(--v4-blue-line));
 }
 
 .account-card::after {
@@ -266,18 +266,18 @@
 
 .account-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(21, 94, 239, 0.25);
+  border-color: var(--v4-blue-line);
   background: var(--surface-solid);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.94) inset,
-    0 15px 34px rgba(15, 23, 42, 0.11);
+    0 1px 0 var(--v4-card) inset,
+    0 15px 34px var(--v4-neutral-bg);
 }
 
 .account-card.is-problem {
   --account-accent: var(--warning);
-  --account-accent-soft: rgba(161, 98, 7, 0.1);
-  border-color: rgba(161, 98, 7, 0.22);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 251, 235, 0.94));
+  --account-accent-soft: var(--v4-amber-border);
+  border-color: var(--v4-amber-border);
+  background: linear-gradient(180deg, var(--v4-card), var(--v4-amber-bg));
 }
 
 .account-card-head {
@@ -285,7 +285,7 @@
   grid-template-columns: 52px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  border-bottom: 1px solid var(--v4-border);
   padding-bottom: 9px;
 }
 
@@ -302,15 +302,14 @@
   place-items: center;
   border-radius: var(--radius-sm);
   background:
-    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.42), transparent 34%),
+    radial-gradient(circle at 30% 18%, var(--v4-card-soft), transparent 34%),
     linear-gradient(135deg, var(--primary), var(--cyan));
-  color: #fff;
+  color: var(--surface-solid);
   font-size: 13px;
   font-weight: 950;
   letter-spacing: -0.03em;
-  box-shadow:
-    0 10px 20px rgba(21, 94, 239, 0.18),
-    0 0 0 1px rgba(255, 255, 255, 0.42) inset;
+  box-shadow: var(--v4-shadow-blue),
+    0 0 0 1px var(--v4-card-soft) inset;
 }
 
 .account-kind-chip {
@@ -322,7 +321,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--v4-card);
   border-radius: 999px;
   background: var(--v4-text);
   color: var(--surface-solid);
@@ -330,7 +329,7 @@
   font-size: 8.5px;
   font-weight: 950;
   letter-spacing: 0;
-  box-shadow: 0 8px 18px rgba(16, 33, 59, 0.18);
+  box-shadow: var(--v4-shadow-md);
 }
 
 .account-kind-chip.kind-newapi,
@@ -380,9 +379,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(21, 94, 239, 0.14);
+  border: 1px solid var(--v4-blue-line);
   border-radius: 999px;
-  background: rgba(232, 241, 255, 0.92);
+  background: var(--v4-blue-soft);
   color: var(--primary-strong);
   padding: 4px 8px;
   font-size: 10.5px;
@@ -394,34 +393,34 @@
 .status-manual_required,
 .status-captcha_required,
 .status-two_factor_required {
-  border-color: rgba(183, 107, 0, 0.24);
-  background: rgba(255, 245, 224, 0.95);
-  color: #9a5a00;
+  border-color: var(--v4-amber-border);
+  background: var(--v4-amber-bg);
+  color: var(--v4-amber);
 }
 
 .status-valid {
-  border-color: rgba(8, 132, 93, 0.2);
-  background: rgba(226, 248, 239, 0.95);
-  color: #087c59;
+  border-color: var(--v4-green-border);
+  background: var(--v4-green-bg);
+  color: var(--v4-green);
 }
 
 .account-card-metrics {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(96px, 0.55fr);
   gap: 5px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--v4-border);
   border-radius: var(--radius-md);
-  background: rgba(241, 245, 249, 0.78);
+  background: var(--surface-subtle);
   padding: 5px;
 }
 
 .account-card-metrics div {
   min-width: 0;
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border: 1px solid var(--v4-border);
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--v4-card);
   padding: 7px 8px;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  box-shadow: 0 1px 0 var(--v4-card) inset;
 }
 
 .account-card-metrics span {
@@ -444,7 +443,7 @@
 
 .account-card-metrics .metric-balance strong {
   overflow: visible;
-  color: #0f172a;
+  color: var(--v4-text);
   font-size: 15px;
   font-weight: 950;
   text-overflow: clip;
@@ -457,7 +456,7 @@
 }
 
 .account-card-metrics .metric-checkin strong {
-  color: #233957;
+  color: var(--muted-strong);
   font-size: 12.5px;
   font-weight: 900;
 }
@@ -475,8 +474,8 @@
 
 .account-card .chips span {
   min-height: 22px;
-  border-color: rgba(99, 115, 138, 0.13);
-  background: rgba(255, 255, 255, 0.78);
+  border-color: var(--v4-border);
+  background: var(--v4-card);
   color: var(--muted-strong);
   font-size: 10px;
 }
@@ -485,9 +484,9 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--v4-border);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--v4-card);
   padding: 6px;
 }
 
@@ -496,7 +495,7 @@
   display: grid;
   gap: 3px;
   border-radius: 10px;
-  background: rgba(242, 247, 252, 0.74);
+  background: var(--v4-card-soft);
   padding: 6px 7px;
 }
 
@@ -525,7 +524,7 @@
   grid-column: 1 / -1;
   overflow: hidden;
   margin: 0;
-  border-top: 1px dashed rgba(99, 115, 138, 0.14);
+  border-top: 1px dashed var(--v4-border);
   padding: 5px 2px 0;
   color: var(--muted-strong);
   font-size: 10.5px;
@@ -535,34 +534,34 @@
 }
 
 .account-key-summary.key-valid {
-  border-color: rgba(8, 132, 93, 0.17);
-  background: rgba(238, 252, 245, 0.76);
+  border-color: var(--v4-green-border);
+  background: var(--v4-green-bg);
 }
 
 .account-key-summary.key-expired {
-  border-color: rgba(192, 54, 71, 0.2);
-  background: rgba(255, 244, 246, 0.78);
+  border-color: var(--v4-red-border);
+  background: var(--v4-red-bg);
 }
 
 .account-key-summary.is-usable > div:first-child strong,
 .account-key-summary.is-usable > div:last-of-type strong {
-  color: #087c59;
+  color: var(--v4-green);
 }
 
 .account-card-editor {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 9px;
-  border: 1px solid rgba(21, 94, 239, 0.14);
+  border: 1px solid var(--v4-blue-line);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.84));
+  background: linear-gradient(180deg, var(--v4-card), var(--v4-card-soft));
   padding: 10px;
-  box-shadow: 0 8px 18px rgba(25, 58, 99, 0.06) inset;
+  box-shadow: var(--v4-shadow-md) inset;
 }
 
 .account-editor-head {
   grid-column: 1 / -1;
-  border-bottom: 1px solid rgba(99, 115, 138, 0.11);
+  border-bottom: 1px solid var(--v4-border);
   padding-bottom: 7px;
 }
 
@@ -636,9 +635,9 @@
 .account-card-actions {
   display: grid;
   gap: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--v4-border);
   border-radius: var(--radius-md);
-  background: rgba(248, 250, 252, 0.78);
+  background: var(--v4-card-soft);
   padding: 7px;
 }
 
@@ -658,9 +657,9 @@
 .account-more-panel {
   display: grid;
   gap: 6px;
-  border: 1px solid rgba(99, 115, 138, 0.11);
+  border: 1px solid var(--v4-border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--v4-card);
   padding: 7px;
   animation: panel-in 180ms ease both;
 }
@@ -674,11 +673,11 @@
 
 .account-action-label.danger-label {
   margin-top: 2px;
-  color: rgba(192, 54, 71, 0.82);
+  color: var(--v4-red-border);
 }
 
 .account-action-group.danger-zone {
-  border-top: 1px dashed rgba(192, 54, 71, 0.18);
+  border-top: 1px dashed var(--v4-red-border);
   padding-top: 7px;
 }
 
@@ -693,17 +692,17 @@
 }
 
 .account-action-group.primary button:first-child {
-  box-shadow: 0 8px 18px rgba(15, 110, 234, 0.2);
+  box-shadow: var(--v4-shadow-blue);
 }
 
 .account-action-group.primary .more-toggle {
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--v4-card);
   color: var(--muted-strong);
   box-shadow: none;
 }
 
 .account-action-group.primary .more-toggle.active {
-  border-color: rgba(15, 110, 234, 0.24);
+  border-color: var(--v4-border-strong);
   background: var(--primary-soft);
   color: var(--primary-strong);
 }
@@ -712,7 +711,7 @@
   height: 32px;
   min-height: 32px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--v4-card);
   color: var(--muted-strong);
   font-size: 11.5px;
 }

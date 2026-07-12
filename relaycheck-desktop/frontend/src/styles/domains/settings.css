@@ -7,11 +7,11 @@
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.74);
+  border: 1px solid var(--v4-card-soft);
   border-radius: 26px;
   background:
-    radial-gradient(circle at 100% 0%, rgba(0, 165, 184, 0.2), transparent 18rem),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(232, 243, 255, 0.9));
+    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 18rem),
+    linear-gradient(135deg, var(--v4-card), var(--v4-blue-soft));
   padding: 22px;
   box-shadow: var(--shadow-md);
 }
@@ -94,17 +94,17 @@
 .audit-row {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  background: rgba(247, 251, 255, 0.82);
+  background: var(--v4-card-soft);
 }
 
 .audit-row.warning {
-  border-color: rgba(183, 107, 0, 0.18);
-  background: rgba(255, 250, 240, 0.88);
+  border-color: var(--v4-amber-border);
+  background: var(--v4-amber-bg);
 }
 
 .audit-row.error {
-  border-color: rgba(204, 59, 59, 0.18);
-  background: rgba(255, 245, 245, 0.9);
+  border-color: var(--v4-red-border);
+  background: var(--v4-red-bg);
 }
 
 .audit-row strong,
@@ -144,8 +144,8 @@
 }
 
 .site-schedule-row.is-active {
-  border-color: rgba(15, 110, 234, 0.18);
-  background: rgba(247, 251, 255, 0.84);
+  border-color: var(--v4-blue-line);
+  background: var(--v4-card-soft);
 }
 
 .site-schedule-header {
@@ -197,7 +197,7 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 13px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--v4-card-soft);
   color: var(--v4-text);
 }
 
@@ -213,7 +213,7 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 13px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--v4-card-soft);
   color: var(--v4-text);
   text-align: center;
 }
@@ -245,7 +245,7 @@
   border-radius: 8px;
   font-size: 13px;
   font-family: "Menlo", "Fira Code", "JetBrains Mono", monospace;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--v4-card-soft);
   color: var(--v4-text);
   width: 140px;
 }
@@ -268,7 +268,7 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 13px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--v4-card-soft);
   color: var(--v4-text);
   flex: 1;
 }
@@ -287,8 +287,8 @@
   font-size: 12px;
   padding: 2px 8px;
   border-radius: 12px;
-  background: rgba(15, 110, 234, 0.08);
-  border: 1px solid rgba(15, 110, 234, 0.16);
+  background: var(--v4-blue-line);
+  border: 1px solid var(--v4-blue-line);
   color: var(--v4-text);
 }
 
@@ -304,7 +304,7 @@
 }
 
 .chip-remove:hover {
-  color: #d32f2f;
+  color: var(--danger);
 }
 
 /* -----------------------------------------------
@@ -358,12 +358,12 @@
 }
 
 .type-checkin {
-  background: rgba(15, 110, 234, 0.10);
+  background: var(--v4-blue-line);
   color: var(--v4-blue);
 }
 
 .type-sync {
-  background: rgba(99, 115, 138, 0.10);
+  background: var(--v4-border);
   color: var(--muted-strong);
 }
 
@@ -424,12 +424,12 @@
 }
 
 .status-ok {
-  background: rgba(15, 110, 234, 0.10);
+  background: var(--v4-blue-line);
   color: var(--v4-blue);
 }
 
 .status-idle {
-  background: rgba(99, 115, 138, 0.08);
+  background: var(--v4-border);
   color: var(--muted);
 }
 
@@ -464,27 +464,27 @@
   display: grid;
   gap: 10px;
   min-width: 0;
-  border: 1px solid rgba(99, 115, 138, 0.12);
+  border: 1px solid var(--v4-border);
   border-radius: 18px;
   background:
-    radial-gradient(circle at 100% 0%, rgba(15, 110, 234, 0.08), transparent 10rem),
-    rgba(247, 251, 255, 0.84);
+    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 10rem),
+    var(--v4-card-soft);
   padding: 13px;
 }
 
 .scheduler-job.running {
-  border-color: rgba(15, 110, 234, 0.24);
+  border-color: var(--v4-border-strong);
   background:
-    radial-gradient(circle at 100% 0%, rgba(15, 110, 234, 0.14), transparent 10rem),
-    rgba(255, 255, 255, 0.92);
+    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 10rem),
+    var(--v4-card);
 }
 
 .scheduler-job.warning,
 .scheduler-job.failed {
-  border-color: rgba(183, 107, 0, 0.2);
+  border-color: var(--v4-amber-border);
   background:
-    radial-gradient(circle at 100% 0%, rgba(183, 107, 0, 0.12), transparent 10rem),
-    rgba(255, 250, 240, 0.92);
+    radial-gradient(circle at 100% 0%, var(--v4-amber-border), transparent 10rem),
+    var(--v4-amber-bg);
 }
 
 .scheduler-job > div:first-child {
@@ -546,13 +546,13 @@
 }
 
 .status-pill.success {
-  border-color: rgba(17, 135, 93, 0.18);
-  background: rgba(17, 135, 93, 0.1);
+  border-color: var(--v4-green-border);
+  background: var(--v4-green-border);
   color: var(--success);
 }
 
 .status-pill.neutral {
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--v4-card);
   color: var(--muted-strong);
 }
 
@@ -575,7 +575,7 @@
   gap: 5px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: rgba(247, 251, 255, 0.82);
+  background: var(--v4-card-soft);
   padding: 12px;
 }
 
@@ -593,8 +593,8 @@
 }
 
 .proxy-result.success {
-  border-color: rgba(17, 135, 93, 0.16);
-  background: rgba(17, 135, 93, 0.08);
+  border-color: var(--v4-green-border);
+  background: var(--v4-green-border);
 }
 
 .proxy-result.success strong {
@@ -602,8 +602,8 @@
 }
 
 .proxy-result.warning {
-  border-color: rgba(183, 107, 0, 0.18);
-  background: rgba(255, 247, 229, 0.88);
+  border-color: var(--v4-amber-border);
+  background: var(--v4-amber-bg);
 }
 
 .proxy-result.warning strong {
@@ -613,7 +613,7 @@
 .backup-row {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  background: rgba(247, 251, 255, 0.82);
+  background: var(--v4-card-soft);
 }
 
 .backup-row:has(.backup-check) {
@@ -621,15 +621,15 @@
 }
 
 .backup-row.is-latest {
-  border-color: rgba(15, 110, 234, 0.2);
+  border-color: var(--v4-blue-line);
   background:
-    radial-gradient(circle at 100% 0%, rgba(15, 110, 234, 0.11), transparent 12rem),
-    rgba(255, 255, 255, 0.94);
-  box-shadow: 0 14px 30px rgba(15, 110, 234, 0.1);
+    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 12rem),
+    var(--v4-card);
+  box-shadow: var(--v4-shadow-blue);
 }
 
 .backup-row.is-selected {
-  border-color: rgba(0, 165, 184, 0.28);
+  border-color: var(--v4-blue-line);
   box-shadow:
     inset 4px 0 0 var(--cyan),
     var(--shadow-sm);

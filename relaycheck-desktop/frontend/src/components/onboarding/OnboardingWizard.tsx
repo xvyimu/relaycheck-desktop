@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/api/client";
+import { DialogShell } from "@/components/ui/dialog-shell";
 import { LineIcon } from "@/components/ui/line-icon";
 import type { LineIconName } from "@/types";
 
@@ -116,7 +117,6 @@ export function OnboardingWizard() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const dialogRef = useRef<HTMLDivElement>(null);
   const baseUrlInputRef = useRef<HTMLInputElement>(null);
 
   // Step 1 form state
@@ -137,27 +137,16 @@ export function OnboardingWizard() {
       setSaveToken(true);
       setOpen(true);
     }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && open) {
-        event.preventDefault();
-        close();
-      }
-    }
     window.addEventListener(REOPEN_EVENT, handleReopen as EventListener);
-    window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener(REOPEN_EVENT, handleReopen as EventListener);
-      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open]);
+  }, []);
 
   useEffect(() => {
-    if (!open) return;
-    if (stepIndex === 0) {
-      baseUrlInputRef.current?.focus();
-      return;
-    }
-    dialogRef.current?.focus();
+    if (!open || stepIndex !== 0) return;
+    const frame = window.requestAnimationFrame(() => baseUrlInputRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
   }, [open, stepIndex]);
 
   function close() {
@@ -229,154 +218,157 @@ export function OnboardingWizard() {
     }
   }
 
-  if (!open) {
-    return null;
-  }
-
   const step = STEPS[stepIndex];
   const isLast = stepIndex === STEPS.length - 1;
   const canRun =
     step.key !== "connect" || (baseUrl.trim().length > 0 && accessToken.trim().length > 0);
 
   return (
-    <div className="onboarding-overlay" role="presentation">
-      <div className="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" tabIndex={-1} ref={dialogRef}>
-        <header className="onboarding-header">
-          <div className="onboarding-title">
-            <span className="onboarding-brand">RelayCheck</span>
-            <span className="onboarding-eyebrow">首次启动引导</span>
-          </div>
-          <div className="onboarding-steps" role="list" aria-label="步骤指示器">
-            {STEPS.map((item, idx) => (
-              <span
-                key={item.key}
-                role="listitem"
-                aria-current={idx === stepIndex ? "step" : undefined}
-                aria-label={`步骤 ${item.index}/${STEPS.length}：${item.title}${idx < stepIndex ? "，已完成" : ""}`}
-                className={
-                  "onboarding-step-dot" +
-                  (idx === stepIndex ? " active" : "") +
-                  (idx < stepIndex ? " completed" : "")
-                }
-                title={`${item.index}/${STEPS.length} ${item.title}`}
-              >
-                {item.index}
-              </span>
-            ))}
-          </div>
-        </header>
-
-        <div className="onboarding-body">
-          <div className="onboarding-step">
-            <OnboardingStepIcon name={step.icon} />
-            <div className="onboarding-step-text">
-              <div className="onboarding-step-meta">
-                步骤 {step.index}/{STEPS.length}
-              </div>
-              <h3 className="onboarding-step-title" id="onboarding-title">{step.title}</h3>
-              <p className="onboarding-step-desc">{step.description}</p>
-            </div>
-          </div>
-
-          {step.key === "connect" ? (
-            <form
-              className="onboarding-form"
-              onSubmit={(event) => {
-                // Allow Enter-to-submit from the text inputs. The visible
-                // "执行" button lives outside this form and is type="button",
-                // so without this handler + hidden submit input the form's
-                // onSubmit would be dead code.
-                event.preventDefault();
-                if (!busy && canRun) {
-                  void runStep();
-                }
-              }}
+    <DialogShell
+      open={open}
+      onClose={close}
+      variant="modal"
+      ariaLabel="首次启动引导"
+      backdropClassName="onboarding-overlay"
+      className="onboarding-card"
+      initialFocusSelector={stepIndex === 0 ? "input[type='url']" : undefined}
+    >
+      <header className="onboarding-header">
+        <div className="onboarding-title">
+          <span className="onboarding-brand">RelayCheck</span>
+          <span className="onboarding-eyebrow">首次启动引导</span>
+        </div>
+        <div className="onboarding-steps" role="list" aria-label="步骤指示器">
+          {STEPS.map((item, idx) => (
+            <span
+              key={item.key}
+              role="listitem"
+              aria-current={idx === stepIndex ? "step" : undefined}
+              aria-label={`步骤 ${item.index}/${STEPS.length}：${item.title}${idx < stepIndex ? "，已完成" : ""}`}
+              className={
+                "onboarding-step-dot" +
+                (idx === stepIndex ? " active" : "") +
+                (idx < stepIndex ? " completed" : "")
+              }
+              title={`${item.index}/${STEPS.length} ${item.title}`}
             >
-              <label className="onboarding-field">
-                <span>NewAPI 后台地址</span>
-                <input
-                  ref={baseUrlInputRef}
-                  type="url"
-                  inputMode="url"
-                  value={baseUrl}
-                  onChange={(event) => setBaseUrl(event.target.value)}
-                  placeholder="https://your-newapi.example.com"
-                  autoComplete="url"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                />
-              </label>
-              <label className="onboarding-field">
-                <span>访问令牌（Access Token）</span>
-                <input
-                  type="password"
-                  value={accessToken}
-                  onChange={(event) => setAccessToken(event.target.value)}
-                  placeholder="NewAPI 后台 -> 个人设置 -> 访问令牌"
-                  autoComplete="new-password"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                />
-              </label>
-              <label className="onboarding-check">
-                <input
-                  type="checkbox"
-                  checked={saveToken}
-                  onChange={(event) => setSaveToken(event.target.checked)}
-                />
-                保存令牌以便后续定时同步
-              </label>
-              <button
-                type="submit"
-                aria-hidden="true"
-                tabIndex={-1}
-                style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", border: 0 }}
-              />
-            </form>
-          ) : null}
+              {item.index}
+            </span>
+          ))}
+        </div>
+      </header>
 
-          {step.key === "channels" ? (
-            <div className="onboarding-hint">
-              你可以前往左侧「渠道」页查看导入的渠道，或在这里点击「执行」触发一次模型同步。
+      <div className="onboarding-body">
+        <div className="onboarding-step">
+          <OnboardingStepIcon name={step.icon} />
+          <div className="onboarding-step-text">
+            <div className="onboarding-step-meta">
+              步骤 {step.index}/{STEPS.length}
             </div>
-          ) : null}
-
-          {step.key === "credentials" ? (
-            <div className="onboarding-hint">
-              前往左侧「账号」页为每个站点补充登录凭据或 API Key。本步骤无需在此执行操作。
-            </div>
-          ) : null}
-
-          {step.key === "checkin" ? (
-            <div className="onboarding-hint">
-              点击「执行」触发一次签到任务，验证账号凭据和站点规则是否就绪。
-            </div>
-          ) : null}
-
-          {message ? <div className="onboarding-status success" {...onboardingStatusProps("success")}>{message}</div> : null}
-          {error ? <div className="onboarding-status danger" {...onboardingStatusProps("danger")}>{error}</div> : null}
+            <h3 className="onboarding-step-title" id="onboarding-title">{step.title}</h3>
+            <p className="onboarding-step-desc">{step.description}</p>
+          </div>
         </div>
 
-        <footer className="onboarding-footer">
-          <button className="ghost" type="button" onClick={skip} disabled={busy}>
-            跳过
-          </button>
-          <div className="onboarding-footer-actions">
-            {step.key !== "credentials" ? (
-              <button
-                type="button"
-                onClick={() => void runStep()}
-                disabled={busy || !canRun}
-              >
-                {busy ? "执行中…" : "执行"}
-              </button>
-            ) : null}
-            <button type="button" onClick={next} disabled={busy}>
-              {isLast ? "完成" : "下一步"}
-            </button>
+        {step.key === "connect" ? (
+          <form
+            className="onboarding-form"
+            onSubmit={(event) => {
+              // Allow Enter-to-submit from the text inputs. The visible
+              // "执行" button lives outside this form and is type="button",
+              // so without this handler + hidden submit input the form's
+              // onSubmit would be dead code.
+              event.preventDefault();
+              if (!busy && canRun) {
+                void runStep();
+              }
+            }}
+          >
+            <label className="onboarding-field">
+              <span>NewAPI 后台地址</span>
+              <input
+                ref={baseUrlInputRef}
+                type="url"
+                inputMode="url"
+                value={baseUrl}
+                onChange={(event) => setBaseUrl(event.target.value)}
+                placeholder="https://your-newapi.example.com"
+                autoComplete="url"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+            </label>
+            <label className="onboarding-field">
+              <span>访问令牌（Access Token）</span>
+              <input
+                type="password"
+                value={accessToken}
+                onChange={(event) => setAccessToken(event.target.value)}
+                placeholder="NewAPI 后台 -> 个人设置 -> 访问令牌"
+                autoComplete="new-password"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+            </label>
+            <label className="onboarding-check">
+              <input
+                type="checkbox"
+                checked={saveToken}
+                onChange={(event) => setSaveToken(event.target.checked)}
+              />
+              保存令牌以便后续定时同步
+            </label>
+            <button
+              type="submit"
+              aria-hidden="true"
+              tabIndex={-1}
+              style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", border: 0 }}
+            />
+          </form>
+        ) : null}
+
+        {step.key === "channels" ? (
+          <div className="onboarding-hint">
+            你可以前往左侧「渠道」页查看导入的渠道，或在这里点击「执行」触发一次模型同步。
           </div>
-        </footer>
+        ) : null}
+
+        {step.key === "credentials" ? (
+          <div className="onboarding-hint">
+            前往左侧「账号」页为每个站点补充登录凭据或 API Key。本步骤无需在此执行操作。
+          </div>
+        ) : null}
+
+        {step.key === "checkin" ? (
+          <div className="onboarding-hint">
+            点击「执行」触发一次签到任务，验证账号凭据和站点规则是否就绪。
+          </div>
+        ) : null}
+
+        {message ? <div className="onboarding-status success" {...onboardingStatusProps("success")}>{message}</div> : null}
+        {error ? <div className="onboarding-status danger" {...onboardingStatusProps("danger")}>{error}</div> : null}
       </div>
-    </div>
+
+      <footer className="onboarding-footer">
+        <Button variant="ghost" type="button" onClick={skip} disabled={busy}>
+          跳过
+        </Button>
+        <div className="onboarding-footer-actions">
+          {step.key !== "credentials" ? (
+            <button
+              type="button"
+              onClick={() => void runStep()}
+              disabled={busy || !canRun}
+            >
+              {busy ? "执行中…" : "执行"}
+            </button>
+          ) : null}
+          <button type="button" onClick={next} disabled={busy}>
+            {isLast ? "完成" : "下一步"}
+          </button>
+        </div>
+      </footer>
+    </DialogShell>
   );
 }
+import { Button } from "@/components/ui/button";

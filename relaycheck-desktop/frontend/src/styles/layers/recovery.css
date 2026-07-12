@@ -1,16 +1,5 @@
 /* ===== Merged from recovery.css: unique styles not previously in styles.css ===== */
-button,
-input {
-  font: inherit;
-}
-
-input {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid rgba(71, 85, 105, 0.18);
-  border-radius: 8px;
-  padding: 0 12px;
-}
+/* Global form controls (input/select/textarea/font:inherit) live in base.css — not reasserted here. */
 
 .center-screen {
   min-height: 100vh;
@@ -20,39 +9,20 @@ input {
 }
 
 .loading-card,
-.login-card,
 .card,
 .metric-card {
-  border: 1px solid rgba(71, 85, 105, 0.14);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+  border: 1px solid var(--v4-border, var(--line));
+  background: var(--v4-card, var(--v4-card));
+  box-shadow: var(--v4-shadow-md, 0 8px 22px var(--v4-neutral-bg));
 }
 
-.login-card {
-  width: min(430px, 100%);
-  display: grid;
-  gap: 16px;
-  border-radius: 8px;
-  padding: 28px;
-}
-
-.login-card h1,
 .topbar h1 {
   margin: 0;
 }
 
-.login-card p,
 .muted {
-  color: #64748b;
+  color: var(--v4-muted, var(--muted));
   line-height: 1.6;
-}
-
-.login-card label {
-  display: grid;
-  gap: 7px;
-  color: #40516b;
-  font-size: 13px;
-  font-weight: 650;
 }
 
 .notice {
@@ -62,9 +32,9 @@ input {
 }
 
 .notice.error {
-  border: 1px solid #fecdd3;
-  background: #fff1f2;
-  color: #be123c;
+  border: 1px solid var(--v4-red-border, var(--v4-red-bg));
+  background: var(--v4-red-bg);
+  color: var(--v4-red, var(--v4-red));
 }
 
 .update-banner {
@@ -73,13 +43,13 @@ input {
   justify-content: space-between;
   gap: 14px;
   flex-wrap: wrap;
-  border: 1px solid #bfdbfe;
-  background: linear-gradient(135deg, #eff6ff 0%, #e0ecff 100%);
-  color: #1e3a8a;
+  border: 1px solid var(--v4-blue-soft);
+  background: linear-gradient(135deg, var(--v4-blue-soft) 0%, var(--primary-soft) 100%);
+  color: var(--v4-blue-active);
   border-radius: 10px;
   padding: 12px 16px;
   margin-bottom: 16px;
-  box-shadow: 0 6px 16px rgba(29, 99, 237, 0.1);
+  box-shadow: var(--v4-shadow-blue);
 }
 
 .update-banner-content {
@@ -96,8 +66,8 @@ input {
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: #1d63ed;
-  color: #fff;
+  background: var(--v4-blue);
+  color: var(--surface-solid);
   font-weight: 800;
   font-size: 15px;
   flex-shrink: 0;
@@ -117,7 +87,7 @@ input {
 
 .update-banner-text span {
   font-size: 12.5px;
-  color: #3b5a9a;
+  color: var(--v4-blue-hover);
 }
 
 .update-banner-actions {
@@ -133,8 +103,8 @@ input {
   min-height: 34px;
   padding: 0 14px;
   border-radius: 8px;
-  background: #1d63ed;
-  color: #fff;
+  background: var(--v4-blue);
+  color: var(--surface-solid);
   font-weight: 650;
   font-size: 13px;
   text-decoration: none;
@@ -142,7 +112,7 @@ input {
 }
 
 .update-banner-link:hover {
-  background: #1959d8;
+  background: var(--v4-blue);
 }
 
 .update-banner .ghost {
@@ -157,7 +127,7 @@ input {
 
 .brand small {
   display: block;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .sidebar nav {
@@ -174,15 +144,15 @@ input {
   justify-content: flex-start;
   width: 100%;
   background: transparent;
-  color: #40516b;
+  color: var(--muted-strong);
   box-shadow: none;
   text-align: left;
 }
 
 .sidebar nav button.active,
 .sidebar nav button:hover {
-  background: #eaf2ff;
-  color: #155eef;
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 .main-panel {
@@ -191,8 +161,7 @@ input {
 }
 
 .topbar-actions,
-.toolbar,
-.row-actions {
+.toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -213,7 +182,7 @@ input {
 
 .metric-card span {
   display: block;
-  color: #64748b;
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -247,15 +216,15 @@ input {
   gap: 14px;
   align-items: center;
   min-width: 0;
-  border: 1px solid rgba(71, 85, 105, 0.12);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--surface-soft);
   padding: 12px;
 }
 
 .list-row.unread {
-  border-color: rgba(29, 99, 237, 0.24);
-  background: #eef5ff;
+  border-color: var(--v4-blue-line);
+  background: var(--v4-blue-soft);
 }
 
 .list-row strong,
@@ -267,7 +236,7 @@ input {
 
 .list-row span,
 .list-row small {
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   margin-top: 3px;
 }
@@ -284,23 +253,23 @@ input {
 }
 
 .badge.good {
-  background: #e8f7ef;
-  color: #0f8a5f;
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .badge.warn {
-  background: #fff7df;
-  color: #a16207;
+  background: var(--surface-solid)7df;
+  color: var(--warning);
 }
 
 .badge.bad {
-  background: #fff1f2;
-  color: #be123c;
+  background: var(--surface-solid)1f2;
+  color: var(--v4-red);
 }
 
 .badge.neutral {
-  background: #eef2f7;
-  color: #40516b;
+  background: var(--v4-neutral-bg);
+  color: var(--muted-strong);
 }
 
 .kv {
@@ -312,7 +281,7 @@ input {
 
 .kv dt,
 .kv-row span {
-  color: #64748b;
+  color: var(--muted);
 }
 
 .kv dd {
@@ -326,7 +295,7 @@ input {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 1px solid rgba(71, 85, 105, 0.1);
+  border-bottom: 1px solid var(--line);
   padding-bottom: 8px;
 }
 
@@ -336,40 +305,23 @@ input {
 }
 
 .empty {
-  border: 1px dashed rgba(71, 85, 105, 0.22);
-  border-radius: 8px;
-  color: #64748b;
+  border: 1px dashed var(--v4-border, var(--line));
+  border-radius: var(--v4-radius-xs, 8px);
+  color: var(--v4-muted, var(--muted));
   padding: 22px;
   text-align: center;
+  background: var(--v4-card-soft, transparent);
 }
 
-textarea,
-select {
-  font: inherit;
-}
-
-select,
-textarea {
-  width: 100%;
-  border: 1px solid rgba(71, 85, 105, 0.18);
-  border-radius: 8px;
-  background: white;
-  color: #172033;
-}
-
-select {
-  min-height: 40px;
-  padding: 0 10px;
-}
-
+/* Undo base form width:100% / min-height on checkboxes only. */
 input[type="checkbox"] {
   width: auto;
   min-height: 0;
 }
 
 .status-pill.danger {
-  background: #fff1f2;
-  color: #be123c;
+  background: var(--surface-solid)1f2;
+  color: var(--v4-red);
 }
 
 .panel,
@@ -383,9 +335,9 @@ input[type="checkbox"] {
 .channel-summary > div,
 .scheduler-job,
 .detail-row {
-  border: 1px solid rgba(71, 85, 105, 0.14);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--v4-border, var(--line));
+  border-radius: var(--v4-radius-xs, 8px);
+  background: var(--v4-card, var(--v4-card));
 }
 
 .settings-hero p,
@@ -394,7 +346,7 @@ input[type="checkbox"] {
 .detail-hint,
 .note,
 .muted {
-  color: #64748b;
+  color: var(--v4-muted, var(--muted));
 }
 
 .channel-summary,
@@ -414,7 +366,7 @@ input[type="checkbox"] {
 .field > span,
 .settings-editor > span {
   display: block;
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 650;
 }
@@ -423,12 +375,12 @@ input[type="checkbox"] {
   display: grid;
   grid-template-columns: minmax(90px, 0.34fr) minmax(0, 1fr);
   gap: 12px;
-  border-bottom: 1px solid rgba(71, 85, 105, 0.1);
+  border-bottom: 1px solid var(--line);
   padding-bottom: 8px;
 }
 
 .detail-list span {
-  color: #64748b;
+  color: var(--muted);
 }
 
 .detail-list strong,
@@ -458,7 +410,7 @@ input[type="checkbox"] {
   display: inline-flex;
   gap: 8px;
   align-items: center;
-  color: #40516b;
+  color: var(--muted-strong);
   font-size: 13px;
 }
 
@@ -474,13 +426,13 @@ input[type="checkbox"] {
 
 .problem-hint,
 .note {
-  border: 1px solid rgba(29, 99, 237, 0.16);
-  background: #f4f8ff;
+  border: 1px solid var(--v4-blue-line);
+  background: var(--v4-blue-soft);
 }
 
 .error,
 .danger-text {
-  color: #be123c;
+  color: var(--v4-red);
 }
 
 .scheduler-job > div:first-child,
@@ -495,17 +447,17 @@ input[type="checkbox"] {
 .detail-row span {
   display: grid;
   gap: 4px;
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
 }
 
 .danger {
-  border-color: rgba(190, 18, 60, 0.24);
-  background: #be123c;
+  border-color: var(--v4-red-border);
+  background: var(--v4-red);
 }
 
 .danger:hover:not(:disabled) {
-  background: #9f1239;
+  background: var(--v4-red);
 }
 
 .hub-radar-head,
@@ -525,13 +477,13 @@ input[type="checkbox"] {
 .hub-radar-head span,
 .radar-card-top span {
   display: block;
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
 .hub-radar-card.is-warning {
-  border-color: rgba(161, 98, 7, 0.24);
+  border-color: var(--v4-amber-border);
 }
 
 .channels-panel,
@@ -546,21 +498,21 @@ input[type="checkbox"] {
 }
 
 .channel-health-center {
-  border-color: rgba(71, 85, 105, 0.14);
+  border-color: var(--line);
 }
 
 .channel-health-center.level-danger {
-  border-color: rgba(190, 18, 60, 0.24);
+  border-color: var(--v4-red-border);
   background:
-    radial-gradient(circle at 100% 0%, rgba(190, 18, 60, 0.08), transparent 12rem),
-    rgba(255, 255, 255, 0.92);
+    radial-gradient(circle at 100% 0%, var(--v4-red-border), transparent 12rem),
+    var(--v4-card);
 }
 
 .channel-health-center.level-warning {
-  border-color: rgba(161, 98, 7, 0.22);
+  border-color: var(--v4-amber-border);
   background:
-    radial-gradient(circle at 100% 0%, rgba(161, 98, 7, 0.08), transparent 12rem),
-    rgba(255, 255, 255, 0.92);
+    radial-gradient(circle at 100% 0%, var(--v4-amber-border), transparent 12rem),
+    var(--v4-card);
 }
 
 .channel-health-metrics {
@@ -571,16 +523,16 @@ input[type="checkbox"] {
 
 .channel-health-metrics > div {
   min-width: 0;
-  border: 1px solid rgba(71, 85, 105, 0.1);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--surface-soft);
   padding: 10px;
 }
 
 .channel-health-metrics span,
 .channel-health-risk span {
   display: block;
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 650;
 }
@@ -588,7 +540,7 @@ input[type="checkbox"] {
 .channel-health-metrics strong {
   display: block;
   margin-top: 4px;
-  color: #172033;
+  color: var(--text);
   font-size: 24px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -603,20 +555,20 @@ input[type="checkbox"] {
 .channel-health-risk {
   display: grid;
   gap: 8px;
-  border: 1px solid rgba(71, 85, 105, 0.12);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--surface-soft);
   padding: 10px;
 }
 
 .channel-health-risk.level-danger {
-  border-color: rgba(190, 18, 60, 0.22);
-  background: #fff6f8;
+  border-color: var(--v4-red-border);
+  background: var(--surface-solid)6f8;
 }
 
 .channel-health-risk.level-warning {
-  border-color: rgba(161, 98, 7, 0.2);
-  background: #fff9e8;
+  border-color: var(--v4-amber-border);
+  background: var(--surface-solid)9e8;
 }
 
 .channel-health-risk strong,
@@ -628,13 +580,13 @@ input[type="checkbox"] {
 
 .channel-health-risk strong {
   margin-top: 3px;
-  color: #172033;
+  color: var(--text);
   font-size: 14px;
 }
 
 .channel-health-risk em {
   margin-top: 4px;
-  color: #40516b;
+  color: var(--muted-strong);
   font-size: 12px;
   font-style: normal;
   line-height: 1.5;
@@ -647,9 +599,9 @@ input[type="checkbox"] {
 }
 
 .channel-health-risk-stats span {
-  border: 1px solid rgba(71, 85, 105, 0.1);
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--v4-card);
   padding: 4px 8px;
   white-space: nowrap;
 }
@@ -659,9 +611,9 @@ input[type="checkbox"] {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  border: 1px solid rgba(161, 98, 7, 0.2);
+  border: 1px solid var(--v4-amber-border);
   border-radius: 8px;
-  background: #fff9e8;
+  background: var(--surface-solid)9e8;
   padding: 9px 10px;
 }
 
@@ -676,22 +628,22 @@ input[type="checkbox"] {
 }
 
 .channel-active-filter strong {
-  color: #713f12;
+  color: var(--v4-amber-ink);
   font-size: 13px;
   line-height: 1.35;
 }
 
 .channel-active-filter span {
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
 .channel-card-v4.is-health-risk {
-  border-color: rgba(161, 98, 7, 0.24);
+  border-color: var(--v4-amber-border);
   background:
-    linear-gradient(180deg, rgba(255, 251, 237, 0.96), rgba(255, 255, 255, 0.94));
+    linear-gradient(180deg, var(--v4-amber-bg), var(--v4-card));
 }
 
 .compact-summary {
@@ -709,14 +661,14 @@ input[type="checkbox"] {
 .channel-card-head > div:nth-child(2) span,
 .channel-subtle {
   display: block;
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
 }
 
 .channel-card-metrics > div {
-  border: 1px solid rgba(71, 85, 105, 0.1);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--surface-soft);
   padding: 10px;
 }
 
@@ -745,14 +697,14 @@ input[type="checkbox"] {
 }
 
 .site-card {
-  border: 1px solid rgba(71, 85, 105, 0.14);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--v4-card);
   padding: 14px;
 }
 
 .site-card.is-unhealthy {
-  border-color: rgba(190, 18, 60, 0.24);
+  border-color: var(--v4-red-border);
 }
 
 .site-card-head,
@@ -774,7 +726,7 @@ input[type="checkbox"] {
 .site-addresses dt,
 .site-card-metrics span {
   display: block;
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 650;
 }
@@ -796,13 +748,13 @@ input[type="checkbox"] {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr);
   gap: 10px;
-  border-bottom: 1px solid rgba(71, 85, 105, 0.1);
+  border-bottom: 1px solid var(--line);
   padding-bottom: 8px;
 }
 
 .site-addresses dd {
   margin: 0;
-  color: #172033;
+  color: var(--text);
   font-weight: 650;
 }
 
@@ -813,9 +765,9 @@ input[type="checkbox"] {
 }
 
 .site-card-metrics > div {
-  border: 1px solid rgba(71, 85, 105, 0.1);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--surface-soft);
   padding: 10px;
 }
 
@@ -875,9 +827,9 @@ input[type="checkbox"] {
 }
 
 .checkin-card {
-  border: 1px solid rgba(71, 85, 105, 0.14);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--v4-card);
   padding: 14px;
 }
 
@@ -885,26 +837,26 @@ input[type="checkbox"] {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
 }
 
 .checkin-progress > div:first-child strong {
-  color: #172033;
+  color: var(--text);
 }
 
 .checkin-progress-track {
   height: 10px;
   overflow: hidden;
   border-radius: 999px;
-  background: #e2e8f0;
+  background: var(--v4-neutral-bg);
 }
 
 .checkin-progress-track span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #1d63ed;
+  background: var(--v4-blue);
   transition: width 180ms ease;
 }
 
@@ -919,15 +871,15 @@ input[type="checkbox"] {
 }
 
 .checkin-metrics > div {
-  border: 1px solid rgba(71, 85, 105, 0.1);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--surface-soft);
   padding: 10px;
 }
 
 .checkin-metrics span {
   display: block;
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -958,8 +910,8 @@ input[type="checkbox"] {
   border-radius: var(--radius-md);
   padding: 12px 14px;
   background:
-    radial-gradient(circle at 100% 0%, rgba(15, 110, 234, 0.03), transparent 10rem),
-    rgba(255, 255, 255, 0.86);
+    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 10rem),
+    var(--v4-card);
 }
 
 .notification-toolbar {
@@ -971,26 +923,26 @@ input[type="checkbox"] {
 }
 
 .notification-card.is-unread {
-  border-color: rgba(29, 99, 237, 0.24);
-  background: #f8fbff;
+  border-color: var(--v4-blue-line);
+  background: var(--v4-card-soft);
 }
 
 .notification-card.tone-bad {
-  border-color: rgba(190, 18, 60, 0.24);
+  border-color: var(--v4-red-border);
   background:
-    radial-gradient(circle at 100% 0%, rgba(190, 18, 60, 0.08), transparent 10rem),
-    rgba(255, 245, 247, 0.9);
+    radial-gradient(circle at 100% 0%, var(--v4-red-border), transparent 10rem),
+    var(--v4-red-bg);
 }
 
 .notification-card.tone-warn {
-  border-color: rgba(161, 98, 7, 0.24);
+  border-color: var(--v4-amber-border);
   background:
-    radial-gradient(circle at 100% 0%, rgba(161, 98, 7, 0.08), transparent 10rem),
-    rgba(255, 250, 240, 0.9);
+    radial-gradient(circle at 100% 0%, var(--v4-amber-border), transparent 10rem),
+    var(--v4-amber-bg);
 }
 
 .notification-card.tone-good {
-  border-color: rgba(22, 163, 74, 0.2);
+  border-color: var(--v4-green-border);
 }
 
 .notification-card-head,
@@ -1007,7 +959,7 @@ input[type="checkbox"] {
 
 .notification-card-head span,
 .notification-meta {
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -1019,7 +971,7 @@ input[type="checkbox"] {
 
 .notification-card p {
   margin: 0;
-  color: #40516b;
+  color: var(--muted-strong);
   line-height: 1.5;
 }
 
@@ -1048,9 +1000,9 @@ input[type="checkbox"] {
 .account-capability-panel,
 .detail-card,
 .account-key-summary {
-  border: 1px solid rgba(71, 85, 105, 0.14);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--v4-card);
   padding: 14px;
 }
 
@@ -1076,7 +1028,7 @@ input[type="checkbox"] {
 .account-kind-chip,
 .capability-empty,
 .capability-mini-note {
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -1091,7 +1043,7 @@ input[type="checkbox"] {
 }
 
 .account-identity em {
-  color: #64748b;
+  color: var(--muted);
   font-style: normal;
   font-size: 12px;
 }
@@ -1107,9 +1059,9 @@ input[type="checkbox"] {
 .account-card-metrics > div,
 .detail-metrics > div,
 .mini-stats > div {
-  border: 1px solid rgba(71, 85, 105, 0.1);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--surface-soft);
   padding: 10px;
 }
 
@@ -1117,7 +1069,7 @@ input[type="checkbox"] {
 .detail-metrics span,
 .mini-stats span {
   display: block;
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -1140,14 +1092,14 @@ input[type="checkbox"] {
 .account-card-editor,
 .account-key-summary {
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--surface-soft);
   padding: 12px;
 }
 
 .account-action-label,
 .danger-label,
 .account-editor-head span {
-  color: #64748b;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1166,7 +1118,7 @@ input[type="checkbox"] {
 .capability-panel-head em,
 .capability-row span,
 .compact-row span {
-  color: #64748b;
+  color: var(--muted);
   font-style: normal;
   font-size: 12px;
 }
@@ -1180,19 +1132,19 @@ input[type="checkbox"] {
 
 .capability-row,
 .compact-row {
-  border: 1px solid rgba(71, 85, 105, 0.1);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--surface-soft);
   padding: 10px;
 }
 
 .success-row {
-  border-color: rgba(15, 138, 95, 0.18);
-  background: #f0fbf5;
+  border-color: var(--v4-green-border);
+  background: var(--v4-green-bg);
 }
 
 .issue-row,
 .is-warning {
-  border-color: rgba(161, 98, 7, 0.2);
-  background: #fff9e8;
+  border-color: var(--v4-amber-border);
+  background: var(--surface-solid)9e8;
 }

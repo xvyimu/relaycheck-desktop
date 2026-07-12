@@ -1,5 +1,7 @@
 import { type ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { DialogShell } from "@/components/ui/dialog-shell";
+import { Button } from "@/components/ui/button";
 
 export type TwoFactorGuideVariant = "inline" | "dialog";
 
@@ -118,9 +120,9 @@ export function TwoFactorGuide({
           </button>
         ) : null}
         {onClose ? (
-          <button type="button" className="ghost" onClick={onClose}>
+          <Button variant="ghost" type="button" onClick={onClose}>
             {variant === "dialog" ? "关闭" : "我知道了"}
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -130,33 +132,25 @@ export function TwoFactorGuide({
 
   if (variant === "dialog") {
     return (
-      <div
-        className="twofa-guide-backdrop"
-        role="presentation"
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) {
-            onClose?.();
-          }
-        }}
+      <DialogShell
+        open
+        onClose={onClose ?? (() => undefined)}
+        variant="modal"
+        ariaLabel={title}
+        backdropClassName="twofa-guide-backdrop"
+        className={cn("twofa-guide twofa-guide-dialog", className)}
+        initialFocusSelector=".twofa-guide-primary, .twofa-guide-close, .ghost"
       >
-        <aside
-          aria-label={title}
-          aria-modal="true"
-          className={cn("twofa-guide twofa-guide-dialog", className)}
-          role="dialog"
-          tabIndex={-1}
-        >
-          <header className="twofa-guide-head">
-            <h3>{title}</h3>
-            {onClose ? (
-              <button type="button" className="ghost twofa-guide-close" aria-label="关闭" onClick={onClose}>
-                ×
-              </button>
-            ) : null}
-          </header>
-          {content}
-        </aside>
-      </div>
+        <header className="twofa-guide-head">
+          <h3>{title}</h3>
+          {onClose ? (
+            <Button variant="ghost" type="button" aria-label="关闭" onClick={onClose} className="twofa-guide-close">
+              ×
+            </Button>
+          ) : null}
+        </header>
+        {content}
+      </DialogShell>
     );
   }
 

@@ -8,15 +8,19 @@ export function useOpsHealth() {
   const notifications = useApi<NotificationItem[]>("/api/notifications", []);
   const diagnostics = useApi<SystemDiagnostics | null>("/api/system/diagnostics", null);
   const actionCenter = useApi<ActionCenter | null>("/api/system/action-center", null);
+  const { refresh: refreshCheckins } = checkins;
+  const { refresh: refreshNotifications } = notifications;
+  const { refresh: refreshDiagnostics } = diagnostics;
+  const { refresh: refreshActionCenter } = actionCenter;
 
   const refresh = useCallback(async () => {
     await Promise.all([
-      checkins.refresh(),
-      notifications.refresh(),
-      diagnostics.refresh(),
-      actionCenter.refresh(),
+      refreshCheckins(),
+      refreshNotifications(),
+      refreshDiagnostics(),
+      refreshActionCenter(),
     ]);
-  }, [actionCenter.refresh, checkins.refresh, diagnostics.refresh, notifications.refresh]);
+  }, [refreshActionCenter, refreshCheckins, refreshDiagnostics, refreshNotifications]);
 
   return {
     loading: checkins.loading || notifications.loading || diagnostics.loading || actionCenter.loading,

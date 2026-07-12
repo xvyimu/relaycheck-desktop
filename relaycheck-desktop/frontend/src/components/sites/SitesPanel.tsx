@@ -3,6 +3,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/api/client";
 import { AccountsPanel } from "@/components/accounts/AccountsPanel";
 import { SiteAccountMasterDetail } from "@/components/sites/SiteAccountMasterDetail";
+import { DialogShell } from "@/components/ui/dialog-shell";
+import { Empty } from "@/components/ui/empty";
 import { formatConfidence, formatDuration, formatTime } from "@/lib/format";
 import { loginDiscoverySourceLabel, normalizeLoginDiscovery, parseLoginDiscovery } from "@/lib/loginDiscovery";
 import type { Account, LoginDiscovery, NextRunItem, NavigationIntent, SiteDetail, TabKey, UpstreamSite } from "@/types";
@@ -52,8 +54,6 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
   // site-centric master-detail; "accounts" shows the flat 全部账号 surface.
   const [subview, setSubview] = useState<"sites" | "accounts">("sites");
   const detailRequestRef = useRef(0);
-  const detailCloseButtonRef = useRef<HTMLButtonElement | null>(null);
-  const detailTriggerRef = useRef<HTMLButtonElement | null>(null);
   const task = useTaskProgress();
   const { nextRuns } = useNextRuns();
 
@@ -134,12 +134,9 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
     }
   }
 
-  async function openDetail(site: UpstreamSite, trigger?: HTMLButtonElement) {
+  async function openDetail(site: UpstreamSite) {
     const requestId = detailRequestRef.current + 1;
     detailRequestRef.current = requestId;
-    if (trigger) {
-      detailTriggerRef.current = trigger;
-    }
     setDetailBusyId(site.id);
     setMessage("");
     try {
@@ -160,30 +157,9 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
 
   const closeDetail = useCallback(() => {
     detailRequestRef.current += 1;
-    const trigger = detailTriggerRef.current;
     setDetail(null);
     setDetailBusyId("");
-    window.requestAnimationFrame(() => {
-      trigger?.focus();
-    });
   }, []);
-
-  useEffect(() => {
-    if (!detail) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") closeDetail();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [closeDetail, detail]);
-
-  useEffect(() => {
-    if (!detail) return;
-    const frame = window.requestAnimationFrame(() => {
-      detailCloseButtonRef.current?.focus();
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [detail]);
 
   const detailDiscovery = detail ? siteLoginDiscovery(detail.site, detail.detection) : null;
   const detailCandidates = detailDiscovery?.candidates?.slice(0, 6) || [];
@@ -286,7 +262,7 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
           </label>
         </div>
         <div className="toolbar">
-          <button type="button" className="ghost" onClick={() => { setHealthFilter("all"); setQuery(""); }}>清除筛选</button>
+          <Button variant="ghost" type="button" onClick={() => { setHealthFilter("all"); setQuery(""); }}>清除筛选</Button>
         </div>
         {healthFilter === "unreachable" ? (
           <div className="channel-active-filter">
@@ -294,7 +270,7 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
               <strong>不可达站点筛选已启用</strong>
               <span>仅显示健康状态异常（不可达、失败、错误、过期等）的站点。</span>
             </div>
-            <button type="button" className="ghost" onClick={() => { setHealthFilter("all"); setQuery(""); }}>清除</button>
+            <Button variant="ghost" type="button" onClick={() => { setHealthFilter("all"); setQuery(""); }}>清除</Button>
           </div>
         ) : null}
       </div>
@@ -377,25 +353,19 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
               ) : null}
 
               <div className="site-actions">
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={detailBusyId === site.id}
-                  onClick={(event) => void openDetail(site, event.currentTarget)}
+                <Button variant="ghost" type="button" disabled={detailBusyId === site.id}
+                  onClick={() => void openDetail(site)}
                 >
                   {detailBusyId === site.id ? "加载中…" : "详情"}
-                </button>
+                </Button>
                 {onNavigate ? (
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => {
+                  <Button variant="ghost" type="button" onClick={() => {
                       const next = siteAccountsNavigationIntent(site.id);
                       onNavigate(next.target, { upstreamSiteId: next.upstreamSiteId });
                     }}
                   >
                     查看账号
-                  </button>
+                  </Button>
                 ) : null}
                 <button
                   disabled={busyId === site.id}
@@ -410,29 +380,31 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
         })}
 
         {!filteredSites.length ? (
-          <div className="empty-state">
-            <div className="empty-mark">RC</div>
-            <strong>暂无上游站点</strong>
-            <span>请先导入 NewAPI 或 OneAPI 渠道，再在此探测站点能力。</span>
-          </div>
+          <Empty
+            title="暂无上游站点"
+            description="请先导入 NewAPI 或 OneAPI 渠道，再在此探测站点能力。"
+          />
         ) : null}
       </div>
         </>
       )}
-      {detail ? (
-        <div className="drawer-backdrop" role="presentation" onClick={closeDetail}>
-          <aside
-            className="detail-drawer detail-drawer-wide"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="site-detail-title"
-            onClick={(event) => event.stopPropagation()}
-          >
+      <DialogShell
+        open={Boolean(detail)}
+        onClose={closeDetail}
+        variant="panel"
+        className="detail-drawer-wide"
+        ariaLabel={detail ? `站点详情 ${detail.site.name}` : "站点详情"}
+        initialFocusSelector=".detail-header .ghost, .detail-header button"
+      >
+        {detail ? (
+          <>
             <div className="detail-header">
               <div>
                 <span className="eyebrow">站点详情</span>
                 <h2 id="site-detail-title">{detail.site.name}</h2>
-                <p>{detail.site.kind || "unknown"} · {detail.site.healthStatus || "未知"}</p>
+                <p>
+                  {detail.site.kind || "unknown"} · {detail.site.healthStatus || "未知"}
+                </p>
               </div>
               <div className="toolbar">
                 {onNavigate ? (
@@ -446,7 +418,9 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
                     查看账号
                   </button>
                 ) : null}
-                <button type="button" className="ghost" ref={detailCloseButtonRef} onClick={closeDetail}>关闭</button>
+                <Button variant="ghost" type="button" onClick={closeDetail} className="dialog-shell-close">
+                  关闭
+                </Button>
               </div>
             </div>
 
@@ -454,9 +428,18 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
               <section className="detail-card">
                 <h3>入口</h3>
                 <div className="detail-list">
-                  <div><span>基础网址</span><strong>{detail.site.baseUrl || "-"}</strong></div>
-                  <div><span>主页</span><strong>{detail.site.homepageUrl || detail.detection.homepageUrl || "-"}</strong></div>
-                  <div><span>登录网址</span><strong>{detail.site.loginUrl || detail.detection.loginUrl || "-"}</strong></div>
+                  <div>
+                    <span>基础网址</span>
+                    <strong>{detail.site.baseUrl || "-"}</strong>
+                  </div>
+                  <div>
+                    <span>主页</span>
+                    <strong>{detail.site.homepageUrl || detail.detection.homepageUrl || "-"}</strong>
+                  </div>
+                  <div>
+                    <span>登录网址</span>
+                    <strong>{detail.site.loginUrl || detail.detection.loginUrl || "-"}</strong>
+                  </div>
                 </div>
               </section>
 
@@ -500,10 +483,22 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
               <section className="detail-card">
                 <h3>探测</h3>
                 <div className="detail-list">
-                  <div><span>后台类型</span><strong>{detail.detection.kind || detail.site.kind || "未知"}</strong></div>
-                  <div><span>健康状态</span><strong>{detail.detection.healthStatus || detail.site.healthStatus || "未知"}</strong></div>
-                  <div><span>识别置信度</span><strong>{formatConfidence(detail.detection.detectionConfidence)}</strong></div>
-                  <div><span>最近检查</span><strong>{formatTime(detail.site.lastHealthCheckAt || "")}</strong></div>
+                  <div>
+                    <span>后台类型</span>
+                    <strong>{detail.detection.kind || detail.site.kind || "未知"}</strong>
+                  </div>
+                  <div>
+                    <span>健康状态</span>
+                    <strong>{detail.detection.healthStatus || detail.site.healthStatus || "未知"}</strong>
+                  </div>
+                  <div>
+                    <span>识别置信度</span>
+                    <strong>{formatConfidence(detail.detection.detectionConfidence)}</strong>
+                  </div>
+                  <div>
+                    <span>最近检查</span>
+                    <strong>{formatTime(detail.site.lastHealthCheckAt || "")}</strong>
+                  </div>
                 </div>
               </section>
 
@@ -518,9 +513,9 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
                 </section>
               ) : null}
             </div>
-          </aside>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+      </DialogShell>
         </>
       ) : null}
 
@@ -537,3 +532,4 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
 }
 
 export const SitesPanel = memo(SitesPanelBase);
+import { Button } from "@/components/ui/button";

@@ -8,12 +8,12 @@ type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
 };
 
 const variantClasses: Record<BadgeVariant, string> = {
-  default: "border-blue-100 bg-blue-50 text-blue-700",
-  secondary: "border-slate-200 bg-slate-50 text-slate-600",
-  success: "border-emerald-100 bg-emerald-50 text-emerald-700",
-  warning: "border-amber-100 bg-amber-50 text-amber-700",
-  destructive: "border-red-100 bg-red-50 text-red-700",
-  outline: "border-border bg-white text-muted-foreground",
+  default: "border-[var(--v4-blue-line)] bg-[var(--v4-blue-soft)] text-[var(--v4-blue)]",
+  secondary: "border-[var(--v4-neutral-border)] bg-[var(--v4-neutral-bg)] text-[var(--v4-muted)]",
+  success: "border-[var(--v4-green-border)] bg-[var(--v4-green-bg)] text-[var(--v4-green)]",
+  warning: "border-[var(--v4-amber-border)] bg-[var(--v4-amber-bg)] text-[var(--v4-amber)]",
+  destructive: "border-[var(--v4-red-border)] bg-[var(--v4-red-bg)] text-[var(--v4-red)]",
+  outline: "border-[var(--v4-border)] bg-[var(--v4-card)] text-[var(--v4-muted)]",
 };
 
 export function Badge({ className, variant = "default", ...props }: BadgeProps) {

@@ -36,7 +36,8 @@
   --bg: #eef3f8;
   --bg-strong: #dce6f0;
   --surface: rgba(255, 255, 255, 0.86);
-  --surface-solid: var(--surface-solid);
+  /* Solid surface for primary button text / solid cards. Must not self-reference. */
+  --surface-solid: #ffffff;
   --surface-soft: #f8fafc;
   --surface-subtle: #f1f5f9;
   --line: rgba(71, 85, 105, 0.16);

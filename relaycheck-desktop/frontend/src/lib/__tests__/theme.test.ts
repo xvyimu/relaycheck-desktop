@@ -23,6 +23,7 @@ function createLocalStorageMock() {
 
 function createDocumentMock() {
   const classList = new Set<string>();
+  const style: { colorScheme?: string } = {};
   return {
     documentElement: {
       classList: {
@@ -30,8 +31,10 @@ function createDocumentMock() {
         remove: vi.fn((cls: string) => classList.delete(cls)),
         contains: (cls: string) => classList.has(cls),
       },
+      style,
     },
     _classList: classList,
+    _style: style,
   };
 }
 
@@ -47,12 +50,14 @@ describe("applyTheme", () => {
     applyTheme("dark");
     expect(docMock.documentElement.classList.add).toHaveBeenCalledWith("dark");
     expect(docMock._classList.has("dark")).toBe(true);
+    expect(docMock._style.colorScheme).toBe("dark");
   });
 
   it("removes dark class for light theme", () => {
     applyTheme("light");
     expect(docMock.documentElement.classList.remove).toHaveBeenCalledWith("dark");
     expect(docMock._classList.has("dark")).toBe(false);
+    expect(docMock._style.colorScheme).toBe("light");
   });
 
   it("adds dark class for system theme when system prefers dark", () => {

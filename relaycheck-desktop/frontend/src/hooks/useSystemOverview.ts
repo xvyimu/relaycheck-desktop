@@ -9,6 +9,7 @@ export function useSystemOverview() {
   const [healthLoading, setHealthLoading] = useState(true);
   const [healthLoaded, setHealthLoaded] = useState(false);
   const status = useApi<StatusPayload | null>("/api/system/status", null);
+  const { refresh: refreshStatus } = status;
 
   const refreshHealth = useCallback(async () => {
     setHealthLoading(true);
@@ -24,8 +25,8 @@ export function useSystemOverview() {
   }, []);
 
   const refresh = useCallback(async () => {
-    await Promise.all([refreshHealth(), status.refresh()]);
-  }, [refreshHealth, status.refresh]);
+    await Promise.all([refreshHealth(), refreshStatus()]);
+  }, [refreshHealth, refreshStatus]);
 
   useEffect(() => {
     void refreshHealth();

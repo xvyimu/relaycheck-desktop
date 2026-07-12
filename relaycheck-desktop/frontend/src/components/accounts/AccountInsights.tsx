@@ -354,9 +354,9 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
           >
             批量打开授权
           </button>
-          <button type="button" className="ghost" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
+          <Button variant="ghost" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
             {expanded ? "收起洞察" : "展开洞察"}
-          </button>
+          </Button>
         </div>
       </div>
       {keyTask.progress || keyTask.loading || keyTask.error ? (
@@ -456,9 +456,9 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
                   <strong title={account.displayName}>{account.displayName}</strong>
                   <span title={`${account.upstreamSiteName} · ${keyIssueLabel(account)}`}>{account.upstreamSiteName} · {keyIssueLabel(account)}</span>
                 </div>
-                <button type="button" className="ghost" disabled={keyTestBusyId !== ""} onClick={() => void testSingleKey(account)}>
+                <Button variant="ghost" type="button" disabled={keyTestBusyId !== ""} onClick={() => void testSingleKey(account)}>
                   {keyTestBusyId === account.id ? "检测中" : "检测"}
-                </button>
+                </Button>
               </div>
             ))}
             {!successKeyAccounts.length && !issueKeyAccounts.length ? <span className="capability-empty">{keyAccounts.length ? "已保存 Key 暂无明显异常。" : "在账号卡编辑里保存 API Key，或从配置/密码文件导入后即可检测。"}</span> : null}
@@ -540,9 +540,9 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
             {!pricingOverview?.sources?.length && !modelOverview?.priceHints?.length ? <span className="capability-empty">先同步模型或同步 NewAPI 渠道；需要更完整价格时点"同步在线价格"。检测仍在本地直连上游完成，不向第三方提交 Key。</span> : null}
           </div>
           <div className="mini-action-row">
-            <button type="button" className="ghost" disabled={pricingSyncBusy} onClick={() => void syncPricing()}>
+            <Button variant="ghost" type="button" disabled={pricingSyncBusy} onClick={() => void syncPricing()}>
               {pricingSyncBusy ? "探测中" : "同步在线价格"}
-            </button>
+            </Button>
             <span className="capability-mini-note">{pricingOverview?.failedCacheCount ? `${pricingOverview.failedCacheCount} 个站点未返回价格` : "参考 modeloc 类检测维度，本地执行"}</span>
           </div>
         </div>
@@ -567,9 +567,9 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
             {!keyExportPreview ? <span className="capability-empty">导出前先生成预览。导出内容只包含 Key 指纹、状态、模型和测速，不包含真实密钥。</span> : null}
           </div>
           <div className="mini-action-row">
-            <button type="button" className="ghost" disabled={!keyAccounts.length || keyExportBusy} onClick={() => void loadKeyExportPreview()}>{keyExportBusy ? "生成中" : "预览"}</button>
-            <button type="button" className="ghost" disabled={!keyAccounts.length} onClick={() => void copyKeyExportPreview()}>复制脱敏</button>
-            <button type="button" className="ghost" disabled={!keyExportPreview} onClick={downloadKeyExportPreview}>下载</button>
+            <Button variant="ghost" type="button" disabled={!keyAccounts.length || keyExportBusy} onClick={() => void loadKeyExportPreview()}>{keyExportBusy ? "生成中" : "预览"}</Button>
+            <Button variant="ghost" type="button" disabled={!keyAccounts.length} onClick={() => void copyKeyExportPreview()}>复制脱敏</Button>
+            <Button variant="ghost" type="button" disabled={!keyExportPreview} onClick={downloadKeyExportPreview}>下载</Button>
           </div>
         </div>
         <div className="account-capability-panel unsupported-cleanup-panel is-actionable">
@@ -608,9 +608,9 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
             {cleanupPreview && !cleanupPreview.items.length ? <span className="capability-empty">当前没有匹配的不支持签到账号。</span> : null}
           </div>
           <div className="mini-action-row">
-            <button type="button" className="ghost" disabled={cleanupBusy} onClick={() => void previewUnsupportedCheckinCleanup()}>
+            <Button variant="ghost" type="button" disabled={cleanupBusy} onClick={() => void previewUnsupportedCheckinCleanup()}>
               {cleanupPreviewButtonLabel}
-            </button>
+            </Button>
             <button type="button" className="danger" disabled={cleanupBusy || !cleanupCanDelete} onClick={() => void deleteUnsupportedCheckinCleanup()}>
               删除本批
             </button>
@@ -651,7 +651,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
         >
           批量保存已登录
         </button>
-        <button type="button" className="ghost" onClick={() => setShowDetails((current) => !current)}>{showDetails ? "收起明细" : "展开明细"}</button>
+        <Button variant="ghost" type="button" onClick={() => setShowDetails((current) => !current)}>{showDetails ? "收起明细" : "展开明细"}</Button>
       </div>
       {showDetails ? (
         <div className="account-insight-details">
@@ -698,3 +698,4 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
     </div>
   );
 }
+import { Button } from "@/components/ui/button";

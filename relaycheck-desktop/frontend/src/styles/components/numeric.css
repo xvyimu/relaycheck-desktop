@@ -56,7 +56,7 @@
 .account-status {
   border-radius: var(--v4-radius-pill);
   border-color: var(--v4-border);
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--v4-card-soft);
   color: var(--v4-muted);
 }
 
@@ -88,7 +88,7 @@
 .account-card-actions {
   border-radius: var(--v4-radius-sm);
   border-color: var(--v4-border);
-  background: rgba(255, 255, 255, 0.64);
+  background: var(--v4-card-soft);
   padding: 7px;
 }
 
@@ -105,7 +105,7 @@
 
 .account-more-panel {
   border-radius: var(--v4-radius-xs);
-  background: rgba(247, 250, 255, 0.76);
+  background: var(--v4-card-soft);
   padding: 8px;
 }
 
@@ -117,7 +117,7 @@
 .detail-row {
   border-color: var(--v4-border);
   border-radius: var(--v4-radius-sm);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--v4-card-soft);
   box-shadow: var(--v4-shadow-sm);
 }
 

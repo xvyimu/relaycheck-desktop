@@ -3,53 +3,69 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-11 (Action Center site deep-links + #9 R2 session chip)
+**Last updated:** 2026-07-12 (frontend optimization close-out + IA-2)
+
+---
+
+## ⏳ TODO (next session)
+
+- [ ] **Push local commits** — branch is ahead of `origin/main` (IA-2 `c517226` + frontend optimization). BLOCKED if git proxy `127.0.0.1:7897` has no listener. Start Clash/mihomo, then `git push`. Fallback: `git -c http.proxy= -c https.proxy= push`.
+- [ ] Verify v1.1.0 release zip after push: `dist/releases/relaycheck-desktop-1.1.0-c5172260b4bc-20260712-052033.zip` (Zip SHA256 `73ee77f9743c92d7b6dd34e6958fbfc7c6f6eb457fd71ab2dfebd9a695086090`).
+- [ ] Optional: true light/dark + drawer/onboarding/2FA visual smoke (not automated).
 
 ---
 
 ## Current state
 
-Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **#8.3 channel-sync UI**, **#9 Phase 2 bulk re-login**, **#8.4/#8.2**, **Action Center site sample deep-links**, and **#9 R2 session indicator** are implemented on branch `main`.
+Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **IA-2** (accounts tab physically merged into 站点与账号), **#8.3 channel-sync UI**, **#9 Phase 2 bulk re-login**, **#8.4/#8.2**, **Action Center site sample deep-links**, **#9 R2 session indicator**, and **2026-07-12 frontend optimization** are on branch `main` (local; may be unpushed).
 
-- **Verification (2026-07-11 night):**
-  - `go test -mod=vendor ./internal/accounts/ ./internal/core/` PASS
-  - `go test -mod=vendor ./internal/core/ -run ActionCenter` PASS (incl. site/channel sample entities)
-  - `cd frontend; npx tsc --noEmit` PASS
-  - `cd frontend; npx vitest run` navigation + accountActions + AccountCard **45/45** PASS
-- Branch may be ahead of `origin/main`; **do not push unless asked**.
-- Preserved: `vendor/`, `data/`, `frontend/dist/`. Run `cd frontend; npm ci` if `node_modules` missing.
-- Constraints still hold: no auto-login / 2FA bypass; no secrets in docs/logs; reuse `?upstreamSiteId=`; no Radix/shadcn; never “请关闭 2FA”.
+### Frontend optimization (2026-07-12) — done
 
-### Alpha slice checklist
-
-| Slice | Summary | Status |
-|-------|---------|--------|
-| S1–S6 | Action-first accounts/sites/dashboard/sidebar/CSS | done |
-
-### Beta / #8 / #9 / Action Center
+Report: `docs/frontend-optimization-report-2026-07-12.md`
 
 | Track | Summary | Status |
 |-------|---------|--------|
-| β-MVP | `SiteAccountMasterDetail` dual-pane (≥1180) / stack (≤900); default layout on Sites; toggle 主从/卡片 | done |
-| #8.3 | `LocalNewAPISyncPanel` + `syncFeedback` counters; empty vs excluded vs needs-token; Scan tab | done |
-| #8.4 | `skippedExcludedSamples` (+truncated) on Admin/SQLite import; `ListExcludedRelaySiteRules`; `GET /api/local-newapi/exclude-rules`; panel 只读规则 | done |
-| #8.2 | `last_sync_at` / `last_sync_summary` ensureColumn; List/Get SELECT; Sync 成功后 `SaveLocalNewAPILastSyncSummary`; 实例卡展示上次摘要 | done |
-| #9 Phase 2 | `BulkReloginWizard` (open/save batch); `AccountDetailContent` re-login step strip + CTAs | done |
-| #9 R2 / 9.3 | Persistent session chip while `reloginPhase === browser_open` (`opened` / `already_open`); helpers in `accountActions` | done |
-| Action Center deep-link | `ActionSample` with entityType/entityId; unreachable-sites + channel-health-risks return site ids; sample click → sites master-detail | done |
+| Theme integrity | Fix circular `--surface-solid`; class-only `html.dark`; FOUC bootstrap | done |
+| Primitives | Tokenized Button/Card/Badge/Empty; **no Radix/shadcn** | done |
+| DialogShell | Shared Escape + focus trap/cycle/restore; Sites / Accounts / master-detail / Channels / Onboarding / 2FA | done |
+| Idle tabs | `lib/idle-tabs.ts` 5 min TTL; dashboard pinned | done |
+| Lazy + chunks | Non-dashboard panels `React.lazy`; Vite `manualChunks` | done |
+| CSS merge | `layers/control-room.css` = redesign → layout-harmonization → linear; old files stubbed | done |
+| Button ghost | `variant="ghost"` → CSS class `ghost`; product ghost call sites migrated; 0 residual `button.ghost` natives | done |
+| exhaustive-deps | Stable refresh/destructure + Settings `DEFAULT_*` module constants | done |
+| Tooling | ESLint 9 flat + react-hooks; Prettier | done |
 
-Still open: β Tab merge / full IA-2 (out of #8 scope). Accounts tab still accepts legacy upstreamSiteId filter.
+**Verify (frontend close-out):**
 
-### Key files (this slice)
+```powershell
+cd E:\zidqiandao\relaycheck-desktop\frontend
+npx tsc -b
+npm test          # 261 passed
+npm run build
+npm run lint      # 0 errors, 0 warns
+```
 
-**Action Center site deep-links**
-- Backend: `internal/core/models.go` (`ActionSample`), `action_center.go` (`sampleEntityType`, 2-col sample SQL for unreachable-sites / channel-health-risks), `action_center_test.go`
-- Frontend: `types/index.ts`, `lib/navigation.ts` (`actionSampleNavigationIntent`), `Dashboard.tsx` (clickable `task-sample-link`), `styles/domains/dashboard.css`
-- Tests: `navigation.test.ts`
+### Product tracks
 
-**#9 R2 session indicator**
-- Frontend: `lib/accountActions.ts` (`browserSessionOpenKind`, `browserSessionRunningLabel`), `AccountCard.tsx`, `AccountDetailContent.tsx`, `styles/domains/accounts.css` (`.account-session-chip`)
-- Tests: `accountActions.test.ts`
+| Track | Summary | Status |
+|-------|---------|--------|
+| S1–S6 | Action-first accounts/sites/dashboard/sidebar/CSS | done |
+| β-MVP | `SiteAccountMasterDetail` dual-pane (≥1180) / stack (≤900); default layout on Sites | done |
+| IA-2 | Physically merge accounts tab into 站点与账号 (`c517226`) | done |
+| #8.3 | `LocalNewAPISyncPanel` + `syncFeedback`; Scan tab | done |
+| #8.4 | exclude samples + `GET /api/local-newapi/exclude-rules` | done |
+| #8.2 | last_sync_at / last_sync_summary on instances | done |
+| #9 Phase 2 | `BulkReloginWizard` + detail re-login strip | done |
+| #9 R2 / 9.3 | Session chip while `browser_open` | done |
+| Action Center deep-link | `ActionSample` → sites master-detail | done |
+
+### Constraints (still hold)
+
+- No auto-login / 2FA bypass; never “请关闭 2FA”
+- No secrets in docs/logs
+- Reuse `?upstreamSiteId=`
+- No Radix/shadcn (project-owned `components/ui/*` only)
+- **Do not push unless asked** (or after proxy is up and user expects publish)
 
 ### Token save note (#8.3)
 
@@ -57,9 +73,10 @@ There is **no** `POST /api/local-newapi/{id}/sync-token`. Saving a system access
 
 ### Specs
 
+- Frontend opt report: `docs/frontend-optimization-report-2026-07-12.md`
 - β review: `docs/superpowers/specs/2026-07-11-layout-beta-design-review-draft.md`
-- #8: `docs/superpowers/specs/2026-07-11-newapi-channel-sync-exploration.md` (8.1/8.5/8.3/8.4/8.2 done)
-- #9: `docs/superpowers/specs/2026-07-11-session-relogin-plan.md` (9.1–9.6 + R2/9.3 + Phase 2 bulk; no auto-login)
+- #8: `docs/superpowers/specs/2026-07-11-newapi-channel-sync-exploration.md`
+- #9: `docs/superpowers/specs/2026-07-11-session-relogin-plan.md`
 
 ### Suggested verify after pull
 
@@ -67,13 +84,16 @@ There is **no** `POST /api/local-newapi/{id}/sync-token`. Saving a system access
 cd E:\zidqiandao\relaycheck-desktop
 go test -mod=vendor -count=1 ./internal/accounts/ ./internal/core/
 cd frontend
-npx tsc --noEmit
+npx tsc -b
 npm test
+npm run lint
 # optional: npm run build
 ```
+
+Preserved: `vendor/`, `data/`, `frontend/dist/`. Run `cd frontend; npm ci` if `node_modules` missing.
 
 ---
 
 ## Historical sessions
 
-See git log and earlier HANDOFF sections in history for alpha S1–S6, AccountTaskService, CheckinTaskService, and global optimization closure.
+See git log and earlier HANDOFF history for alpha S1–S6, AccountTaskService, CheckinTaskService, and global optimization closure.

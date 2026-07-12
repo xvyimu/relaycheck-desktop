@@ -5,6 +5,7 @@ import { AccountForm } from "@/components/accounts/AccountForm";
 import { AccountInsights } from "@/components/accounts/AccountInsights";
 import { BulkReloginWizard } from "@/components/accounts/BulkReloginWizard";
 import { isProblemAccount } from "@/components/accounts/helpers";
+import { DialogShell } from "@/components/ui/dialog-shell";
 import { Empty } from "@/components/ui/empty";
 import { useSiteAccounts } from "@/hooks/useSiteAccounts";
 import type { Account, NavigationIntent, UpstreamSite } from "@/types";
@@ -34,6 +35,7 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
 
   // S3: server-side site filter — only hits /api/accounts when a site is selected.
   const siteScoped = useSiteAccounts(siteFilter);
+  const { enabled: siteScopedEnabled, refresh: refreshSiteScoped } = siteScoped;
 
   // React to navigation intent from Action Center / sites "查看账号"
   useEffect(() => {
@@ -49,10 +51,10 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
 
   const handleDone = useCallback(async () => {
     await onRefresh();
-    if (siteScoped.enabled) {
-      await siteScoped.refresh();
+    if (siteScopedEnabled) {
+      await refreshSiteScoped();
     }
-  }, [onRefresh, siteScoped.enabled, siteScoped.refresh]);
+  }, [onRefresh, refreshSiteScoped, siteScopedEnabled]);
 
   const siteOptions = useMemo(() => {
     const counts = new Map<string, number>();
@@ -102,15 +104,6 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
   const selectedSiteName =
     siteFilter === "all" ? "" : siteOptions.find((site) => site.id === siteFilter)?.name || siteFilter;
 
-  useEffect(() => {
-    if (!detailAccount) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setDetailAccount(null);
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [detailAccount]);
-
   return (
     <section className="accounts-panel">
       <AccountInsights accounts={accounts} onDone={handleDone} />
@@ -151,9 +144,9 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
           </label>
         </div>
         <div className="toolbar">
-          <button type="button" className="ghost" onClick={clearFilters} disabled={!hasActiveFilter}>
+          <Button variant="ghost" type="button" onClick={clearFilters} disabled={!hasActiveFilter}>
             清除筛选
-          </button>
+          </Button>
         </div>
         {statusFilter === "problem" || siteFilter !== "all" ? (
           <div className="channel-active-filter">
@@ -178,7 +171,7 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
               </span>
               {siteScoped.error ? <span className="danger-text">{siteScoped.error}</span> : null}
             </div>
-            <button type="button" className="ghost" onClick={clearFilters}>清除</button>
+            <Button variant="ghost" type="button" onClick={clearFilters}>清除</Button>
           </div>
         ) : null}
       </div>
@@ -201,15 +194,20 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
           />
         ) : null}
       </div>
-      {detailAccount ? (
-        <div className="drawer-backdrop" role="presentation" onClick={() => setDetailAccount(null)}>
-          <aside className="detail-drawer" onClick={(event) => event.stopPropagation()}>
-            <AccountDetailContent account={detailAccount} onClose={() => setDetailAccount(null)} />
-          </aside>
-        </div>
-      ) : null}
+      <DialogShell
+        open={Boolean(detailAccount)}
+        onClose={() => setDetailAccount(null)}
+        variant="panel"
+        ariaLabel={detailAccount ? `账号详情 ${detailAccount.displayName || detailAccount.id}` : "账号详情"}
+        initialFocusSelector=".detail-header .ghost, .detail-header button, button.ghost"
+      >
+        {detailAccount ? (
+          <AccountDetailContent account={detailAccount} onClose={() => setDetailAccount(null)} />
+        ) : null}
+      </DialogShell>
     </section>
   );
 }
 
 export const AccountsPanel = memo(AccountsPanelBase);
+import { Button } from "@/components/ui/button";

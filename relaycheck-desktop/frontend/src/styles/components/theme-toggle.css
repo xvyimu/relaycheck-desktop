@@ -183,3 +183,165 @@ html.dark .site-suggestions span {
   background: var(--v4-card-soft);
   color: var(--v4-text);
 }
+
+/* Global control-room dark overrides (moved out of task-progress.css) */
+html.dark button.ghost {
+  background: rgba(22, 32, 48, 0.76);
+  color: var(--rc-ink-soft);
+}
+
+html.dark button.danger {
+  background: rgba(232, 90, 109, 0.12);
+  color: var(--rc-red);
+}
+
+html.dark nav button:hover:not(:disabled) {
+  background: rgba(28, 40, 58, 0.6);
+}
+
+html.dark nav button.active {
+  background: var(--v4-blue-soft);
+  border-color: var(--v4-blue-line);
+  color: var(--v4-blue-active);
+}
+
+html.dark .sidebar {
+  background:
+    linear-gradient(180deg, rgba(22, 32, 48, 0.94), rgba(18, 28, 42, 0.84)),
+    radial-gradient(circle at 16% 0%, rgba(75, 139, 245, 0.08), transparent 15rem);
+  border-right-color: var(--v4-border);
+  box-shadow: 8px 0 28px rgba(0, 0, 0, 0.2);
+}
+
+html.dark .channel-model-board,
+html.dark .usage-insight-board,
+html.dark .account-capability-panel,
+html.dark .hub-radar-card,
+html.dark .dashboard-card,
+html.dark .insight-card,
+html.dark .detail-section,
+html.dark .panel-section,
+html.dark .stats-card,
+html.dark .summary-card {
+  background: var(--v4-card);
+  border-color: var(--v4-border);
+}
+
+html.dark .channel-model-board .account-capability-panel,
+html.dark .usage-insight-board .account-capability-panel {
+  background: var(--v4-card-soft);
+}
+
+html.dark .warning-banner,
+html.dark .amber-banner,
+html.dark .hint-banner {
+  background: var(--v4-amber-bg);
+  border-color: var(--v4-amber-border);
+  color: var(--v4-amber-ink);
+}
+
+html.dark .info-banner,
+html.dark .blue-banner,
+html.dark .info-hint {
+  background: var(--v4-blue-soft);
+  border-color: var(--v4-blue-line);
+  color: var(--v4-blue-on-dark);
+}
+
+html.dark .error-banner,
+html.dark .danger-banner {
+  background: var(--v4-red-bg);
+  border-color: var(--v4-red-border);
+  color: var(--v4-red);
+}
+
+html.dark .success-banner,
+html.dark .green-banner {
+  background: var(--v4-green-bg);
+  border-color: var(--v4-green-border);
+  color: var(--v4-green);
+}
+
+html.dark .neutral-banner,
+html.dark .neutral-hint {
+  background: var(--v4-neutral-bg);
+  border-color: var(--v4-neutral-border);
+}
+
+html.dark pre,
+html.dark code,
+html.dark .code-block,
+html.dark .mono-text {
+  background: rgba(10, 17, 24, 0.6);
+  color: var(--v4-text);
+}
+
+html.dark pre {
+  border-color: var(--v4-border);
+}
+
+html.dark tr:nth-child(even),
+html.dark .table-row-alt {
+  background: rgba(18, 28, 42, 0.4);
+}
+
+html.dark tr:hover,
+html.dark .table-row-hover:hover {
+  background: var(--v4-card-hover);
+}
+
+html.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: rgba(10, 17, 24, 0.4);
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(120, 150, 200, 0.2);
+  border-radius: 4px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 150, 200, 0.3);
+}
+
+html.dark [data-tooltip]::after,
+html.dark .tooltip-content,
+html.dark .tooltip-body {
+  background: rgba(10, 17, 24, 0.96);
+  border-color: var(--v4-border);
+  color: var(--v4-text);
+  box-shadow: var(--shadow-sm);
+}
+
+html.dark .empty,
+html.dark .empty-state {
+  border-color: var(--v4-border);
+  background: var(--v4-card-soft);
+  color: var(--v4-muted);
+}
+
+html.dark .empty-state strong {
+  color: var(--v4-text);
+}
+
+html.dark .loading-card,
+html.dark .login-card,
+html.dark .metric-card {
+  background: var(--v4-card);
+  border-color: var(--v4-border);
+  box-shadow: var(--v4-shadow-md);
+}
+
+html.dark .notice.error {
+  border-color: var(--v4-red-border);
+  background: var(--v4-red-bg);
+  color: var(--v4-red);
+}
+
+html.dark .muted {
+  color: var(--v4-muted);
+}

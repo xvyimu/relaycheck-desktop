@@ -8,6 +8,7 @@ import type {
   BulkBrowserOpenResponse,
   BulkBrowserSaveResponse,
 } from "@/types";
+import { Button } from "@/components/ui/button";
 
 export type BulkReloginPhase = "idle" | "opened" | "saved" | "done";
 
@@ -95,14 +96,11 @@ export function BulkReloginWizard({ accounts, onDone }: BulkReloginWizardProps) 
             异常账号 {candidates.length} 个。人工完成浏览器登录后保存授权；不自动填密码、不绕过 2FA。
           </span>
         </div>
-        <button
-          type="button"
-          className="ghost"
-          aria-expanded={open}
+        <Button variant="ghost" type="button" aria-expanded={open}
           onClick={() => setOpen((current) => !current)}
         >
           {open ? "收起向导" : "打开向导"}
-        </button>
+        </Button>
       </div>
 
       {open ? (
@@ -150,9 +148,9 @@ export function BulkReloginWizard({ accounts, onDone }: BulkReloginWizardProps) 
               >
                 {busy === "save" ? "保存中…" : "2. 批量保存授权"}
               </button>
-              <button type="button" className="ghost" disabled={Boolean(busy)} onClick={resetWizard}>
+              <Button variant="ghost" type="button" disabled={Boolean(busy)} onClick={resetWizard}>
                 重置步骤
-              </button>
+              </Button>
             </div>
           </div>
 

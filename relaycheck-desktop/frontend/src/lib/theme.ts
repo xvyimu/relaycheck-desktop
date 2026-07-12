@@ -22,6 +22,8 @@ export function applyTheme(theme: Theme): void {
   } else {
     root.classList.remove("dark");
   }
+  // Keep native form controls / scrollbars aligned with class-based theme only.
+  root.style.colorScheme = effective;
 }
 
 export function getTheme(): Theme {
