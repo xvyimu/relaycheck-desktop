@@ -9,7 +9,7 @@ Read this first, then `CLAUDE.md` for architecture.
 
 ## ⏳ TODO (next session)
 
-- [ ] **Push local commits** — `00529ee`+`bee1252`+S0/S1 review fixes. BLOCKED: `127.0.0.1:7897` proxy down and/or direct `github.com:443` fail. When network/proxy up: `git -c http.proxy= -c https.proxy= push` or start Clash then `git push`.
+- [x] **Push local commits** — `00529ee`+`bee1252`+`2c8afc3` (S0/S1 review) → `origin/main` (`47bf263..2c8afc3`)
 - [x] **Release zip (post CSP bootstrap)** — `dist/releases/relaycheck-desktop-1.1.0-00529ee1ca70-20260712-145035.zip`  
   Zip SHA256 `8b8b7efe3e018e9c6b0026043f30ecf44de2441a151fe7b6c3cb7a7d674a01a3` · `verify-package` PASS  
   (supersedes `…-2611e3a5c9c4-…` / `a7990685…`)
