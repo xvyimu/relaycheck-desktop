@@ -9,8 +9,10 @@ Read this first, then `CLAUDE.md` for architecture.
 
 ## ⏳ TODO (next session)
 
-- [x] **Push** — `c517226` (IA-2) + `b533653` (frontend opt) on `origin/main` (direct push, proxy bypassed).
-- [ ] Verify v1.1.0 release zip: `dist/releases/relaycheck-desktop-1.1.0-c5172260b4bc-20260712-052033.zip` (Zip SHA256 `73ee77f9743c92d7b6dd34e6958fbfc7c6f6eb457fd71ab2dfebd9a695086090`). Zip is pre-`b533653` UI; rebuild release if packaging frontend opt.
+- [x] **Push** — `c517226` (IA-2) + `b533653` (frontend opt) + `2611e3a` (handoff) on `origin/main` (direct push, proxy bypassed).
+- [x] **Release zip (post frontend opt)** — `dist/releases/relaycheck-desktop-1.1.0-2611e3a5c9c4-20260712-144248.zip`  
+  Zip SHA256 `a7990685de20d2a76dcfccdf39f628255f59db6279cd62bb440e4f0533f06c5a`  
+  (supersedes pre-opt zip `…-c5172260b4bc-…` / `73ee77f9…`)
 - [ ] Optional: true light/dark + drawer/onboarding/2FA visual smoke (not automated).
 
 ---
