@@ -97,9 +97,17 @@ Constraint: **no Radix / no shadcn install** (project-owned `components/ui/*` on
 
 Optional later（不阻塞）:
 
-1. 真机 light/dark + 抽屉/引导 截图级视觉 QA（form 已只靠 `base.css`）  
-2. 主操作 / danger 是否再迁 Button（非 ghost，可选统一）  
-3. recovery 布局 helper 是否再砍  
+1. 主操作 / danger 是否再迁 Button（非 ghost，可选统一）  
+2. recovery 布局 helper 是否再砍  
+3. DialogShell 行为级单测（Escape / focus trap）加深  
+
+### Follow-up closed after optional debt
+
+| Change | Path / note |
+|--------|-------------|
+| FOUC theme bootstrap CSP-safe | 内联 script 违反 `script-src 'self'`；改为 `frontend/public/theme-bootstrap.js` + `index.html` 外链 |
+| Headless light/dark 视觉冒烟 | `scripts/visual-smoke-theme.mjs`；隔离 runtime 起 `dist/relaycheck.exe`；截图 `.tmp/visual-smoke/`（不入库） |
+| 操作员会话过期手册接线 | `docs/OPERATOR_SESSION_EXPIRY_RUNBOOK.md` + `OPERATOR_RUNBOOK.md` 互链 |
 
 ---
 
@@ -111,9 +119,13 @@ npx tsc -b        # OK
 npm test          # 261 passed (27 files)
 npm run build     # OK；CSS ~205.23 kB（`index-*.css`）
 npm run lint      # 0 errors, 0 warns
-```
 
-Optional: open app, toggle light/dark with OS set opposite; open site/account/channel drawers + onboarding + 2FA (Tab cycle + Escape); leave a tab idle 5+ min and confirm remount on revisit.
+# Visual smoke (needs built dist/relaycheck.exe + playwright in frontend/node_modules)
+$env:RELAYCHECK_NO_OPEN=1; $env:RELAYCHECK_PORT=3015
+# start isolated exe under .tmp\visual-smoke-runtime, then:
+node scripts/visual-smoke-theme.mjs --base http://127.0.0.1:3015 --out .tmp/visual-smoke
+# PASS: light/dark tokens, nav tabs, no CSP/console hard errors; 9 screenshots
+```
 
 ---
 

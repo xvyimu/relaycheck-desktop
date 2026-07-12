@@ -86,6 +86,11 @@ For a quick monitor smoke against an already-running app, use short intervals:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-monitor.ps1 -BaseUrl http://127.0.0.1:3101 -ExpectedPort 3101 -SampleCount 3 -IntervalSeconds 1
 ```
 
+## Related operator docs
+
+- **会话过期 / 重登闭环（操作员）:** `docs/OPERATOR_SESSION_EXPIRY_RUNBOOK.md`  
+  识别 `auth_expired`、单账号四步重登、批量重登向导、2FA 人工边界。不自动填密码、不绕过 2FA。
+
 ## Manual Critical Flow
 
 Use non-secret test data only.
@@ -97,7 +102,8 @@ Use non-secret test data only.
 5. Open Sites or Channels and create or inspect one relay site with non-secret test values.
 6. Run a dry-run task before any real batch action.
 7. If testing browser login, use a disposable account and verify the detected login URL opens without redirect loops.
-8. Do not run real check-ins, balance refreshes, imports, restores, or encrypted exports during acceptance unless the operator has approved that data change.
+8. When accounts show expired / manual_required login, follow `docs/OPERATOR_SESSION_EXPIRY_RUNBOOK.md` (open browser login → save auth → test → checkin). Never ask operators to “关闭 2FA”.
+9. Do not run real check-ins, balance refreshes, imports, restores, or encrypted exports during acceptance unless the operator has approved that data change.
 
 ## Port Conflict Check
 

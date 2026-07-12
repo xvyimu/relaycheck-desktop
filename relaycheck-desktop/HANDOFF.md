@@ -10,10 +10,9 @@ Read this first, then `CLAUDE.md` for architecture.
 ## ⏳ TODO (next session)
 
 - [x] **Push** — `c517226` (IA-2) + `b533653` (frontend opt) + `2611e3a` (handoff) on `origin/main` (direct push, proxy bypassed).
-- [x] **Release zip (post frontend opt)** — `dist/releases/relaycheck-desktop-1.1.0-2611e3a5c9c4-20260712-144248.zip`  
-  Zip SHA256 `a7990685de20d2a76dcfccdf39f628255f59db6279cd62bb440e4f0533f06c5a`  
-  (supersedes pre-opt zip `…-c5172260b4bc-…` / `73ee77f9…`)
-- [ ] Optional: true light/dark + drawer/onboarding/2FA visual smoke (not automated).
+- [x] **Release zip (post frontend opt)** — rebuild after CSP theme-bootstrap if shipping; prior zip `…-2611e3a5c9c4-…` / `a7990685…` is pre-bootstrap-external.
+- [x] **Visual smoke** — `scripts/visual-smoke-theme.mjs` PASS (light/dark token L, 6 nav tabs, no hard console/CSP after external bootstrap). Screenshots local `.tmp/visual-smoke/` only.
+- [x] **Operator session-expiry runbook** — `docs/OPERATOR_SESSION_EXPIRY_RUNBOOK.md` tracked; linked from `OPERATOR_RUNBOOK.md`.
 
 ---
 
