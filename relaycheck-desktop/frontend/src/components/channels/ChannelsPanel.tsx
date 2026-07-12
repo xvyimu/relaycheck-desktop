@@ -8,6 +8,7 @@ import { useChannelFilters } from "@/hooks/useChannelFilters";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { formatTime } from "@/lib/format";
 import type { ChannelHealthOverview, ChannelHealthSite, NavigationIntent } from "@/types";
+import { Button } from "@/components/ui/button";
 
 const LABELS_HEALTH_PROBE = { title: "渠道健康探测" } as const;
 
@@ -327,4 +328,3 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
 }
 
 export const ChannelsPanel = memo(ChannelsPanelBase);
-import { Button } from "@/components/ui/button";

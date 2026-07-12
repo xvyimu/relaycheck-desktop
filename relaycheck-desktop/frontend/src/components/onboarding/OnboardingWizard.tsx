@@ -3,6 +3,7 @@ import { api } from "@/api/client";
 import { DialogShell } from "@/components/ui/dialog-shell";
 import { LineIcon } from "@/components/ui/line-icon";
 import type { LineIconName } from "@/types";
+import { Button } from "@/components/ui/button";
 
 const ONBOARDING_FLAG = "relaycheck_onboarding_done";
 const REOPEN_EVENT = "relaycheck:reopen-onboarding";
@@ -371,4 +372,3 @@ export function OnboardingWizard() {
     </DialogShell>
   );
 }
-import { Button } from "@/components/ui/button";

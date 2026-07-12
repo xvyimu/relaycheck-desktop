@@ -12,6 +12,7 @@ import { useNextRuns } from "@/hooks/useNextRuns";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
 import { siteAccountsNavigationIntent } from "@/lib/navigation";
+import { Button } from "@/components/ui/button";
 
 const LABELS_BATCH_DETECT = { title: "批量识别" } as const;
 
@@ -532,4 +533,3 @@ function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: Site
 }
 
 export const SitesPanel = memo(SitesPanelBase);
-import { Button } from "@/components/ui/button";

@@ -4,6 +4,7 @@ import { formatTime } from "@/lib/format";
 import type { CheckinLog, CheckinStatus, NavigationIntent } from "@/types";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
+import { Button } from "@/components/ui/button";
 
 const LABELS_BATCH_CHECKIN = { title: "批量签到" } as const;
 
@@ -295,4 +296,3 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
 }
 
 export const CheckinsPanel = memo(CheckinsPanelBase);
-import { Button } from "@/components/ui/button";

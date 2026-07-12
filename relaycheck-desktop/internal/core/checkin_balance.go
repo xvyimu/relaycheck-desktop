@@ -731,7 +731,11 @@ func (a *App) doLoginHTTP(req *http.Request, jar *cookiejar.Jar) (*http.Response
 		client.Jar = jar
 		return client.Do(req)
 	}
-	client := newNetworkHTTPClient(defaultHTTPTimeout, a.currentNetworkProxyConfig())
+	policy := outboundURLPolicy{}
+	if a != nil {
+		policy = a.externalURLPolicy()
+	}
+	client := newNetworkHTTPClient(defaultHTTPTimeout, a.currentNetworkProxyConfig(), policy)
 	client.Jar = jar
 	return client.Do(req)
 }

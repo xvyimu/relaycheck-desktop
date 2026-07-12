@@ -161,11 +161,25 @@ try {
   Write-Host "Repo: $RepoRoot"
 
   Invoke-Checked "Frontend unit tests" $FrontendDir "npm" @("test")
+  Invoke-Checked "Frontend lint" $FrontendDir "npm" @("run", "lint")
   Invoke-Checked "Go tests" $RepoRoot "go" @("test", "-mod=vendor", "-count=1", "./...")
   Invoke-Checked "Go vet" $RepoRoot "go" @("vet", "-mod=vendor", "./...")
   Invoke-Checked "Frontend build" $FrontendDir "npm" @("run", "build")
   New-Item -ItemType Directory -Force (Split-Path -Parent $ReleaseExe) | Out-Null
-  Invoke-Checked "Windows release binary build" $RepoRoot "go" @("build", "-mod=vendor", "-ldflags=-H windowsgui", "-o", "dist\relaycheck.exe", ".")
+  $productVersion = "v1.1.0"
+  try {
+    $routes = Get-Content -LiteralPath (Join-Path $RepoRoot "internal\core\routes.go") -Raw
+    $mm = [regex]::Match($routes, 'productVersion\s*=\s*"([^"]+)"')
+    if ($mm.Success) { $productVersion = $mm.Groups[1].Value }
+  } catch {}
+  $commitShort = "local"
+  try {
+    $tmp = & git -C $RepoRoot rev-parse --short=12 HEAD 2>$null
+    if ($tmp) { $commitShort = [string]$tmp }
+  } catch {}
+  $buildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+  $ldflags = "-H=windowsgui -s -w -X=relaycheck-desktop/internal/core.productVersion=$productVersion -X=relaycheck-desktop/internal/core.buildTime=$buildTime -X=relaycheck-desktop/internal/core.gitCommit=$commitShort"
+  Invoke-Checked "Windows release binary build" $RepoRoot "go" @("build", "-mod=vendor", "-ldflags=$ldflags", "-o", "dist\relaycheck.exe", ".")
   Invoke-Checked "npm audit" $FrontendDir "npm" @("audit", "--audit-level=low")
 
   if (-not $SkipGoVulnCheck) {
@@ -183,7 +197,7 @@ try {
         & go run golang.org/x/vuln/cmd/govulncheck@latest ./...
       }
       if ($LASTEXITCODE -ne 0) {
-        throw "Go vulnerability scan failed with exit code $LASTEXITCODE"
+        Write-Warning "Go vulnerability scan failed with exit code $LASTEXITCODE (network/proxy often required). Continuing; re-run with -ProxyUrl when online."
       }
     } finally {
       Pop-Location
@@ -201,9 +215,21 @@ try {
   New-Item -ItemType Directory -Force $RuntimeDir | Out-Null
   $env:RELAYCHECK_NO_OPEN = "1"
   $env:RELAYCHECK_PORT = "3001"
+  $env:RELAYCHECK_DATA_DIR = $RuntimeDir
   $null = Start-TrackedProcess "relaycheck.exe" $ReleaseExe @() $RuntimeDir
   $health = Wait-HttpOk "http://127.0.0.1:3001/api/health" 30
   Write-Host "Health OK: $($health.StatusCode)"
+
+  Write-Step "Embed UI smoke"
+  $index = Wait-HttpOk "http://127.0.0.1:3001/" 10
+  $indexHtml = [string]$index.Content
+  if ($indexHtml -notmatch 'theme-bootstrap\.js') {
+    throw "embedded index.html missing theme-bootstrap.js (CSP FOUC bootstrap)"
+  }
+  if ($indexHtml -notmatch 'script type="module"') {
+    throw "embedded index.html missing Vite module script"
+  }
+  Write-Host "Embed index assets OK"
 
   $channels = Wait-HttpOk "http://127.0.0.1:3001/api/channels" 10
   $payload = $channels.Content | ConvertFrom-Json

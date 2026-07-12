@@ -519,7 +519,9 @@ func (a *App) beginSchedulerJob(ctx context.Context, jobKey string, runKey strin
 			return false
 		}
 	}
-	_, err := a.db.ExecContext(ctx, `
+	// CAS: only claim the row when it is not already running so concurrent ticks
+	// (global + per-site) cannot double-start the same job_key.
+	result, err := a.db.ExecContext(ctx, `
 		INSERT INTO scheduler_runs (job_key, status, planned_run_key, last_run_key, last_started_at, last_error, summary, updated_at)
 		VALUES (?, 'running', ?, ?, ?, '', '', ?)
 		ON CONFLICT(job_key) DO UPDATE SET
@@ -530,8 +532,19 @@ func (a *App) beginSchedulerJob(ctx context.Context, jobKey string, runKey strin
 			last_error='',
 			summary='',
 			updated_at=excluded.updated_at
+		WHERE scheduler_runs.status <> 'running'
 	`, jobKey, runKey, runKey, now(), now())
 	if err != nil {
+		if jobKey == schedulerJobSync {
+			a.localSyncRun.Finish()
+		}
+		if jobKey == schedulerJobChannelHealth {
+			a.channelHealthRun.Finish()
+		}
+		return false
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
 		if jobKey == schedulerJobSync {
 			a.localSyncRun.Finish()
 		}

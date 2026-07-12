@@ -1,4 +1,5 @@
 import type { TaskProgress } from "@/hooks/useTaskProgress";
+import { Button } from "@/components/ui/button";
 
 interface TaskProgressViewProps {
   progress: TaskProgress | null;
@@ -123,4 +124,3 @@ export function TaskProgressView({
     </div>
   );
 }
-import { Button } from "@/components/ui/button";

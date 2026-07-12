@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import { formatTime } from "@/lib/format";
 import { statusTone } from "@/lib/tone";
 import type { NavigationIntent, NotificationItem } from "@/types";
+import { Button } from "@/components/ui/button";
 
 type NotificationsPanelProps = {
   items: NotificationItem[];
@@ -156,4 +157,3 @@ function NotificationsPanelBase({ items, onRefresh, intent }: NotificationsPanel
 }
 
 export const NotificationsPanel = memo(NotificationsPanelBase);
-import { Button } from "@/components/ui/button";

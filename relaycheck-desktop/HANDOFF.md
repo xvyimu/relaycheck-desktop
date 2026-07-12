@@ -9,12 +9,15 @@ Read this first, then `CLAUDE.md` for architecture.
 
 ## ⏳ TODO (next session)
 
-- [ ] **Push `00529ee`** — CSP theme-bootstrap + visual smoke + session runbook. BLOCKED: `127.0.0.1:7897` proxy down and direct `github.com:443` connect fail. When network/proxy up: `git -c http.proxy= -c https.proxy= push` or start Clash then `git push`.
+- [ ] **Push local commits** — `00529ee`+`bee1252`+S0/S1 review fixes. BLOCKED: `127.0.0.1:7897` proxy down and/or direct `github.com:443` fail. When network/proxy up: `git -c http.proxy= -c https.proxy= push` or start Clash then `git push`.
 - [x] **Release zip (post CSP bootstrap)** — `dist/releases/relaycheck-desktop-1.1.0-00529ee1ca70-20260712-145035.zip`  
   Zip SHA256 `8b8b7efe3e018e9c6b0026043f30ecf44de2441a151fe7b6c3cb7a7d674a01a3` · `verify-package` PASS  
   (supersedes `…-2611e3a5c9c4-…` / `a7990685…`)
 - [x] **Visual smoke** — `scripts/visual-smoke-theme.mjs` PASS (light/dark token L, 6 nav tabs, no hard console/CSP after external bootstrap). Screenshots local `.tmp/visual-smoke/` only.
 - [x] **Operator session-expiry runbook** — `docs/OPERATOR_SESSION_EXPIRY_RUNBOOK.md` tracked; linked from `OPERATOR_RUNBOOK.md`.
+- [x] **Full-stack review report** — `docs/code-review-optimization-2026-07-12.md`（FE/BE/Arch/Config；P0=0 / P1≈12）
+- [x] **S0 review fixes** — FE-1 trailing Button import；BE-1/BE-2 SSRF+redirect；BE-6 scheduler CAS
+- [x] **S1 review fixes** — RELAYCHECK_DATA_DIR / exe-dir data root；ldflags version；verify-release lint+embed smoke；graceful shutdown
 
 ---
 
@@ -77,6 +80,7 @@ There is **no** `POST /api/local-newapi/{id}/sync-token`. Saving a system access
 ### Specs
 
 - Frontend opt report: `docs/frontend-optimization-report-2026-07-12.md`
+- **Full-stack review:** `docs/code-review-optimization-2026-07-12.md`（2026-07-12）
 - β review: `docs/superpowers/specs/2026-07-11-layout-beta-design-review-draft.md`
 - #8: `docs/superpowers/specs/2026-07-11-newapi-channel-sync-exploration.md`
 - #9: `docs/superpowers/specs/2026-07-11-session-relogin-plan.md`

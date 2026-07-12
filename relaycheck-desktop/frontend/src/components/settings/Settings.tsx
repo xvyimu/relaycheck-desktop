@@ -7,6 +7,7 @@ import type { AuditLogItem, ChannelHealthScheduleConfig, ExportResult, NetworkPr
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusLabel } from "@/components/ui/status-label";
 import { SiteSchedules } from "@/components/settings/SiteSchedules";
+import { Button } from "@/components/ui/button";
 
 const DEFAULT_PROXY_CONFIG: NetworkProxyConfig = {
   enabled: false,
@@ -910,4 +911,3 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
 }
 
 export const Settings = memo(SettingsBase);
-import { Button } from "@/components/ui/button";

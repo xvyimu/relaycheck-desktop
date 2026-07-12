@@ -6,10 +6,13 @@ import (
 	"strings"
 )
 
-const (
+// Product metadata. Defaults are for local/dev builds; package-release injects
+// version / buildTime / gitCommit via -ldflags -X.
+var (
 	productName    = "RelayCheck Desktop"
 	productVersion = "v1.1.0"
 	buildTime      = "local build"
+	gitCommit      = "unknown"
 )
 
 // RegisterRoutes registers all HTTP handlers on the given mux.

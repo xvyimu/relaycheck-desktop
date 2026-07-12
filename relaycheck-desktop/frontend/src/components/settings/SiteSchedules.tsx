@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { formatTime } from "@/lib/format";
 import type { ChannelSchedule, ScheduleCalendarItem, NextRunItem, UpstreamSite } from "@/types";
+import { Button } from "@/components/ui/button";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -495,4 +496,3 @@ export function SiteSchedules() {
     </>
   );
 }
-import { Button } from "@/components/ui/button";

@@ -476,3 +476,23 @@ func TestTickChannelScheduler_EmptySchedules_NoOp(t *testing.T) {
 	// This should not panic or error when no schedules exist
 	app.tickChannelScheduler(context.Background(), time.Now())
 }
+
+func TestBeginSchedulerJobRejectsConcurrentClaim(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	ctx := context.Background()
+
+	if !app.beginSchedulerJob(ctx, schedulerJobCheckin, "run-a") {
+		t.Fatal("first begin should succeed")
+	}
+	if app.beginSchedulerJob(ctx, schedulerJobCheckin, "run-b") {
+		t.Fatal("second begin while running should fail")
+	}
+	if err := app.finishSchedulerJob(ctx, schedulerJobCheckin, "run-a", "success", "ok", ""); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	if !app.beginSchedulerJob(ctx, schedulerJobCheckin, "run-c") {
+		t.Fatal("begin after finish should succeed")
+	}
+}
+

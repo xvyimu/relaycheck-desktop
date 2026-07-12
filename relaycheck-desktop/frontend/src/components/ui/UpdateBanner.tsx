@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import type { VersionCheckResult } from "@/types";
+import { Button } from "@/components/ui/button";
 
 const DISMISS_KEY = "rc.updateBanner.dismissedVersion";
 
@@ -76,4 +77,3 @@ export function UpdateBanner() {
     </div>
   );
 }
-import { Button } from "@/components/ui/button";

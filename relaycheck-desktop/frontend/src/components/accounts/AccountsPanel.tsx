@@ -9,6 +9,7 @@ import { DialogShell } from "@/components/ui/dialog-shell";
 import { Empty } from "@/components/ui/empty";
 import { useSiteAccounts } from "@/hooks/useSiteAccounts";
 import type { Account, NavigationIntent, UpstreamSite } from "@/types";
+import { Button } from "@/components/ui/button";
 
 export interface AccountsPanelProps {
   accounts: Account[];
@@ -210,4 +211,3 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
 }
 
 export const AccountsPanel = memo(AccountsPanelBase);
-import { Button } from "@/components/ui/button";

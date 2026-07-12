@@ -133,7 +133,11 @@ func (a *App) doHTTPWithTimeout(req *http.Request, timeout time.Duration) (*http
 	if a != nil && a.db == nil && a.client != nil {
 		return a.client.Do(req)
 	}
-	client := newNetworkHTTPClient(timeout, a.currentNetworkProxyConfig())
+	policy := outboundURLPolicy{}
+	if a != nil {
+		policy = a.externalURLPolicy()
+	}
+	client := newNetworkHTTPClient(timeout, a.currentNetworkProxyConfig(), policy)
 	return client.Do(req)
 }
 
@@ -144,12 +148,26 @@ func (a *App) DoHTTPWithTimeout(req *http.Request, timeout time.Duration) (*http
 	return a.doHTTPWithTimeout(req, timeout)
 }
 
-func newNetworkHTTPClient(timeout time.Duration, config NetworkProxyConfig) *http.Client {
+func newNetworkHTTPClient(timeout time.Duration, config NetworkProxyConfig, policy outboundURLPolicy) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = proxyURLForRequest(config)
 	return &http.Client{
 		Timeout:   timeout,
 		Transport: transport,
+		// Re-validate every redirect hop so a public 302 cannot smuggle traffic
+		// to loopback / link-local / private networks after the first DNS check.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("stopped after 5 redirects")
+			}
+			if req.URL == nil {
+				return errors.New("redirect missing URL")
+			}
+			if _, err := validateOutboundHTTPURL(req.Context(), req.URL.String(), policy); err != nil {
+				return fmt.Errorf("redirect target rejected: %w", err)
+			}
+			return nil
+		},
 	}
 }
 

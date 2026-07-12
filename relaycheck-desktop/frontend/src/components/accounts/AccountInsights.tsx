@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { isLocalURL } from "@/components/accounts/helpers";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
+import { Button } from "@/components/ui/button";
 
 const API_KEY_STALE_MS = 24 * 60 * 60 * 1000;
 const UNSUPPORTED_CLEANUP_LIMIT = 10;
@@ -698,4 +699,3 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
     </div>
   );
 }
-import { Button } from "@/components/ui/button";

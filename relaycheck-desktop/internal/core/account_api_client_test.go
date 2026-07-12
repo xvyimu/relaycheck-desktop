@@ -13,6 +13,7 @@ import (
 func TestAccountAPIClientDoAddsAccountAuthHeaders(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
+	app.allowLocalOutbound = true
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/models" {
@@ -100,6 +101,7 @@ func TestAccountAPIClientDoWithTimeoutUsesAPIKeyAndBody(t *testing.T) {
 func TestAccountAPIClientDoLimitsResponseBody(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
+	app.allowLocalOutbound = true
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(strings.Repeat("a", 300*1024)))
@@ -115,5 +117,36 @@ func TestAccountAPIClientDoLimitsResponseBody(t *testing.T) {
 	}
 	if len(body) != 256*1024 {
 		t.Fatalf("body length = %d, want 256 KiB limit", len(body))
+	}
+}
+
+func TestAccountAPIClientDoRejectsPrivateBaseURL(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	// default allowLocalOutbound=false
+
+	client := NewAccountAPIClient(app)
+	_, _, err := client.Do(context.Background(), accountAuthContext{
+		BaseURL: "http://127.0.0.1:9",
+	}, http.MethodGet, "/v1/models", nil)
+	if err == nil {
+		t.Fatal("expected private base URL to be rejected by Do")
+	}
+}
+
+func TestAccountAPIClientDoRejectsAbsolutePathEscape(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	app.allowLocalOutbound = true
+
+	client := NewAccountAPIClient(app)
+	_, _, err := client.Do(context.Background(), accountAuthContext{
+		BaseURL: "http://127.0.0.1:1",
+	}, http.MethodGet, "https://evil.example/steal", nil)
+	if err == nil {
+		t.Fatal("expected absolute path to be rejected")
+	}
+	if !strings.Contains(err.Error(), "relative") {
+		t.Fatalf("error = %v, want relative-path message", err)
 	}
 }

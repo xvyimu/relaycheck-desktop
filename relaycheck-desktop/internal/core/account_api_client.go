@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -25,12 +26,43 @@ func NewAccountAPIClient(app *App) *AccountAPIClient {
 	}
 }
 
+func (c *AccountAPIClient) policy() outboundURLPolicy {
+	if c != nil && c.externalURLPolicy != nil {
+		return c.externalURLPolicy()
+	}
+	return outboundURLPolicy{}
+}
+
+// joinAccountAPIURL builds base+path and rejects absolute / protocol-relative paths
+// that would escape the validated base origin.
+func joinAccountAPIURL(baseURL, path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return baseURL, nil
+	}
+	if strings.Contains(path, "://") || strings.HasPrefix(path, "//") {
+		return "", errors.New("API path must be relative to the site base URL")
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return baseURL + path, nil
+}
+
 func (c *AccountAPIClient) Do(ctx context.Context, auth accountAuthContext, method string, path string, body []byte) (int, string, error) {
+	baseURL, err := safeNormalizeBaseURL(ctx, auth.BaseURL, c.policy())
+	if err != nil {
+		return 0, "", err
+	}
+	fullURL, err := joinAccountAPIURL(baseURL, path)
+	if err != nil {
+		return 0, "", err
+	}
 	var reader io.Reader
 	if body != nil {
 		reader = bytes.NewReader(body)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, normalizeBaseURL(auth.BaseURL)+path, reader)
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, reader)
 	if err != nil {
 		return 0, "", err
 	}
@@ -47,7 +79,11 @@ func (c *AccountAPIClient) Do(ctx context.Context, auth accountAuthContext, meth
 func (c *AccountAPIClient) DoWithTimeout(ctx context.Context, auth accountAuthContext, method string, path string, body []byte, timeout time.Duration) (int, string, error) {
 	requestCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	baseURL, err := safeNormalizeBaseURL(requestCtx, auth.BaseURL, c.externalURLPolicy())
+	baseURL, err := safeNormalizeBaseURL(requestCtx, auth.BaseURL, c.policy())
+	if err != nil {
+		return 0, "", err
+	}
+	fullURL, err := joinAccountAPIURL(baseURL, path)
 	if err != nil {
 		return 0, "", err
 	}
@@ -55,7 +91,7 @@ func (c *AccountAPIClient) DoWithTimeout(ctx context.Context, auth accountAuthCo
 	if body != nil {
 		reader = bytes.NewReader(body)
 	}
-	req, err := http.NewRequestWithContext(requestCtx, method, baseURL+path, reader)
+	req, err := http.NewRequestWithContext(requestCtx, method, fullURL, reader)
 	if err != nil {
 		return 0, "", err
 	}

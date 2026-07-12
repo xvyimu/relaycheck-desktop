@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 	"log"
@@ -8,10 +9,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"relaycheck-desktop/internal/core"
@@ -22,7 +25,13 @@ import (
 var staticFiles embed.FS
 
 func main() {
-	app, err := core.NewApp(".")
+	root, err := resolveAppRoot()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("RelayCheck data root: %s", root)
+
+	app, err := core.NewApp(root)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -61,9 +70,49 @@ func main() {
 	_ = openURL(url)
 	log.Printf("RelayCheck Desktop running at %s", url)
 
-	if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.Serve(listener)
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case err := <-errCh:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	case <-sigCh:
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("shutdown: %v", err)
+		}
+		if err := <-errCh; err != nil && err != http.ErrServerClosed {
+			log.Printf("serve after shutdown: %v", err)
+		}
 	}
+}
+
+// resolveAppRoot picks the application root (parent of data/).
+// Priority: RELAYCHECK_DATA_DIR if set; else directory of the executable; else ".".
+func resolveAppRoot() (string, error) {
+	if raw := strings.TrimSpace(os.Getenv("RELAYCHECK_DATA_DIR")); raw != "" {
+		abs, err := filepath.Abs(raw)
+		if err != nil {
+			return "", err
+		}
+		return abs, nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return ".", nil
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return filepath.Dir(exe), nil
 }
 
 func registerStatic(mux *http.ServeMux) {

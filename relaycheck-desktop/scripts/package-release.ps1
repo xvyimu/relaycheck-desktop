@@ -71,6 +71,23 @@ function Get-ProductVersion {
   return $match.Groups[1].Value
 }
 
+function Get-ReleaseLdflags {
+  param(
+    [string]$Version,
+    [string]$Commit
+  )
+  $buildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+  $parts = @(
+    "-H=windowsgui",
+    "-s",
+    "-w",
+    "-X=relaycheck-desktop/internal/core.productVersion=$Version",
+    "-X=relaycheck-desktop/internal/core.buildTime=$buildTime",
+    "-X=relaycheck-desktop/internal/core.gitCommit=$Commit"
+  )
+  return ($parts -join " ")
+}
+
 function Get-GitValue {
   param([string[]]$Arguments)
 
@@ -128,19 +145,21 @@ if ($isDirty -and -not $AllowDirty) {
   throw "Working tree is dirty. Commit or stash changes before packaging, or pass -AllowDirty for development verification."
 }
 
+$productVersion = Get-ProductVersion
+$commit = Get-GitValue @("rev-parse", "--short=12", "HEAD")
+$commitFull = Get-GitValue @("rev-parse", "HEAD")
+
 if (-not $SkipBuild) {
   Invoke-Checked "Frontend build" $FrontendDir "npm" @("run", "build")
   New-Item -ItemType Directory -Force (Split-Path -Parent $ReleaseExe) | Out-Null
-  Invoke-Checked "Windows release binary build" $RepoRoot "go" @("build", "-mod=vendor", "-ldflags=-H windowsgui", "-o", "dist\relaycheck.exe", ".")
+  $ldflags = Get-ReleaseLdflags -Version $productVersion -Commit $commit
+  Invoke-Checked "Windows release binary build" $RepoRoot "go" @("build", "-mod=vendor", "-ldflags=$ldflags", "-o", "dist\relaycheck.exe", ".")
 }
 
 if (-not (Test-Path -LiteralPath $ReleaseExe)) {
   throw "Release executable not found: $ReleaseExe"
 }
 
-$productVersion = Get-ProductVersion
-$commit = Get-GitValue @("rev-parse", "--short=12", "HEAD")
-$commitFull = Get-GitValue @("rev-parse", "HEAD")
 $timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmss")
 $packageName = "relaycheck-desktop-$($productVersion.TrimStart('v'))-$commit-$timestamp"
 $outputFull = Assert-RepoPath $OutputDir

@@ -7,6 +7,7 @@ import { DialogShell } from "@/components/ui/dialog-shell";
 import { Empty } from "@/components/ui/empty";
 import { useSiteAccounts } from "@/hooks/useSiteAccounts";
 import type { Account, NavigationIntent, UpstreamSite } from "@/types";
+import { Button } from "@/components/ui/button";
 
 const STORAGE_KEY = "relaycheck_master_detail_site_id";
 
@@ -290,4 +291,3 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
 }
 
 export const SiteAccountMasterDetail = memo(SiteAccountMasterDetailBase);
-import { Button } from "@/components/ui/button";
