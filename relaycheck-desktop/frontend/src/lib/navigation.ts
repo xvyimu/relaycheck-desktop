@@ -5,7 +5,12 @@ type NavigableAction = Pick<ActionItem, "target" | "filter">;
 export function actionItemNavigationIntent(item: NavigableAction): NavigationIntent {
   switch (item.target) {
     case "accounts":
-      return { target: "accounts", accountStatus: item.filter === "problem" ? "problem" : "all" };
+      // IA-2: the accounts tab is merged into "站点与账号"; land on its 全部账号 subview.
+      return {
+        target: "sites",
+        accountsView: "all",
+        accountStatus: item.filter === "problem" ? "problem" : "all",
+      };
     case "checkins":
       return { target: "checkins", checkinStatus: item.filter === "problem" ? "problem" : "all" };
     case "channels":
@@ -14,8 +19,8 @@ export function actionItemNavigationIntent(item: NavigableAction): NavigationInt
       if (item.filter === "unknown") return { target: "channels", channelKind: "unknown", sourceStatus: "not_archived" };
       return { target: "channels" };
     case "balances":
-      // balances tab is not implemented; land on accounts (usage/balance surface).
-      return { target: "accounts", query: "余额" };
+      // balances tab is not implemented; land on the merged 全部账号 subview (usage/balance surface).
+      return { target: "sites", accountsView: "all", query: "余额" };
     case "sites":
       return { target: "sites", siteHealth: item.filter === "unreachable" ? "unreachable" : "all" };
     case "notifications":
@@ -59,7 +64,10 @@ export function actionSampleNavigationIntent(
   if (entityType === "site" && entityId) {
     const base = actionItemNavigationIntent(item);
     if (base.target === "sites") {
-      return { ...base, upstreamSiteId: entityId };
+      // Site sample always targets the site-centric master-detail, never the
+      // 全部账号 subview — drop any accountsView carried from an accounts item.
+      const { accountsView: _accountsView, ...rest } = base;
+      return { ...rest, upstreamSiteId: entityId };
     }
     // channel-health and similar land on channels filter, but sample is a site id —
     // prefer sites master-detail so the operator can act on the site immediately.

@@ -939,4 +939,11 @@ export type NavigationIntent = {
   upstreamSiteId?: string;
   unreadOnly?: boolean;
   query?: string;
+  /**
+   * IA-2: sites and accounts are merged into one tab. When set, the merged
+   * "站点与账号" panel opens on its "全部账号" subview instead of the
+   * site-centric master-detail. Legacy intents targeting the old accounts tab
+   * are rewritten to `{ target: "sites", accountsView: "all" }`.
+   */
+  accountsView?: "all";
 };

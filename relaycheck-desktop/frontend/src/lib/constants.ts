@@ -3,8 +3,7 @@ import type { NavItem } from "@/types";
 export const NAV_ITEMS = [
   { key: "dashboard", label: "总览", icon: "dashboard", description: "关键指标与运行状态" },
   { key: "channels", label: "渠道", icon: "channels", description: "NewAPI 导入渠道" },
-  { key: "sites", label: "上游站点", icon: "sites", description: "识别面板型中转站" },
-  { key: "accounts", label: "账号", icon: "accounts", description: "授权、密钥与会话" },
+  { key: "sites", label: "站点与账号", icon: "sites", description: "上游站点、授权、密钥与会话" },
   { key: "checkins", label: "签到", icon: "checkins", description: "手动/批量签到日志" },
   { key: "balances", label: "余额", icon: "balances", description: "额度快照与用量" },
   { key: "notifications", label: "通知", icon: "notifications", description: "站内提醒中心" },

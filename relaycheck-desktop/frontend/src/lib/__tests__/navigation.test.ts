@@ -6,19 +6,19 @@ import {
 } from "../navigation";
 
 describe("actionItemNavigationIntent", () => {
-  it("routes accounts with problem filter", () => {
+  it("routes accounts (problem) into the merged sites 全部账号 subview", () => {
     const result = actionItemNavigationIntent({ target: "accounts", filter: "problem" });
-    expect(result).toEqual({ target: "accounts", accountStatus: "problem" });
+    expect(result).toEqual({ target: "sites", accountsView: "all", accountStatus: "problem" });
   });
 
-  it("routes accounts without problem filter", () => {
+  it("routes accounts without problem filter into the merged 全部账号 subview", () => {
     const result = actionItemNavigationIntent({ target: "accounts" });
-    expect(result).toEqual({ target: "accounts", accountStatus: "all" });
+    expect(result).toEqual({ target: "sites", accountsView: "all", accountStatus: "all" });
   });
 
-  it("routes accounts with non-problem filter to all", () => {
+  it("routes accounts with non-problem filter to the merged 全部账号 subview", () => {
     const result = actionItemNavigationIntent({ target: "accounts", filter: "other" });
-    expect(result).toEqual({ target: "accounts", accountStatus: "all" });
+    expect(result).toEqual({ target: "sites", accountsView: "all", accountStatus: "all" });
   });
 
   it("routes checkins with problem filter", () => {
@@ -56,9 +56,9 @@ describe("actionItemNavigationIntent", () => {
     expect(result).toEqual({ target: "channels" });
   });
 
-  it("routes balances to accounts (no dead balances tab)", () => {
+  it("routes balances to the merged 全部账号 subview (no dead balances tab)", () => {
     const result = actionItemNavigationIntent({ target: "balances" });
-    expect(result).toEqual({ target: "accounts", query: "余额" });
+    expect(result).toEqual({ target: "sites", accountsView: "all", query: "余额" });
   });
 
   it("routes sites with unreachable filter", () => {
@@ -140,6 +140,15 @@ describe("actionSampleNavigationIntent", () => {
       { target: "accounts", filter: "problem" },
       { entityType: "", entityId: "" },
     );
-    expect(result).toEqual({ target: "accounts", accountStatus: "problem" });
+    expect(result).toEqual({ target: "sites", accountsView: "all", accountStatus: "problem" });
+  });
+
+  it("drops accountsView when a site sample deep-links from an accounts item", () => {
+    const result = actionSampleNavigationIntent(
+      { target: "accounts", filter: "problem" },
+      { entityType: "site", entityId: "site-x" },
+    );
+    // Site sample lands on the site-centric master-detail, not the 全部账号 subview.
+    expect(result).toEqual({ target: "sites", accountStatus: "problem", upstreamSiteId: "site-x" });
   });
 });

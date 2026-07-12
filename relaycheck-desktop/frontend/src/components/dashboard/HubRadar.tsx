@@ -106,8 +106,8 @@ export function HubRadar({
             <span>{modelOverview?.sites?.length ?? 0} 站点</span>
           </div>
           <div className="radar-actions">
-            <button type="button" onClick={() => onNavigate("accounts", { accountStatus: "all" })}>Key 库</button>
-            <button type="button" className="ghost" onClick={() => onNavigate("accounts", { query: "unchecked" })}>待检测</button>
+            <button type="button" onClick={() => onNavigate("sites", { accountsView: "all", accountStatus: "all" })}>Key 库</button>
+            <button type="button" className="ghost" onClick={() => onNavigate("sites", { accountsView: "all", query: "unchecked" })}>待检测</button>
           </div>
         </article>
 
@@ -122,8 +122,8 @@ export function HubRadar({
             <span>{estimatedDailyUseText}</span>
           </div>
           <div className="radar-actions">
-            <button type="button" onClick={() => onNavigate("accounts", { query: "余额" })}>余额用量</button>
-            <button type="button" className="ghost" onClick={() => onNavigate("accounts")}>价格雷达</button>
+            <button type="button" onClick={() => onNavigate("sites", { accountsView: "all", query: "余额" })}>余额用量</button>
+            <button type="button" className="ghost" onClick={() => onNavigate("sites", { accountsView: "all" })}>价格雷达</button>
           </div>
         </article>
 

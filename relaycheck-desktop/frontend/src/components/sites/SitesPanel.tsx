@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "@/api/client";
+import { AccountsPanel } from "@/components/accounts/AccountsPanel";
 import { SiteAccountMasterDetail } from "@/components/sites/SiteAccountMasterDetail";
 import { formatConfidence, formatDuration, formatTime } from "@/lib/format";
 import { loginDiscoverySourceLabel, normalizeLoginDiscovery, parseLoginDiscovery } from "@/lib/loginDiscovery";
-import type { LoginDiscovery, NextRunItem, NavigationIntent, SiteDetail, TabKey, UpstreamSite } from "@/types";
+import type { Account, LoginDiscovery, NextRunItem, NavigationIntent, SiteDetail, TabKey, UpstreamSite } from "@/types";
 import { useNextRuns } from "@/hooks/useNextRuns";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
@@ -14,6 +15,7 @@ const LABELS_BATCH_DETECT = { title: "批量识别" } as const;
 
 type SitesPanelProps = {
   sites: UpstreamSite[];
+  accounts: Account[];
   onRefresh: () => Promise<void>;
   intent?: NavigationIntent | null;
   onNavigate?: (tab: TabKey, intent?: Omit<NavigationIntent, "target">) => void;
@@ -38,7 +40,7 @@ function siteLoginDiscovery(site: UpstreamSite, detection?: SiteDetail["detectio
   );
 }
 
-function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProps) {
+function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: SitesPanelProps) {
   const [busyId, setBusyId] = useState("");
   const [detailBusyId, setDetailBusyId] = useState("");
   const [detail, setDetail] = useState<SiteDetail | null>(null);
@@ -46,6 +48,9 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProp
   const [healthFilter, setHealthFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [layoutMode, setLayoutMode] = useState<"list" | "master">("master");
+  // IA-2: the standalone 账号 tab is merged here. "sites" shows the
+  // site-centric master-detail; "accounts" shows the flat 全部账号 surface.
+  const [subview, setSubview] = useState<"sites" | "accounts">("sites");
   const detailRequestRef = useRef(0);
   const detailCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const detailTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -101,6 +106,13 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProp
   // React to navigation intent from Action Center
   useEffect(() => {
     if (!intent) return;
+    if (intent.accountsView === "all") {
+      // Deep link into the merged 全部账号 surface.
+      setSubview("accounts");
+    } else if (typeof intent.upstreamSiteId === "string" && intent.upstreamSiteId.trim()) {
+      // A specific site always lands on the site-centric master-detail.
+      setSubview("sites");
+    }
     if (intent.siteHealth === "unreachable") setHealthFilter("unreachable");
     if (typeof intent.query === "string") setQuery(intent.query);
     if (typeof intent.upstreamSiteId === "string" && intent.upstreamSiteId.trim()) {
@@ -197,6 +209,24 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProp
         </div>
       </div>
 
+      <div className="segmented" role="group" aria-label="视图">
+        <button
+          type="button"
+          className={subview === "sites" ? "active" : ""}
+          onClick={() => setSubview("sites")}
+        >
+          按站点
+        </button>
+        <button
+          type="button"
+          className={subview === "accounts" ? "active" : ""}
+          onClick={() => setSubview("accounts")}
+        >
+          全部账号
+        </button>
+      </div>
+
+      {subview === "sites" ? (
       <div className="site-bulk-actions">
         <button
           type="button"
@@ -222,6 +252,7 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProp
           </button>
         </div>
       </div>
+      ) : null}
 
       <TaskProgressView
         progress={task.progress}
@@ -234,8 +265,8 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProp
 
       {message ? <div className="problem-hint">{message}</div> : null}
 
-      
-
+      {subview === "sites" ? (
+        <>
       {layoutMode === "master" ? (
         <SiteAccountMasterDetail sites={sites} onRefresh={onRefresh} intent={intent} />
       ) : (
@@ -489,6 +520,17 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate }: SitesPanelProp
             </div>
           </aside>
         </div>
+      ) : null}
+        </>
+      ) : null}
+
+      {subview === "accounts" ? (
+        <AccountsPanel
+          accounts={accounts}
+          sites={sites}
+          onRefresh={onRefresh}
+          intent={intent?.target === "sites" && intent.accountsView === "all" ? intent : null}
+        />
       ) : null}
     </section>
   );

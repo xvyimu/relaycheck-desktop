@@ -2,7 +2,6 @@ export type Tab =
   | "dashboard"
   | "channels"
   | "sites"
-  | "accounts"
   | "checkins"
   | "scan"
   | "notifications"
@@ -11,8 +10,7 @@ export type Tab =
 export const TABS: Array<{ key: Tab; label: string }> = [
   { key: "dashboard", label: "仪表盘" },
   { key: "channels", label: "渠道" },
-  { key: "sites", label: "站点" },
-  { key: "accounts", label: "账号" },
+  { key: "sites", label: "站点与账号" },
   { key: "checkins", label: "签到" },
   { key: "scan", label: "本机扫描" },
   { key: "notifications", label: "通知" },
@@ -39,8 +37,7 @@ export const NAV_GROUPS: Array<{
     label: "资产",
     items: [
       { key: "channels", label: "渠道" },
-      { key: "sites", label: "站点" },
-      { key: "accounts", label: "账号" },
+      { key: "sites", label: "站点与账号" },
     ],
   },
   {

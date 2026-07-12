@@ -29,10 +29,10 @@ describe("Sidebar nav groups α-D / S5", () => {
 
   it("marks the active tab with aria-current", () => {
     const html = renderToStaticMarkup(
-      <Sidebar activeTab="accounts" onTabChange={() => undefined} />,
+      <Sidebar activeTab="sites" onTabChange={() => undefined} />,
     );
     expect(html).toContain('aria-current="page"');
-    expect(html).toContain("账号");
+    expect(html).toContain("站点与账号");
   });
 
   it("uses live sidebar class (S6 bridge target, not sidebar-v4)", () => {

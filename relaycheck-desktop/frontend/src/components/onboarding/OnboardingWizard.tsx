@@ -36,7 +36,7 @@ const STEPS: StepMeta[] = [
     index: 3,
     icon: "accounts",
     title: "配置凭据",
-    description: "去账号页为每个站点补充登录凭据或 API Key。",
+    description: "去「站点与账号」页的「全部账号」子视图，为每个站点补充登录凭据或 API Key。",
   },
   {
     key: "checkin",
@@ -214,7 +214,7 @@ export function OnboardingWizard() {
         });
         setMessage(`模型同步完成：共 ${result.total ?? 0} 个，成功 ${result.synced ?? 0} 个，失败 ${result.failed ?? 0} 个。`);
       } else if (step.key === "credentials") {
-        setMessage("已记录。请稍后到「账号」页为每个站点补充登录凭据或 API Key。");
+        setMessage("已记录。请稍后到「站点与账号」页的「全部账号」子视图，为每个站点补充登录凭据或 API Key。");
       } else if (step.key === "checkin") {
         const result = await api<TaskStartResult>("/api/tasks/start", {
           method: "POST",

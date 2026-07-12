@@ -1,6 +1,5 @@
 import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AccountsPanel } from "@/components/accounts/AccountsPanel";
 import { CheckinsPanel } from "@/components/checkins/CheckinsPanel";
 import { ChannelsPanel } from "@/components/channels/ChannelsPanel";
 import { Dashboard } from "@/components/dashboard/Dashboard";
@@ -124,12 +123,7 @@ function App() {
         ) : null}
         {visitedTabs.has("sites") ? (
           <div style={{ display: show("sites") }}>
-            <SitesPanel sites={inventory.sites} onRefresh={reload} intent={navigationIntent?.target === "sites" ? navigationIntent : null} onNavigate={handleNavigate} />
-          </div>
-        ) : null}
-        {visitedTabs.has("accounts") ? (
-          <div style={{ display: show("accounts") }}>
-            <AccountsPanel accounts={inventory.accounts} sites={inventory.sites} onRefresh={reload} intent={navigationIntent?.target === "accounts" ? navigationIntent : null} />
+            <SitesPanel sites={inventory.sites} accounts={inventory.accounts} onRefresh={reload} intent={navigationIntent?.target === "sites" ? navigationIntent : null} onNavigate={handleNavigate} />
           </div>
         ) : null}
         {visitedTabs.has("checkins") ? (
