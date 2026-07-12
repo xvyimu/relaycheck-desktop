@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/api/client";
 import type {
   Account,
@@ -29,14 +29,33 @@ export interface ChannelActionsResult {
   ) => Promise<void>;
 }
 
-export function useChannelActions(): ChannelActionsResult {
-  const [channels, setChannels] = useState<ImportedChannel[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+export type UseChannelActionsOptions = {
+  /** When false, skip auto-fetch and treat panel as inactive (keep-alive). */
+  active?: boolean;
+  /** Prefer inventory channels to avoid dual-fetch on mount. */
+  initialChannels?: ImportedChannel[];
+  /** Prefer inventory accounts to avoid dual-fetch on mount. */
+  initialAccounts?: Account[];
+};
+
+export function useChannelActions(options: UseChannelActionsOptions = {}): ChannelActionsResult {
+  const { active = true, initialChannels, initialAccounts } = options;
+  const [channels, setChannels] = useState<ImportedChannel[]>(() => initialChannels ?? []);
+  const [accounts, setAccounts] = useState<Account[]>(() => initialAccounts ?? []);
   const [modelOverview, setModelOverview] = useState<ChannelModelOverview | null>(null);
   const [modelSyncing, setModelSyncing] = useState(false);
   const [message, setMessage] = useState("");
-  const [loaded, setLoaded] = useState(false);
+  const seeded = Boolean(initialChannels && initialAccounts);
+  const [loaded, setLoaded] = useState(seeded);
   const [drawer, setDrawer] = useState<DetailDrawerState | null>(null);
+
+  // Keep local state aligned when parent inventory refresh lands.
+  useEffect(() => {
+    if (initialChannels) setChannels(initialChannels);
+  }, [initialChannels]);
+  useEffect(() => {
+    if (initialAccounts) setAccounts(initialAccounts);
+  }, [initialAccounts]);
 
   const refresh = useCallback(async () => {
     try {
@@ -57,6 +76,28 @@ export function useChannelActions(): ChannelActionsResult {
       setLoaded(true);
     }
   }, []);
+
+  // Models overview is channels-specific; inventory does not carry it.
+  // When seeded from inventory, only pull models once while active.
+  useEffect(() => {
+    if (!active) return;
+    if (!seeded) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const overview = await api<ChannelModelOverview>("/api/channels/models/overview");
+        if (!cancelled) {
+          setModelOverview(overview);
+          setLoaded(true);
+        }
+      } catch {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [active, seeded]);
 
   const syncChannelModels = useCallback(async () => {
     setModelSyncing(true);

@@ -300,7 +300,8 @@ func (h *NotificationHub) BuildChannel(entry ChannelEntry) Channel {
 }
 
 // EncryptEntrySecrets encrypts sensitive fields on the ChannelEntry in place
-// using the hub's crypto port.
+// using the hub's crypto port. Empty fields are left unchanged so callers can
+// "keep previous secret" by sending blank values after a masked GET.
 func (h *NotificationHub) EncryptEntrySecrets(entry *ChannelEntry) error {
 	if entry.Config == nil {
 		return nil
@@ -311,7 +312,7 @@ func (h *NotificationHub) EncryptEntrySecrets(entry *ChannelEntry) error {
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
-		if cfg.HMACSecret != "" {
+		if cfg.HMACSecret != "" && !strings.HasPrefix(cfg.HMACSecret, "v1.") {
 			enc, err := h.crypto.Encrypt(cfg.HMACSecret)
 			if err != nil {
 				return err
@@ -324,7 +325,7 @@ func (h *NotificationHub) EncryptEntrySecrets(entry *ChannelEntry) error {
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
-		if cfg.BotToken != "" {
+		if cfg.BotToken != "" && !strings.HasPrefix(cfg.BotToken, "v1.") {
 			enc, err := h.crypto.Encrypt(cfg.BotToken)
 			if err != nil {
 				return err
@@ -337,7 +338,7 @@ func (h *NotificationHub) EncryptEntrySecrets(entry *ChannelEntry) error {
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
-		if cfg.SendKey != "" {
+		if cfg.SendKey != "" && !strings.HasPrefix(cfg.SendKey, "v1.") {
 			enc, err := h.crypto.Encrypt(cfg.SendKey)
 			if err != nil {
 				return err
@@ -350,7 +351,7 @@ func (h *NotificationHub) EncryptEntrySecrets(entry *ChannelEntry) error {
 		if err := json.Unmarshal(entry.Config, &cfg); err != nil {
 			return nil
 		}
-		if cfg.Password != "" {
+		if cfg.Password != "" && !strings.HasPrefix(cfg.Password, "v1.") {
 			enc, err := h.crypto.Encrypt(cfg.Password)
 			if err != nil {
 				return err
@@ -360,6 +361,131 @@ func (h *NotificationHub) EncryptEntrySecrets(entry *ChannelEntry) error {
 		entry.Config, _ = json.Marshal(cfg)
 	}
 	return nil
+}
+
+// MergeEntrySecretsPreserveEmpty keeps previously stored encrypted secrets when
+// the incoming entry leaves a secret field blank (or only a mask placeholder).
+// Used by PUT /api/system/settings after GET returns redacted secrets.
+func (h *NotificationHub) MergeEntrySecretsPreserveEmpty(incoming *ChannelEntry, previous ChannelEntry) {
+	if incoming == nil || incoming.Config == nil || previous.Config == nil {
+		return
+	}
+	if incoming.Type != previous.Type {
+		return
+	}
+	switch incoming.Type {
+	case "webhook":
+		var next, prev WebhookConfig
+		if json.Unmarshal(incoming.Config, &next) != nil || json.Unmarshal(previous.Config, &prev) != nil {
+			return
+		}
+		if shouldPreserveSecret(next.HMACSecret) {
+			next.HMACSecret = prev.HMACSecret
+		}
+		incoming.Config, _ = json.Marshal(next)
+	case "telegram":
+		var next, prev TelegramConfig
+		if json.Unmarshal(incoming.Config, &next) != nil || json.Unmarshal(previous.Config, &prev) != nil {
+			return
+		}
+		if shouldPreserveSecret(next.BotToken) {
+			next.BotToken = prev.BotToken
+		}
+		incoming.Config, _ = json.Marshal(next)
+	case "serverchan":
+		var next, prev ServerChanConfig
+		if json.Unmarshal(incoming.Config, &next) != nil || json.Unmarshal(previous.Config, &prev) != nil {
+			return
+		}
+		if shouldPreserveSecret(next.SendKey) {
+			next.SendKey = prev.SendKey
+		}
+		incoming.Config, _ = json.Marshal(next)
+	case "email":
+		var next, prev EmailConfig
+		if json.Unmarshal(incoming.Config, &next) != nil || json.Unmarshal(previous.Config, &prev) != nil {
+			return
+		}
+		if shouldPreserveSecret(next.Password) {
+			next.Password = prev.Password
+		}
+		incoming.Config, _ = json.Marshal(next)
+	}
+}
+
+func shouldPreserveSecret(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return true
+	}
+	// Masked placeholders from GET (****abcd or pure asterisks).
+	if strings.Trim(trimmed, "*") == "" {
+		return true
+	}
+	if strings.HasPrefix(trimmed, "****") {
+		return true
+	}
+	return false
+}
+
+// MaskEntrySecretsForAPI redacts secret fields for API responses while marking
+// configured:true so the UI can show "已配置" without exposing ciphertext.
+func MaskEntrySecretsForAPI(entry *ChannelEntry) {
+	if entry == nil || entry.Config == nil {
+		return
+	}
+	switch entry.Type {
+	case "webhook":
+		var cfg map[string]interface{}
+		if json.Unmarshal(entry.Config, &cfg) != nil {
+			return
+		}
+		maskMapSecret(cfg, "hmacSecret")
+		entry.Config, _ = json.Marshal(cfg)
+	case "telegram":
+		var cfg map[string]interface{}
+		if json.Unmarshal(entry.Config, &cfg) != nil {
+			return
+		}
+		maskMapSecret(cfg, "botToken")
+		entry.Config, _ = json.Marshal(cfg)
+	case "serverchan":
+		var cfg map[string]interface{}
+		if json.Unmarshal(entry.Config, &cfg) != nil {
+			return
+		}
+		maskMapSecret(cfg, "sendKey")
+		entry.Config, _ = json.Marshal(cfg)
+	case "email":
+		var cfg map[string]interface{}
+		if json.Unmarshal(entry.Config, &cfg) != nil {
+			return
+		}
+		maskMapSecret(cfg, "password")
+		entry.Config, _ = json.Marshal(cfg)
+	}
+}
+
+func maskMapSecret(cfg map[string]interface{}, field string) {
+	raw, _ := cfg[field].(string)
+	configured := strings.TrimSpace(raw) != ""
+	cfg[field+"Configured"] = configured
+	if configured {
+		cfg[field] = ""
+	}
+}
+
+// MaskChannelsConfigJSON returns a redacted JSON string of ChannelsConfig for GET APIs.
+func MaskChannelsConfigJSON(valueJSON string) string {
+	config, _ := ParseChannelsConfig(valueJSON)
+	for i := range config.Channels {
+		MaskEntrySecretsForAPI(&config.Channels[i])
+	}
+	encoded, err := json.Marshal(config)
+	if err != nil {
+		return `{"enabled":false,"defaultLevels":["warning","error"],"channels":[]}`
+	}
+	return string(encoded)
 }
 
 // DecryptEntrySecrets decrypts sensitive fields on the ChannelEntry in place.

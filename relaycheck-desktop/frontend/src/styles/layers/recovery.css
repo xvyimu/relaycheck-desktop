@@ -1,4 +1,9 @@
-/* ===== Merged from recovery.css: unique styles not previously in styles.css ===== */
+/* ===== recovery.css (cascade pad) =====
+ * CASCADE ORDER (styles.css): tokens → base → layout → domains → control-room →
+ * radical-v4 → mobile → recovery (this file) → drawers.
+ * Rules here win on equal specificity. Prefer deleting dead reasserts over adding.
+ * FE-4 (2026-07-12): slim duplicate .muted-only block; keep product recovery rules.
+ */
 /* Global form controls (input/select/textarea/font:inherit) live in base.css — not reasserted here. */
 
 .center-screen {
@@ -20,10 +25,6 @@
   margin: 0;
 }
 
-.muted {
-  color: var(--v4-muted, var(--muted));
-  line-height: 1.6;
-}
 
 .notice {
   border-radius: 8px;

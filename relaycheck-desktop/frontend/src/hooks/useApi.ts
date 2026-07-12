@@ -2,7 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "@/api/client";
 
-export function useApi<T>(url: string, fallback: T) {
+export type UseApiOptions = {
+  /** When false, skip auto-fetch and abort in-flight (keep-alive pause). */
+  enabled?: boolean;
+};
+
+export function useApi<T>(url: string, fallback: T, options: UseApiOptions = {}) {
+  const enabled = options.enabled ?? true;
   const [data, setData] = useState<T>(fallback);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -49,13 +55,18 @@ export function useApi<T>(url: string, fallback: T) {
   }, [url]);
 
   useEffect(() => {
+    if (!enabled) {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      return;
+    }
     void refresh();
-    // Abort the in-flight request on unmount or when url changes.
+    // Abort the in-flight request on unmount or when url/enabled changes.
     return () => {
       abortRef.current?.abort();
       abortRef.current = null;
     };
-  }, [refresh]);
+  }, [refresh, enabled]);
 
   return { data, loading, loaded, error, refresh };
 }

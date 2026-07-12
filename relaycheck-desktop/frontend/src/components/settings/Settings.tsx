@@ -7,6 +7,9 @@ import type { AuditLogItem, ChannelHealthScheduleConfig, ExportResult, NetworkPr
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusLabel } from "@/components/ui/status-label";
 import { SiteSchedules } from "@/components/settings/SiteSchedules";
+import { SettingsBackup } from "@/components/settings/SettingsBackup";
+import { SettingsExportImport } from "@/components/settings/SettingsExportImport";
+import { SettingsProxy } from "@/components/settings/SettingsProxy";
 import { Button } from "@/components/ui/button";
 
 const DEFAULT_PROXY_CONFIG: NetworkProxyConfig = {
@@ -484,122 +487,53 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
           <div className="problem-hint detail-hint">建议在大量导入、批量识别、批量签到前先点一次"立即备份数据库"。</div>
         </article>
 
-        <article className="card settings-export-card">
-          <div className="section-heading">
-            <div>
-              <strong>加密导出 / 导入</strong>
-              <span>将渠道、凭据、历史和设置打包为 AES-GCM 加密文件</span>
-            </div>
-          </div>
-          <div className="proxy-form-grid">
-            <label className="field">
-              <span>导出密码（至少 6 位）</span>
-              <input
-                type="password"
-                value={exportPassword}
-                onChange={(e) => setExportPassword(e.target.value)}
-                placeholder="设置导出密码"
-              />
-            </label>
-            <button
-              type="button"
-              disabled={exporting || exportPassword.length < 6}
-              onClick={async () => {
-                setExporting(true);
-                setExportResult(null);
-                try {
-                  const result = await api<ExportResult>("/api/system/export", {
-                    method: "POST",
-                    body: JSON.stringify({ password: exportPassword }),
-                  });
-                  setExportResult(result);
-                  setMessage("加密导出成功");
-                  const list = await api<ExportResult[]>("/api/system/exports");
-                  setExports(list || []);
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : "导出失败");
-                } finally {
-                  setExporting(false);
-                }
-              }}
-            >
-              {exporting ? "导出中…" : "加密导出"}
-            </button>
-          </div>
-          {exportResult ? (
-            <div className="detail-list" style={{ marginTop: 8 }}>
-              <div><span>文件名</span><strong>{exportResult.fileName}</strong></div>
-              <div><span>大小</span><strong>{formatBytes(exportResult.sizeBytes)}</strong></div>
-              <div><span>数据库</span><strong>{formatBytes(exportResult.manifest.databaseSize)}</strong></div>
-              <div><span>设置数</span><strong>{exportResult.manifest.settingCount}</strong></div>
-              <div><span>导出时间</span><strong>{formatTime(exportResult.manifest.exportedAt)}</strong></div>
-            </div>
-          ) : null}
-          {exports.length > 0 ? (
-            <div className="detail-list" style={{ marginTop: 12 }}>
-              <div className="section-heading"><strong>已有导出文件</strong></div>
-              {exports.map((exp) => (
-                <div key={exp.fileName}>
-                  <span>{exp.fileName}</span>
-                  <strong>
-                    {formatBytes(exp.sizeBytes)}
-                    <Button variant="ghost" type="button" style={{ marginLeft: 8, padding: "2px 8px", fontSize: 12 }}
-                      onClick={() => { setImportFileName(exp.fileName); }}
-                    >
-                      选择导入
-                    </Button>
-                  </strong>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          <div className="proxy-form-grid" style={{ marginTop: 12 }}>
-            <label className="field">
-              <span>导入密码</span>
-              <input
-                type="password"
-                value={importPassword}
-                onChange={(e) => setImportPassword(e.target.value)}
-                placeholder="输入导出时设置的密码"
-              />
-            </label>
-            <label className="field">
-              <span>导入文件</span>
-              <input
-                value={importFileName}
-                onChange={(e) => setImportFileName(e.target.value)}
-                placeholder="export-XXXXXXXX-XXXXXX.rczip"
-              />
-            </label>
-            <button
-              type="button"
-              className="danger"
-              disabled={importing || importPassword.length < 6 || !importFileName}
-              onClick={async () => {
-                if (!confirm("导入将覆盖当前数据库，确定继续？")) return;
-                setImporting(true);
-                try {
-                  await api("/api/system/import", {
-                    method: "POST",
-                    body: JSON.stringify({ password: importPassword, fileName: importFileName }),
-                  });
-                  setMessage("导入成功，正在刷新…");
-                  setTimeout(() => window.location.reload(), 1500);
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : "导入失败");
-                } finally {
-                  setImporting(false);
-                }
-              }}
-            >
-              {importing ? "导入中…" : "加密导入"}
-            </button>
-          </div>
-          <div className="problem-hint detail-hint">
-            导出文件使用 AES-256-GCM 加密，包含完整数据库和所有设置。导入会覆盖当前数据，请先备份。
-          </div>
-        </article>
-
+        <SettingsExportImport
+          exportPassword={exportPassword}
+          importPassword={importPassword}
+          importFileName={importFileName}
+          exporting={exporting}
+          importing={importing}
+          exportResult={exportResult}
+          exports={exports}
+          onExportPasswordChange={setExportPassword}
+          onImportPasswordChange={setImportPassword}
+          onImportFileNameChange={setImportFileName}
+          onExport={async () => {
+            setExporting(true);
+            setExportResult(null);
+            try {
+              const result = await api<ExportResult>("/api/system/export", {
+                method: "POST",
+                body: JSON.stringify({ password: exportPassword }),
+              });
+              setExportResult(result);
+              setExportPassword("");
+              setMessage("加密导出成功");
+              const list = await api<ExportResult[]>("/api/system/exports");
+              setExports(list || []);
+            } catch (error) {
+              setMessage(error instanceof Error ? error.message : "导出失败");
+            } finally {
+              setExporting(false);
+            }
+          }}
+          onImport={async () => {
+            if (!confirm("导入将覆盖当前数据库，确定继续？")) return;
+            setImporting(true);
+            try {
+              await api("/api/system/import", {
+                method: "POST",
+                body: JSON.stringify({ password: importPassword, fileName: importFileName }),
+              });
+              setMessage("导入成功，正在刷新…");
+              setTimeout(() => window.location.reload(), 1500);
+            } catch (error) {
+              setMessage(error instanceof Error ? error.message : "导入失败");
+            } finally {
+              setImporting(false);
+            }
+          }}
+        />
         <article className="card settings-help-card">
           <div className="section-heading">
             <div>
@@ -650,53 +584,18 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
           </div>
         </article>
 
-        <article className="card settings-proxy-card">
-          <div className="section-heading">
-            <div>
-              <strong>网络代理</strong>
-              <span>用于外部中转站探测、签到、余额刷新和 API Key 检测。本地 127.0.0.1 默认直连。</span>
-            </div>
-            <span className={"status-pill " + (proxyConfig.enabled ? "success" : "neutral")}>
-              <StatusLabel level={proxyConfig.enabled ? "enabled" : "disabled"} label={proxyConfig.enabled ? "已启用" : "未启用"} />
-            </span>
-          </div>
-          <div className="proxy-toggle-row">
-            <label className="check">
-              <input type="checkbox" checked={proxyConfig.enabled} onChange={(event) => updateProxyConfig({ enabled: event.target.checked })} />
-              启用代理
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={proxyConfig.bypassLocal} onChange={(event) => updateProxyConfig({ bypassLocal: event.target.checked })} />
-              绕过本地地址
-            </label>
-          </div>
-          <div className="proxy-form-grid">
-            <label className="field">
-              <span>代理地址</span>
-              <input value={proxyConfig.url} onChange={(event) => updateProxyConfig({ url: event.target.value })} placeholder="http://127.0.0.1:7897" />
-            </label>
-            <label className="field">
-              <span>测试地址</span>
-              <input value={proxyTestTarget} onChange={(event) => setProxyTestTarget(event.target.value)} placeholder="https://wxls.ccwu.cc/" />
-            </label>
-          </div>
-          <div className="proxy-actions">
-            <button disabled={busy !== "" || !settings.length} onClick={() => void testProxy()}>
-              {busy === "proxy" ? "测试中…" : "保存并测试代理"}
-            </button>
-            <Button variant="ghost" disabled={busy !== ""} onClick={() => updateProxyConfig(DEFAULT_PROXY_CONFIG)}>恢复默认</Button>
-          </div>
-          {proxyTestResult ? (
-            <div className={"proxy-result " + (proxyTestResult.ok ? "success" : "warning")}>
-              <strong><StatusLabel level={proxyTestResult.ok ? "success" : "warning"} label={proxyTestResult.ok ? "连通" : "未连通"} /></strong>
-              <span>{proxyTestResult.targetUrl} {"·"} {proxyTestResult.httpStatus ? "HTTP " + proxyTestResult.httpStatus + " · " : ""}{proxyTestResult.latencyMs}ms</span>
-              <p>{proxyTestResult.message}</p>
-            </div>
-          ) : (
-            <div className="problem-hint detail-hint">如果某些站点 Chrome 能打开但工具检测失败，先开启这里的代理并测试目标站点。</div>
-          )}
-        </article>
-
+        <SettingsProxy
+          proxyConfig={proxyConfig}
+          proxyTestTarget={proxyTestTarget}
+          proxyTestResult={proxyTestResult}
+          busy={busy === "proxy"}
+          canSave={Boolean(settings.length)}
+          defaultConfig={DEFAULT_PROXY_CONFIG}
+          onPatch={updateProxyConfig}
+          onTargetChange={setProxyTestTarget}
+          onTest={() => void testProxy()}
+          onReset={() => updateProxyConfig(DEFAULT_PROXY_CONFIG)}
+        />
         <article className="card settings-sync-card">
           <div className="section-heading">
             <div>
@@ -838,44 +737,17 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
           </div>
         </article>
 
-        <article className="card">
-          <div className="section-heading">
-            <div>
-              <strong>备份快照</strong>
-              <span>{multiSelectBackups ? ("已选择 " + selectedBackups.length + " 个备份") : "默认突出最新一个；可打开多选清理旧快照。"}</span>
-            </div>
-            <div className="toolbar compact-toolbar">
-              <Button variant="ghost" disabled={busy !== ""} onClick={() => void refresh()}>刷新</Button>
-              <Button variant={multiSelectBackups ? "default" : "ghost"} disabled={busy !== ""} onClick={() => setMultiSelectBackups((current) => !current)}>
-                {multiSelectBackups ? "退出多选" : "多选管理"}
-              </Button>
-              {multiSelectBackups ? (
-                <button className="danger" disabled={busy !== "" || !selectedBackups.length} onClick={() => void deleteSelectedBackups()}>
-                  {busy === "delete" ? "删除中…" : "删除选中"}
-                </button>
-              ) : null}
-            </div>
-          </div>
-          <div className="list compact">
-            {(multiSelectBackups ? backups.slice(0, 24) : backups.slice(0, 1)).map((backup, index) => (
-              <article className={"detail-row backup-row " + (index === 0 ? "is-latest" : "") + " " + (selectedBackups.includes(backup.fileName) ? "is-selected" : "")} key={backup.fileName}>
-                {multiSelectBackups ? (
-                  <label className="backup-check">
-                    <input type="checkbox" checked={selectedBackups.includes(backup.fileName)} onChange={() => toggleBackupSelection(backup.fileName)} />
-                  </label>
-                ) : null}
-                <div>
-                  <strong>{backup.fileName}{index === 0 ? " · 最新" : ""}</strong>
-                  <span>{formatBytes(backup.sizeBytes)} {"·"} {formatTime(backup.createdAt)}</span>
-                </div>
-                <button className="danger" disabled={busy !== ""} onClick={() => void restoreBackup(backup)}>
-                  {busy === "restore" ? "恢复中…" : "恢复"}
-                </button>
-              </article>
-            ))}
-            {!backups.length ? <EmptyState title="暂无备份" description='点击"立即备份数据库"后，这里会出现可恢复的本地快照。' /> : null}
-          </div>
-        </article>
+        <SettingsBackup
+          backups={backups}
+          busy={busy === "delete" || busy === "restore"}
+          multiSelect={multiSelectBackups}
+          selected={selectedBackups}
+          onRefresh={() => void refresh()}
+          onToggleMulti={() => setMultiSelectBackups((current) => !current)}
+          onToggleSelect={toggleBackupSelection}
+          onDeleteSelected={() => void deleteSelectedBackups()}
+          onRestore={(backup) => void restoreBackup(backup)}
+        />
       </div>
 
       <article className="card">

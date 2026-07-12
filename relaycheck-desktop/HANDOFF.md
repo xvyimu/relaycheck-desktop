@@ -3,7 +3,7 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-12 (frontend optimization close-out + IA-2)
+**Last updated:** 2026-07-12 (S2 review polish + FE/BE)
 
 ---
 
@@ -24,6 +24,30 @@ Read this first, then `CLAUDE.md` for architecture.
 ## Current state
 
 Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **IA-2** (accounts tab physically merged into 站点与账号), **#8.3 channel-sync UI**, **#9 Phase 2 bulk re-login**, **#8.4/#8.2**, **Action Center site sample deep-links**, **#9 R2 session indicator**, and **2026-07-12 frontend optimization** are on branch `main` (local; may be unpushed).
+
+### S2 review polish (2026-07-12) — done
+
+| ID | Summary | Status |
+|----|---------|--------|
+| BE-5 | GET settings mask notification secrets; PUT empty preserves ciphertext | done |
+| BE-4 | SQLite import path allowlist (Abs+EvalSymlinks+roots) | done |
+| FE-2 | keep-alive `inert`/`aria-hidden`; `useApi({enabled})` pause | done |
+| FE-3 | ChannelsPanel seeds from inventory; models-only when seeded | done |
+| FE-6 | DialogShell body scroll-lock + `titleId`/aria-labelledby | done |
+| FE-5 | SettingsProxy / SettingsBackup / SettingsExportImport; clear export password | done |
+| FE-4 | recovery cascade note + drop duplicate `.muted` | done |
+| FE-7 | settings-split + dialog-shell contract tests | done |
+
+**Verify (S2):**
+
+```powershell
+cd E:\zidqiandao\relaycheck-desktop
+go test -mod=vendor -count=1 ./internal/accounts/ ./internal/core/
+cd frontend
+npx tsc -b
+npm test          # 264 passed
+npm run lint
+```
 
 ### Frontend optimization (2026-07-12) — done
 
@@ -46,7 +70,7 @@ Report: `docs/frontend-optimization-report-2026-07-12.md`
 ```powershell
 cd E:\zidqiandao\relaycheck-desktop\frontend
 npx tsc -b
-npm test          # 261 passed
+npm test          # 264 passed
 npm run build
 npm run lint      # 0 errors, 0 warns
 ```

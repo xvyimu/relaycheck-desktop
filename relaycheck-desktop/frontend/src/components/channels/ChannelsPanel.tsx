@@ -7,7 +7,7 @@ import { useChannelActions } from "@/hooks/useChannelActions";
 import { useChannelFilters } from "@/hooks/useChannelFilters";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { formatTime } from "@/lib/format";
-import type { ChannelHealthOverview, ChannelHealthSite, NavigationIntent } from "@/types";
+import type { Account, ChannelHealthOverview, ChannelHealthSite, ImportedChannel, NavigationIntent } from "@/types";
 import { Button } from "@/components/ui/button";
 
 const LABELS_HEALTH_PROBE = { title: "渠道健康探测" } as const;
@@ -31,6 +31,12 @@ const emptyHealthOverview: ChannelHealthOverview = {
 export interface ChannelsPanelProps {
   onRefresh: () => Promise<void>;
   intent?: NavigationIntent | null;
+  /** When false, pause auto-fetch (keep-alive inactive tab). */
+  active?: boolean;
+  /** Inventory channels — avoids dual GET /api/channels. */
+  inventoryChannels?: ImportedChannel[];
+  /** Inventory accounts — avoids dual GET /api/accounts. */
+  inventoryAccounts?: Account[];
 }
 
 function healthToneClass(level: string) {
@@ -43,11 +49,23 @@ function topHealthRisks(sites: ChannelHealthSite[]) {
   return sites.filter((site) => site.level === "danger" || site.level === "warning").slice(0, 4);
 }
 
-function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
-  const actions = useChannelActions();
+function ChannelsPanelBase({
+  onRefresh,
+  intent,
+  active = true,
+  inventoryChannels,
+  inventoryAccounts,
+}: ChannelsPanelProps) {
+  const actions = useChannelActions({
+    active,
+    initialChannels: inventoryChannels,
+    initialAccounts: inventoryAccounts,
+  });
   const { refresh: refreshActions, channels, accounts } = actions;
   const filters = useChannelFilters(channels, accounts, intent);
-  const health = useApi<ChannelHealthOverview>("/api/channels/health/overview", emptyHealthOverview);
+  const health = useApi<ChannelHealthOverview>("/api/channels/health/overview", emptyHealthOverview, {
+    enabled: active,
+  });
   const { refresh: refreshHealth } = health;
   const healthTask = useTaskProgress();
   const [healthProbeMessage, setHealthProbeMessage] = useState("");
@@ -56,9 +74,12 @@ function ChannelsPanelBase({ onRefresh, intent }: ChannelsPanelProps) {
   const healthProgressCurrent = healthTask.progress?.current;
   const healthProgressTotal = healthTask.progress?.total;
 
+  // When not seeded from inventory, fetch once while active.
   useEffect(() => {
+    if (!active) return;
+    if (inventoryChannels && inventoryAccounts) return;
     void refreshActions();
-  }, [refreshActions]);
+  }, [active, inventoryAccounts, inventoryChannels, refreshActions]);
 
   const refreshAll = useCallback(async () => {
     await refreshActions();

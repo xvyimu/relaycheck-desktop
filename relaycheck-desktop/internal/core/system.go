@@ -49,6 +49,10 @@ func (a *App) handleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		// BE-5: never return notification secret ciphertext/plaintext on GET.
+		if item.Key == "notification.channels" {
+			item.ValueJSON = notifications.MaskChannelsConfigJSON(item.ValueJSON)
+		}
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -103,6 +107,19 @@ func (a *App) handleUpdateSystemSettings(w http.ResponseWriter, r *http.Request)
 			valueJSON = string(normalized)
 		} else if key == "notification.channels" {
 			config, warnings := notifications.ParseChannelsConfig(valueJSON)
+			// Empty/masked secrets from GET redaction keep previous ciphertext.
+			if prevJSON, err := a.loadSettingValueJSON(r.Context(), key); err == nil && strings.TrimSpace(prevJSON) != "" {
+				prevConfig, _ := notifications.ParseChannelsConfig(prevJSON)
+				prevByName := map[string]notifications.ChannelEntry{}
+				for _, entry := range prevConfig.Channels {
+					prevByName[entry.Name+"\x00"+entry.Type] = entry
+				}
+				for i := range config.Channels {
+					if prev, ok := prevByName[config.Channels[i].Name+"\x00"+config.Channels[i].Type]; ok {
+						a.notificationHub.MergeEntrySecretsPreserveEmpty(&config.Channels[i], prev)
+					}
+				}
+			}
 			for i := range config.Channels {
 				if err := a.encryptChannelEntrySecrets(&config.Channels[i]); err != nil {
 					writeError(w, http.StatusInternalServerError, "加密通知渠道密钥失败："+err.Error())
@@ -492,4 +509,13 @@ func (a *App) handleSystemPortCheck(w http.ResponseWriter, r *http.Request) {
 		result.InUse = false
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *App) loadSettingValueJSON(ctx context.Context, key string) (string, error) {
+	var value string
+	err := a.db.QueryRowContext(ctx, `SELECT value_json FROM system_settings WHERE key = ?`, key).Scan(&value)
+	if err != nil {
+		return "", err
+	}
+	return value, nil
 }

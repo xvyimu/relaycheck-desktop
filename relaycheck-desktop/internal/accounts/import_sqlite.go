@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 )
 
 // ImportChannelsFromSQLite imports channels from a local NewAPI SQLite DB.
@@ -16,7 +18,7 @@ func (s *Service) ImportChannelsFromSQLite(ctx context.Context, dbPath string, i
 // SQLite DB, with a flag to suppress notifications (used by scheduled sync).
 // Result map includes the same diagnostic counters as Admin API import.
 func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPath string, importKeys bool, instanceName string, baseURL string, createSites bool, detectAfterImport bool, notify bool) (map[string]interface{}, error) {
-	cleanPath, err := filepath.Abs(dbPath)
+	cleanPath, err := resolveAllowedSQLiteImportPath(dbPath)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +147,7 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 // readSQLiteChannelRecords reads all rows from the channels table of a local
 // SQLite DB into record maps. Used by the sync-preview flow.
 func readSQLiteChannelRecords(ctx context.Context, dbPath string) (string, []map[string]interface{}, error) {
-	cleanPath, err := filepath.Abs(dbPath)
+	cleanPath, err := resolveAllowedSQLiteImportPath(dbPath)
 	if err != nil {
 		return "", nil, err
 	}
@@ -216,4 +218,89 @@ var defaultNewAPISearchPaths = []string{
 var defaultNewAPISearchDirs = []string{
 	`D:\newapi`,
 	`D:\new-api`,
+}
+
+// resolveAllowedSQLiteImportPath Abs+EvalSymlinks the path and ensures it is
+// under an allowed scan root (known NewAPI dirs, CWD, user home, LOCALAPPDATA).
+// BE-4: refuse arbitrary filesystem reads via the import API.
+func resolveAllowedSQLiteImportPath(dbPath string) (string, error) {
+	cleanPath, err := filepath.Abs(strings.TrimSpace(dbPath))
+	if err != nil {
+		return "", err
+	}
+	if resolved, err := filepath.EvalSymlinks(cleanPath); err == nil {
+		cleanPath = resolved
+	}
+	// If the file does not exist yet, still check the parent allowlist using Abs path.
+	if !pathUnderAllowedSQLiteRoots(cleanPath) {
+		return "", fmt.Errorf("SQLite 路径不在允许的扫描根目录内，拒绝导入：%s", cleanPath)
+	}
+	return cleanPath, nil
+}
+
+func pathUnderAllowedSQLiteRoots(absPath string) bool {
+	roots := allowedSQLiteImportRoots()
+	target := filepath.Clean(absPath)
+	for _, root := range roots {
+		root = filepath.Clean(root)
+		if root == "" {
+			continue
+		}
+		rel, err := filepath.Rel(root, target)
+		if err != nil {
+			continue
+		}
+		if rel == "." || (!strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != "..") {
+			return true
+		}
+	}
+	return false
+}
+
+func allowedSQLiteImportRoots() []string {
+	seen := map[string]bool{}
+	var roots []string
+	add := func(raw string) {
+		if strings.TrimSpace(raw) == "" {
+			return
+		}
+		abs, err := filepath.Abs(raw)
+		if err != nil {
+			return
+		}
+		if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+			abs = resolved
+		}
+		abs = filepath.Clean(abs)
+		if seen[abs] {
+			return
+		}
+		seen[abs] = true
+		roots = append(roots, abs)
+	}
+	for _, p := range defaultNewAPISearchPaths {
+		add(filepath.Dir(p))
+	}
+	for _, d := range defaultNewAPISearchDirs {
+		add(d)
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		add(cwd)
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		add(home)
+	}
+	if local := os.Getenv("LOCALAPPDATA"); local != "" {
+		add(local)
+	}
+	if appdata := os.Getenv("APPDATA"); appdata != "" {
+		add(appdata)
+	}
+	// Env override for operators who keep NewAPI data elsewhere.
+	if extra := strings.TrimSpace(os.Getenv("RELAYCHECK_SQLITE_IMPORT_ROOTS")); extra != "" {
+		for _, part := range strings.Split(extra, ";") {
+			add(part)
+		}
+	}
+	return roots
 }

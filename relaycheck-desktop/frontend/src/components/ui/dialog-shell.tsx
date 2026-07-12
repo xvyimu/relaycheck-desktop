@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useRef,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
@@ -20,6 +21,8 @@ export type DialogShellProps = {
   onClose: () => void;
   /** Accessible name when no visible title is inside children. */
   ariaLabel?: string;
+  /** Optional id of a visible title element for aria-labelledby. */
+  titleId?: string;
   /** panel = side drawer; modal = centered card. */
   variant?: "panel" | "modal";
   /** Close when backdrop is pressed (default true). */
@@ -33,13 +36,14 @@ export type DialogShellProps = {
 
 /**
  * Backdrop + role=dialog shell (no Radix):
- * Escape, Tab cycle, focus in on open, restore on close.
+ * Escape, Tab cycle, focus in on open, restore on close, body scroll lock.
  * Callers own header chrome.
  */
 export function DialogShell({
   open,
   onClose,
   ariaLabel = "对话框",
+  titleId,
   variant = "panel",
   closeOnBackdrop = true,
   initialFocusSelector,
@@ -50,11 +54,15 @@ export function DialogShell({
   const panelRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const generatedTitleId = useId();
+  const labelledBy = titleId || undefined;
 
   useEffect(() => {
     if (!open) return;
     const previous =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const frame = window.requestAnimationFrame(() => {
       const root = panelRef.current;
       if (!root) return;
@@ -70,6 +78,7 @@ export function DialogShell({
     });
     return () => {
       window.cancelAnimationFrame(frame);
+      document.body.style.overflow = previousOverflow;
       if (previous?.isConnected) {
         window.requestAnimationFrame(() => previous.focus());
       }
@@ -126,7 +135,9 @@ export function DialogShell({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={ariaLabel}
+        aria-label={labelledBy ? undefined : ariaLabel}
+        aria-labelledby={labelledBy}
+        data-title-fallback-id={generatedTitleId}
         tabIndex={-1}
         className={cn(
           variant === "panel" ? "detail-drawer dialog-shell-panel" : "dialog-shell-modal",
