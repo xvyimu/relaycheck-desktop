@@ -3,28 +3,40 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-12 (S2 review polish + FE/BE)
+**Last updated:** 2026-07-12 (S2 done; park for next day)
 
 ---
 
-## ⏳ TODO (next session)
+## ⏳ TODO (next session · 2026-07-13+)
 
-- [x] **Push local commits** — S0/S1 + S2 `91b9f40` → `origin/main` via `ssh://git@github.com-obsidian/...` (https 443/proxy dead)
-- [x] **Release zip (post CSP bootstrap)** — `dist/releases/relaycheck-desktop-1.1.0-00529ee1ca70-20260712-145035.zip`  
-  Zip SHA256 `8b8b7efe3e018e9c6b0026043f30ecf44de2441a151fe7b6c3cb7a7d674a01a3` · `verify-package` PASS  
-  (supersedes `…-2611e3a5c9c4-…` / `a7990685…`)
-- [x] **Visual smoke** — `scripts/visual-smoke-theme.mjs` PASS (light/dark token L, 6 nav tabs, no hard console/CSP after external bootstrap). Screenshots local `.tmp/visual-smoke/` only.
-- [x] **Operator session-expiry runbook** — `docs/OPERATOR_SESSION_EXPIRY_RUNBOOK.md` tracked; linked from `OPERATOR_RUNBOOK.md`.
-- [x] **Full-stack review report** — `docs/code-review-optimization-2026-07-12.md`（FE/BE/Arch/Config；P0=0 / P1≈12）
-- [x] **S0 review fixes** — FE-1 trailing Button import；BE-1/BE-2 SSRF+redirect；BE-6 scheduler CAS
-- [x] **S1 review fixes** — RELAYCHECK_DATA_DIR / exe-dir data root；ldflags version；verify-release lint+embed smoke；graceful shutdown
-- [x] **S2 review polish** — BE-4/5 + FE-2/3/4/5/6/7（见下方 Current state）
+**默认优先级（用户 2026-07-12 晚：先歇，明天再做）**
+
+1. [ ] **A · 新 release zip（推荐先做）** — 现 zip 仍停在 `00529ee`（S0 前）；S0–S2 已改安全/路径/前端。  
+   `scripts/package-release.ps1`（或项目惯例）→ `verify-package` → 更新本文件产物行 + SHA256。  
+   HEAD 至少含 `91b9f40` / tip `8b32f21`。
+2. [ ] **B · S3 中期（可选）** — 审查报告 §5：AR-1 App 冻结+core 覆盖率；BE-3 可选解锁；FE-4 recovery 再瘦；CI。非阻塞日常使用。
+3. [ ] **C · P2 零散（更后）** — BE-10 Dashboard COUNT；BE-11 API `/v1`；AR-4 导航 intent 清名；CF-4 build-desktop 一键脚本。
+
+**已完成（勿重做）**
+
+- [x] Push S0/S1/S2 — tip `8b32f21` / S2 `91b9f40` → origin/main via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`（https 443 + 死代理 7897 仍不可用）
+- [x] Release zip (CSP 后旧包) — `dist/releases/relaycheck-desktop-1.1.0-00529ee1ca70-20260712-145035.zip` SHA256 `8b8b7efe…a01a3` · **已被代码超前，待 A 重打**
+- [x] Visual smoke / session-expiry runbook / full-stack review report
+- [x] S0 / S1 / S2 review（见 Current state）
+
+**Push 备忘**
+
+```powershell
+cd E:\zidqiandao\relaycheck-desktop
+git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main
+# 勿依赖 https://github.com + 7897
+```
 
 ---
 
 ## Current state
 
-Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **IA-2** (accounts tab physically merged into 站点与账号), **#8.3 channel-sync UI**, **#9 Phase 2 bulk re-login**, **#8.4/#8.2**, **Action Center site sample deep-links**, **#9 R2 session indicator**, and **2026-07-12 frontend optimization** are on branch `main` (local; may be unpushed).
+Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **IA-2** (accounts tab physically merged into 站点与账号), **#8.3 channel-sync UI**, **#9 Phase 2 bulk re-login**, **#8.4/#8.2**, **Action Center site sample deep-links**, **#9 R2 session indicator**, and **2026-07-12 frontend optimization + S0–S2 review** are on branch `main` (**origin synced** tip `8b32f21`).
 
 ### S2 review polish (2026-07-12) — done
 
