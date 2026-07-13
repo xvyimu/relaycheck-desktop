@@ -78,6 +78,13 @@ func (a *App) encryptText(value string) (string, error) { return a.crypto.Encryp
 
 When adding new code, prefer calling the extracted type directly (`a.crypto.Encrypt(...)`, `a.accountAuth.Load(...)`) rather than the `*App` forwarder. The forwarders exist for migration safety, not as the preferred API.
 
+### AR-1 freeze (S3 · 2026-07-13)
+
+- **Do not** add new business service fields or domain methods on `*App` in `app.go`.
+- New logic: domain package under `internal/<domain>/` (preferred) or extracted `*Service` in `package core`, wired through existing Infra adapters / two-phase init.
+- Prefer calling extracted types directly (`a.crypto…`, `a.accountAuth…`), not new `*App` forwarders.
+- Coverage gate: `go test -mod=vendor -cover ./internal/core` should stay **≥55%** statements.
+
 ### What stays on `*App` (by design)
 
 - `db`, `dataDir`, `key`, `client` — infrastructure, exposed via `SharedInfra`

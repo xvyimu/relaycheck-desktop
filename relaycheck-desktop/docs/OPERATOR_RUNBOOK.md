@@ -91,6 +91,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-monitor.ps1
 - **会话过期 / 重登闭环（操作员）:** `docs/OPERATOR_SESSION_EXPIRY_RUNBOOK.md`  
   识别 `auth_expired`、单账号四步重登、批量重登向导、2FA 人工边界。不自动填密码、不绕过 2FA。
 
+
+## Threat model (local trust · BE-3)
+
+RelayCheck Desktop is a **single-operator local console**, not a multi-user server.
+
+| Control | Behavior |
+| --- | --- |
+| Bind | `127.0.0.1` only (loopback) |
+| Host header | Must match loopback + runtime port (`SecureLocalHandler`) |
+| CSRF | State-changing methods require same-origin `Origin` when the browser sends one |
+| Remote peer | State-changing methods reject non-loopback `RemoteAddr` when present |
+| Session | `requireSession` returns fixed principal `"local"` — **no unlock password / multi-user login** |
+| UI confirm | Destructive flows still confirm in the UI; backend does not re-prompt |
+
+**In scope risk:** any process that can open `http://127.0.0.1:<port>` on the same machine can call export/import/account APIs (after Host/Origin/loopback checks). Treat the host as a trusted single-user workstation.
+
+**Out of scope by design:** remote multi-user auth, reverse-proxy multi-tenant isolation, optional bootstrap unlock password (documented product choice; not implemented).
+
+Do not expose the port via port-forward, LAN bind, or reverse proxy without additional auth in front.
+
 ## Manual Critical Flow
 
 Use non-secret test data only.

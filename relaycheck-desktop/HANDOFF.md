@@ -3,24 +3,34 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-12 (S2 done; park for next day)
+**Last updated:** 2026-07-13 (S4 + P2 三项落地 done; uncommitted)
 
 ---
 
-## ⏳ TODO (next session · 2026-07-13+)
+## ⏳ TODO (next session)
 
-**默认优先级（用户 2026-07-12 晚：先歇，明天再做）**
-
-1. [ ] **A · 新 release zip（推荐先做）** — 现 zip 仍停在 `00529ee`（S0 前）；S0–S2 已改安全/路径/前端。  
-   `scripts/package-release.ps1`（或项目惯例）→ `verify-package` → 更新本文件产物行 + SHA256。  
-   HEAD 至少含 `91b9f40` / tip `8b32f21`。
-2. [ ] **B · S3 中期（可选）** — 审查报告 §5：AR-1 App 冻结+core 覆盖率；BE-3 可选解锁；FE-4 recovery 再瘦；CI。非阻塞日常使用。
-3. [ ] **C · P2 零散（更后）** — BE-10 Dashboard COUNT；BE-11 API `/v1`；AR-4 导航 intent 清名；CF-4 build-desktop 一键脚本。
+1. [ ] **Commit + push**（需确认）— S3+S4+P2 工作区 + 先前 handoff；SSH：`git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main`
+2. [ ] **Optional re-release** — 提交后 `package-release` + `verify-package`（当前发布 zip 仍停在 `a611273`）
+3. [ ] **C · P2 零散（更后）** — Dashboard COUNT 聚合；API `/v1`；导航 intent 清名
 
 **已完成（勿重做）**
 
-- [x] Push S0/S1/S2 — tip `8b32f21` / S2 `91b9f40` → origin/main via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`（https 443 + 死代理 7897 仍不可用）
-- [x] Release zip (CSP 后旧包) — `dist/releases/relaycheck-desktop-1.1.0-00529ee1ca70-20260712-145035.zip` SHA256 `8b8b7efe…a01a3` · **已被代码超前，待 A 重打**
+- [x] **P2 三项落地 (2026-07-13)** — 承 review「Settings 大拆分 / 列表虚拟化 / 本机 API token」  
+  - **Settings 大拆分**: `Settings.tsx` 789→431 行；抽出 `SettingsCards.tsx`（About/VersionCheck/PortCheck/Path/Help/Legend/Sync/ChannelHealth/Scheduler/AuditLog/JsonEditor 11 卡）；`parseSetting`/`parseStringSetting` 收敛 useMemo 解析  
+  - **列表虚拟化（分页）**: `AccountsPanel.tsx` `ACCOUNTS_PER_PAGE=50` + `page` 状态 + `pageAccounts` 切片；筛选变化重置页；`pagination-bar.css`（>50 条才显示分页条）  
+  - **本机 API token（opt-in）**: `internal/core/session_token.go`（256-bit hex + HttpOnly/SameSite=Strict cookie + `subtle.ConstantTimeCompare`）；`RELAYCHECK_REQUIRE_TOKEN=1` 才启用，token 写 `data/session-token.txt`(0600)；`requireSession` 前置 `validateSessionToken`；默认关闭不改现有可信单用户流；SPA 无需改动（`credentials: same-origin` 自动带 cookie）；`session_token_test.go` 4 用例  
+  - Gates: core **55.2%** · go PASS · frontend **268** + lint 0 + tsc 0 + build 0
+- [x] **S4 审查落地 (2026-07-13)** — 见 `docs/code-review-s4-implementation-2026-07-13.md`  
+  - FE: dialogEpoch 关抽屉；safeExternalUrl；启动仅等 system；Insights 展开后拉 models  
+  - BE: openAppDB；digest 单 cancel；health/status 路径脱敏；accounts `limit`；settings 白名单；JSON 8MiB；import 根收紧；releaseUrl sanitize  
+  - CF: CI + go vet；`scripts/build-desktop.ps1`  
+  - Gates: core **55.2%** · go packages PASS · frontend **268** + lint 0
+- [x] **B · S3 (2026-07-13)**  
+  - AR-1 freeze + cover ≥55；BE-3 loopback RemoteAddr；FE-4 cascade docs；CI 骨架
+- [x] **A · Release zip (2026-07-13)** — commit `a611273`  
+  - Zip: `dist/releases/relaycheck-desktop-1.1.0-a6112733657e-20260713-022651.zip`  
+  - SHA256: `50d36aa7a6ea0ec387c1b3445cdfbf65ac1245c3c0b8f04b18caa1ea139808d5`
+- [x] Push S0/S1/S2 — tip was `8b32f21` / S2 `91b9f40` → origin/main via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`（https 443 + 死代理 7897 仍不可用）
 - [x] Visual smoke / session-expiry runbook / full-stack review report
 - [x] S0 / S1 / S2 review（见 Current state）
 
@@ -36,7 +46,31 @@ git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main
 
 ## Current state
 
-Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **IA-2** (accounts tab physically merged into 站点与账号), **#8.3 channel-sync UI**, **#9 Phase 2 bulk re-login**, **#8.4/#8.2**, **Action Center site sample deep-links**, **#9 R2 session indicator**, and **2026-07-12 frontend optimization + S0–S2 review** are on branch `main` (**origin synced** tip `8b32f21`).
+Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **IA-2** (accounts tab physically merged into 站点与账号), **#8.3 channel-sync UI**, **#9 Phase 2 bulk re-login**, **#8.4/#8.2**, **Action Center site sample deep-links**, **#9 R2 session indicator**, and **2026-07-12 frontend optimization + S0–S2 review** are on branch `main`.  
+**Local tip:** `a611273` + **uncommitted S3+S4+P2**. **origin/main** behind until commit+push.
+
+### P2 三项落地 (2026-07-13) — done
+
+| 项 | 摘要 | 关键文件 |
+|----|------|---------|
+| Settings 大拆分 | 789→431 行；11 卡片抽出 | `frontend/src/components/settings/{Settings,SettingsCards}.tsx` |
+| 列表虚拟化（分页） | 50/页；筛选重置；>50 才显示 | `AccountsPanel.tsx` · `styles/components/pagination-bar.css` |
+| 本机 API token（opt-in） | `RELAYCHECK_REQUIRE_TOKEN=1`；HttpOnly/Strict cookie；常量时间比较；默认关 | `internal/core/session_token.go`(+`_test.go`) · `main.go` · `http.go:requireSession` |
+
+Token 默认关闭；启用后 token 写 `data/session-token.txt`(0600)，`/api/health` 不受限，SPA 无需改动。
+
+### S4 review implementation (2026-07-13) — done
+
+See `docs/code-review-s4-implementation-2026-07-13.md`. Cover **55.2%**, frontend **268** tests.
+
+### S3 mid-term (2026-07-13) — done
+
+| ID | Summary | Status |
+|----|---------|--------|
+| AR-1 | App freeze policy + core cover ≥55% (55.1%) | done |
+| BE-3 | Loopback RemoteAddr on writes + threat model doc; no unlock password | done |
+| FE-4 | Recovery cascade docs + stub delete dates | done |
+| CI | `.github/workflows/ci.yml` windows go/frontend | done |
 
 ### S2 review polish (2026-07-12) — done
 
