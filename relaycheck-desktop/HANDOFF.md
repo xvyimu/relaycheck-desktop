@@ -3,14 +3,20 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-13 (S4 + P2 三项 + P2 零散 done; **已推送 origin/main → `0f13915`**)
+**Last updated:** 2026-07-13 (S4 + P2 三项 + P2 零散 done; 已推送 → `0f13915`; **re-release done @ `bdb4767`**)
 
 ---
 
 ## ⏳ TODO (next session)
 
-1. [x] **Push** — 已完成。`f61c4c5..0f13915 main -> main` via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`；origin/main 0/0 同步。
-2. [ ] **Optional re-release** — 推送后 `package-release` + `verify-package`（当前发布 zip 仍停在 `a611273`）
+1. [x] **Push** — 已完成。`f61c4c5..0f13915 main -> main` via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`。
+2. [x] **Re-release** — 已完成。`package-release` + `verify-package` 全绿。
+   - Commit: `bdb4767`（含 push-complete docs）
+   - Zip: `dist/releases/relaycheck-desktop-1.1.0-bdb476755c64-20260713-073147.zip`
+   - SHA256: `d8eab59e18a452fb9ac92334408470a5df74c44fd6328e31345cf7529b5658f4`
+   - verify-package: 33/33 PASS（文件存在 + manifest + checksums）
+
+**待推送**：`bdb4767`（push-complete docs）+ 本次 HANDOFF re-release 记录 commit 需 `git push` 授权后上远端。
 
 **已完成（勿重做）**
 
