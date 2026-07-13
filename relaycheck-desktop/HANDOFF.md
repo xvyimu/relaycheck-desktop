@@ -3,22 +3,30 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-13 (S4 + P2 三项 + P2 零散 done; 已推送 → `0f13915`; **re-release done @ `bdb4767`**)
+**Last updated:** 2026-07-13 (S4 + P2 + re-release done; **docs pass** PACKAGE_INDEX + PROJECT_STRUCTURE; local tip `ccd2f98`, origin still `0f13915`)
 
 ---
 
 ## ⏳ TODO (next session)
 
-1. [x] **Push** — 已完成。`f61c4c5..0f13915 main -> main` via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`。
+1. [x] **Push product work** — 已完成。`f61c4c5..0f13915 main -> main` via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`。
 2. [x] **Re-release** — 已完成。`package-release` + `verify-package` 全绿。
-   - Commit: `bdb4767`（含 push-complete docs）
    - Zip: `dist/releases/relaycheck-desktop-1.1.0-bdb476755c64-20260713-073147.zip`
    - SHA256: `d8eab59e18a452fb9ac92334408470a5df74c44fd6328e31345cf7529b5658f4`
-   - verify-package: 33/33 PASS（文件存在 + manifest + checksums）
-
-**待推送**：`bdb4767`（push-complete docs）+ 本次 HANDOFF re-release 记录 commit 需 `git push` 授权后上远端。
+   - verify-package: 文件 + manifest + checksums 全 PASS
+3. [ ] **Push docs commits**（需授权）— 本地领先 origin 4 个纯 docs 提交：
+   - `bdb4767` handoff push-complete
+   - `2fd935c` handoff re-release record
+   - `c97e85f` core PACKAGE_INDEX (session_token / s3_helpers / errorClass)
+   - `ccd2f98` PROJECT_STRUCTURE refresh (S3/S4/P2 surfaces)
+   - 命令：`git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main`
 
 **已完成（勿重做）**
+
+- [x] **Docs pass (2026-07-13)** — 结构文档对齐 S3/S4/P2 落地
+  - `internal/core/PACKAGE_INDEX.md`：日期 2026-07-13；新增 `session_token.go` / `session_token_test.go` / `s3_helpers_test.go`；`http.go` 注明 errorClass + token gate + loopback write guard
+  - `docs/PROJECT_STRUCTURE.md`：日期 2026-07-13；main.go 数据根 + token env；SettingsCards/pagination/safeExternalUrl/navigation；安全模型改为 opt-in token；审查报告入 Active Documents；验证段改为 tsc/test/lint + 离线 release 路径 + CI
+  - Commits: `c97e85f` · `ccd2f98`
 
 - [x] **P2 零散 (2026-07-13)** — 承 review BE-10 / BE-11 / AR-4  
   - **BE-10** Dashboard COUNT 聚合：`buildDashboardSummary` 5 次独立 `COUNT(*)` 折成单 SQL 标量子查询，省 4 次 SQLite RTT（`commit 459289e`）  
