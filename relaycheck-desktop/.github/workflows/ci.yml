@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  go:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+      - name: Go vet
+        run: go vet -mod=vendor ./internal/accounts/ ./internal/core/ ./internal/notifications/ ./internal/versioncheck/
+      - name: Go test accounts + core
+        run: go test -mod=vendor -count=1 ./internal/accounts/ ./internal/core/
+      - name: Core coverage floor 55%
+        shell: pwsh
+        run: |
+          go test -mod=vendor -count=1 -coverprofile=core-cover.out ./internal/core/
+          $core = go tool cover -func=core-cover.out | Select-String -Pattern '^total:'
+          if (-not $core) { throw "no total coverage line" }
+          if ($core.Line -notmatch '(\d+\.\d+)%') { throw "cannot parse core coverage: $($core.Line)" }
+          $corePct = [double]$Matches[1]
+          Write-Host "internal/core coverage: $corePct%"
+          if ($corePct -lt 55.0) { throw "core coverage $corePct% < 55%" }
+
+  frontend:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck + unit tests
+        run: |
+          npx tsc -b
+          npm test
+      - name: Production build
+        run: npm run build
