@@ -161,21 +161,25 @@ func (a *App) dashboardSummary(r *http.Request) (DashboardSummary, error) {
 }
 
 func (a *App) buildDashboardSummary(ctx context.Context) (DashboardSummary, error) {
+	// BE-10: fold the five independent COUNT(*) reads into a single round-trip
+	// via scalar subqueries. Each subquery still hits its own index; combining
+	// them removes four SQLite round-trips per dashboard refresh, which matters
+	// on larger local databases where the summary is polled frequently.
 	var summary DashboardSummary
-	queries := []struct {
-		target *int
-		sql    string
-	}{
-		{&summary.LocalNewAPICount, `SELECT COUNT(*) FROM local_newapi_instances`},
-		{&summary.ImportedChannelCount, `SELECT COUNT(*) FROM imported_channels`},
-		{&summary.IdentifiedChannelCount, `SELECT COUNT(*) FROM imported_channels WHERE upstream_kind <> 'unknown'`},
-		{&summary.AccountCount, `SELECT COUNT(*) FROM channel_accounts`},
-		{&summary.UnreadNotifications, `SELECT COUNT(*) FROM app_notifications WHERE read = 0`},
-	}
-	for _, query := range queries {
-		if err := a.db.QueryRowContext(ctx, query.sql).Scan(query.target); err != nil {
-			return summary, err
-		}
+	const q = `SELECT
+		(SELECT COUNT(*) FROM local_newapi_instances),
+		(SELECT COUNT(*) FROM imported_channels),
+		(SELECT COUNT(*) FROM imported_channels WHERE upstream_kind <> 'unknown'),
+		(SELECT COUNT(*) FROM channel_accounts),
+		(SELECT COUNT(*) FROM app_notifications WHERE read = 0)`
+	if err := a.db.QueryRowContext(ctx, q).Scan(
+		&summary.LocalNewAPICount,
+		&summary.ImportedChannelCount,
+		&summary.IdentifiedChannelCount,
+		&summary.AccountCount,
+		&summary.UnreadNotifications,
+	); err != nil {
+		return summary, err
 	}
 	return summary, nil
 }
