@@ -3,17 +3,22 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-13 (S4 + P2 三项落地 done; uncommitted)
+**Last updated:** 2026-07-13 (S4 + P2 三项 + P2 零散 done; committed local; **push 被权限系统拒绝，待授权**)
 
 ---
 
 ## ⏳ TODO (next session)
 
-1. [ ] **Commit + push**（需确认）— S3+S4+P2 工作区 + 先前 handoff；SSH：`git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main`
-2. [ ] **Optional re-release** — 提交后 `package-release` + `verify-package`（当前发布 zip 仍停在 `a611273`）
-3. [ ] **C · P2 零散（更后）** — Dashboard COUNT 聚合；API `/v1`；导航 intent 清名
+1. [ ] **Push**（被拒待授权）— 6 提交本地已就绪，origin/main 落后。上次 `git push` 被权限系统拒绝（外发动作）。授权后执行：`git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main`
+2. [ ] **Optional re-release** — 推送后 `package-release` + `verify-package`（当前发布 zip 仍停在 `a611273`）
 
 **已完成（勿重做）**
+
+- [x] **P2 零散 (2026-07-13)** — 承 review BE-10 / BE-11 / AR-4  
+  - **BE-10** Dashboard COUNT 聚合：`buildDashboardSummary` 5 次独立 `COUNT(*)` 折成单 SQL 标量子查询，省 4 次 SQLite RTT（`commit 459289e`）  
+  - **BE-11** 错误稳定：`writeError` 已统一 `errorClass`（validation/server/rate_limited…）对外；`/api/v1` 前缀属契约级迁移（84 处调用点 + SPA 同步），单机本地形态无功能收益，**主动不做**  
+  - **AR-4** 导航 intent：全局搜 `setTab("accounts"/"balances")` 字面量 **0 命中**，全走 `navigation.ts`（`accounts`→`{sites, accountsView:"all"}`、`balances`→`{sites, accountsView:"all", query:"余额"}`），已清  
+  - Gates: core **55.4%** · go PASS · frontend **268** + tsc 0 + lint 0
 
 - [x] **P2 三项落地 (2026-07-13)** — 承 review「Settings 大拆分 / 列表虚拟化 / 本机 API token」  
   - **Settings 大拆分**: `Settings.tsx` 789→431 行；抽出 `SettingsCards.tsx`（About/VersionCheck/PortCheck/Path/Help/Legend/Sync/ChannelHealth/Scheduler/AuditLog/JsonEditor 11 卡）；`parseSetting`/`parseStringSetting` 收敛 useMemo 解析  
