@@ -1,6 +1,6 @@
 # internal/core Package Index
 
-Last updated: 2026-07-05 (local)
+Last updated: 2026-07-13 (local; S3/S4 review + P2 opt-in session token)
 
 The `internal/core` package is the assembly root for RelayCheck Desktop's backend. It holds the `App` struct (`app.go`), HTTP handlers, cross-cutting concerns (audit/crypto/network/url_safety), and forwarding methods to 8 extracted domain packages under `internal/<domain>/`. See `CLAUDE.md` for the architecture overview.
 
@@ -28,7 +28,8 @@ Domain logic lives outside `core` in dedicated packages. Dependency direction: `
 | `app.go` | `App` struct, `NewApp()` constructor, configuration defaults, lifecycle, two-phase init for domain services. |
 | `db.go` | SQLite initialization, schema migrations, `channel_schedules` table, and the nullable global-schedule migration. |
 | `routes.go` | HTTP route registration, `RegisterRoutes()`. |
-| `http.go` | HTTP helpers: `writeJSON`, `writeError`, `method()`, session middleware. |
+| `http.go` | HTTP helpers: `writeJSON`, `writeError` (+`errorClass` stable class), `method()`, `queryInt` bounded parser, `MaxBytesReader` body cap, session middleware (`requireSession`: opt-in token gate + loopback RemoteAddr guard on writes + Origin CSRF). |
+| `session_token.go` | Opt-in local session token (BE-14). `NewSessionToken()` (256-bit hex), `SetLocalToken()`, `tokenEnforced()`, `validateSessionToken(r)` (constant-time `subtle.ConstantTimeCompare`; fail-open only when no token configured), `SetSessionCookieIfEnabled(w)` (HttpOnly, SameSite=Strict). Enabled via `RELAYCHECK_REQUIRE_TOKEN=1` in `main.go`; default off preserves the trusted-single-user flow. SPA needs no change (cookie auto-attached via `credentials: "same-origin"`). |
 | `models.go` | Core data structures: `SystemStatus`, `DashboardSummary`, `ChannelAccount`, `CheckinLog`, `BalanceSnapshot`, etc. |
 | `infra.go` | `SharedInfra` interface (`DB()`/`HTTPClient()`/`Key()`/`DataDir()`/`Locker()` getters); `*App` implements it. Foundation for extracted services/stores. |
 
@@ -187,6 +188,8 @@ Each file in `core` forwards to the corresponding extracted domain package. Conv
 | `scheduler_repo_test.go` | `SchedulerRepo` unit tests. |
 | `scheduler_test.go` | Scheduler tests. |
 | `secrets_security_test.go` | Security tests: no plaintext secrets in responses. |
+| `session_token_test.go` | Opt-in session token tests: random 64-hex generation, default-off validation (fail-open), enforced cookie match (no/empty/wrong/correct), and `SetSessionCookieIfEnabled` HttpOnly+Strict behavior. |
+| `s3_helpers_test.go` | S3 helper tests: `isLowBalance`, `usageTrend`, usage/coverage item limits, model price-hint inference, official-provider normalization. |
 | `sites_test.go` | Sites tests. |
 | `sync_job_run_state_test.go` | `SyncJobRunStore` unit tests. |
 | `sync_preview_test.go` | Sync preview tests. |
