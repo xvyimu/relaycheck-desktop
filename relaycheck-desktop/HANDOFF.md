@@ -3,13 +3,13 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-13 (S4 + P2 三项 + P2 零散 done; committed local; **push 被权限系统拒绝，待授权**)
+**Last updated:** 2026-07-13 (S4 + P2 三项 + P2 零散 done; **已推送 origin/main → `0f13915`**)
 
 ---
 
 ## ⏳ TODO (next session)
 
-1. [ ] **Push**（被拒待授权）— 6 提交本地已就绪，origin/main 落后。上次 `git push` 被权限系统拒绝（外发动作）。授权后执行：`git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main`
+1. [x] **Push** — 已完成。`f61c4c5..0f13915 main -> main` via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`；origin/main 0/0 同步。
 2. [ ] **Optional re-release** — 推送后 `package-release` + `verify-package`（当前发布 zip 仍停在 `a611273`）
 
 **已完成（勿重做）**
