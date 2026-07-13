@@ -415,6 +415,7 @@ try {
   record("Item #6 unread-notifications IS rendered", priorityTitles.some((t) => t.includes("未读通知")) ? "PASS" : "FAIL", "present after slice(0,4) fix");
   // Check 1: auth-required-accounts -> AccountsPanel(problem)
   out("\n[1] 失效授权 -> AccountsPanel(problem)");
+  await goDashboard(page);
   await safe(async () => {
     if (!(await clickHandleFor(page, "优先处理失效授权"))) { record("失效授权", "FAIL", "button missing"); return; }
     if (page.isClosed()) { record("失效授权 -> AccountsPanel(problem)", "FAIL", "page closed"); return; }
@@ -423,7 +424,7 @@ try {
     const sel = await selectValue(page, ".accounts-panel", "状态");
     const banner = await hasBanner(page, ".accounts-panel");
     const bt = banner ? (await page.locator(".accounts-panel .channel-active-filter strong").textContent()).trim() : null;
-    record("失效授权 -> AccountsPanel + problem + banner", tab === "账号" && sel === "problem" && banner && bt.includes("异常账号") ? "PASS" : "FAIL", `tab=${tab} status=${sel} banner=${banner ? bt : "none"}`);
+    record("失效授权 -> AccountsPanel + problem + banner", tab === "站点与账号" && sel === "problem" && banner && bt.includes("异常账号") ? "PASS" : "FAIL", `tab=${tab} status=${sel} banner=${banner ? bt : "none"}`);
   }, "check1");
 
   // Check 2: today-checkin-problems -> CheckinsPanel(failed)
@@ -450,7 +451,7 @@ try {
     const tab = await activeTabLabel(page);
     const sel = await selectValue(page, ".accounts-panel", "状态");
     const banner = await hasBanner(page, ".accounts-panel");
-    record("余额缺失 -> AccountsPanel + all + no banner", tab === "账号" && sel === "all" && !banner ? "PASS" : "FAIL", `tab=${tab} status=${sel} banner=${banner ? "present" : "absent"}`);
+    record("余额缺失 -> AccountsPanel + all + no banner", tab === "站点与账号" && sel === "all" && !banner ? "PASS" : "FAIL", `tab=${tab} status=${sel} banner=${banner ? "present" : "absent"}`);
   }, "check3");
 
   // Check 4: unknown-channels -> ChannelsPanel(unknown)

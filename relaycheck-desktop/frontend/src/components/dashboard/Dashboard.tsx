@@ -236,12 +236,12 @@ function DashboardBase({
                 </div>
                 {item.samples?.length ? (
                   <div className="task-samples">
-                    {item.samples.slice(0, 3).map((sample) => {
+                    {item.samples.slice(0, 3).map((sample, sampleIndex) => {
                       const clickable = Boolean(sample.entityType && sample.entityId);
                       if (clickable) {
                         return (
                           <button
-                            key={`${sample.entityType}:${sample.entityId}:${sample.label}`}
+                            key={`${sample.entityType}:${sample.entityId}:${sample.label}:${sampleIndex}`}
                             type="button"
                             className="task-sample-link"
                             onClick={() => navigateActionSample(onNavigate, item, sample)}
@@ -250,7 +250,7 @@ function DashboardBase({
                           </button>
                         );
                       }
-                      return <span key={sample.label}>{sample.label}</span>;
+                      return <span key={`${sample.label}:${sampleIndex}`}>{sample.label}</span>;
                     })}
                   </div>
                 ) : null}
