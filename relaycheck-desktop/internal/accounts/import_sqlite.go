@@ -287,15 +287,6 @@ func allowedSQLiteImportRoots() []string {
 	if cwd, err := os.Getwd(); err == nil {
 		add(cwd)
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		add(home)
-	}
-	if local := os.Getenv("LOCALAPPDATA"); local != "" {
-		add(local)
-	}
-	if appdata := os.Getenv("APPDATA"); appdata != "" {
-		add(appdata)
-	}
 	// Env override for operators who keep NewAPI data elsewhere.
 	if extra := strings.TrimSpace(os.Getenv("RELAYCHECK_SQLITE_IMPORT_ROOTS")); extra != "" {
 		for _, part := range strings.Split(extra, ";") {

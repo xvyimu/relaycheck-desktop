@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -85,7 +84,11 @@ func (a *App) handleUpdateSystemSettings(w http.ResponseWriter, r *http.Request)
 			writeError(w, http.StatusBadRequest, "设置 Key 和 JSON 内容不能为空。")
 			return
 		}
-		if !json.Valid([]byte(valueJSON)) {
+				if !isAllowedSystemSettingKey(key) {
+			writeError(w, http.StatusBadRequest, "unknown settings key: "+key)
+			return
+		}
+if !json.Valid([]byte(valueJSON)) {
 			writeError(w, http.StatusBadRequest, "设置 "+key+" 不是有效 JSON。")
 			return
 		}
@@ -362,12 +365,21 @@ func (a *App) rollbackRestore(dbPath string, currentPath string, currentMoved bo
 }
 
 func (a *App) reopenDatabase() error {
-	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(a.databasePath())+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)")
+	db, err := openAppDB(a.databasePath())
 	if err != nil {
 		return err
 	}
-	db.SetMaxOpenConns(1)
 	a.db = db
+	// Keep repository handles on the live *sql.DB after restore.
+	if a.accountAuth != nil {
+		a.accountAuth.db = db
+	}
+	if a.schedulerRepo != nil {
+		a.schedulerRepo.db = db
+	}
+	if a.notificationHub != nil {
+		a.notificationHub.SetDB(db)
+	}
 	return nil
 }
 
@@ -518,4 +530,15 @@ func (a *App) loadSettingValueJSON(ctx context.Context, key string) (string, err
 		return "", err
 	}
 	return value, nil
+}
+
+// isAllowedSystemSettingKey restricts PUT /api/system/settings keys.
+func isAllowedSystemSettingKey(key string) bool {
+	switch key {
+	case "app.general", "app.version_check_url", "scanner.targets", "checkin.schedule",
+		"network.proxy", "sync.schedule", "channel.health.schedule", "notification.channels":
+		return true
+	default:
+		return false
+	}
 }

@@ -127,7 +127,7 @@ func (s *Service) CheckVersion(ctx context.Context) *VersionCheckResult {
 	}
 
 	result.LatestVersion = manifest.Version
-	result.ReleaseURL = manifest.ReleaseURL
+	result.ReleaseURL = sanitizeReleaseURL(manifest.ReleaseURL)
 	result.ReleaseNotes = manifest.ReleaseNotes
 	result.UpdateAvailable = CompareVersions(current, manifest.Version) < 0
 
@@ -188,3 +188,20 @@ func CompareVersions(a, b string) int {
 	}
 	return 0
 }
+
+// sanitizeReleaseURL allows only http(s) absolute URLs for client hyperlinks.
+func sanitizeReleaseURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return ""
+	}
+	return u.String()
+}
+

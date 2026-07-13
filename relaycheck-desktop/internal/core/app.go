@@ -9,10 +9,12 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,6 +31,11 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// App is the assembly root. AR-1 freeze (S3 / 2026-07-13):
+// do not add new business service fields or domain methods here.
+// New logic goes into domain packages under internal/<domain>/ or
+// extracted *Service types in package core; wire via existing Infra adapters.
+// Target: keep core coverage ≥55% on `go test -cover ./internal/core`.
 type App struct {
 	db                  *sql.DB
 	dataDir             string
@@ -83,6 +90,10 @@ type App struct {
 	preferredPort      int
 	portConflict       bool
 	allowLocalOutbound bool
+	// localToken, when non-empty, enables opt-in session-token enforcement on
+	// all /api/* handlers (except /api/health). Empty by default: the threat
+	// model is a trusted single-user loopback machine. See session_token.go.
+	localToken string
 }
 
 var fallbackIDCounter atomic.Uint64
@@ -114,6 +125,20 @@ type BrowserLoginSession struct {
 	PID       int
 }
 
+
+// openAppDB opens SQLite with the production pool and pragmas.
+// Used by NewApp and restore/reopen so recovery does not degrade to MaxOpenConns(1).
+func openAppDB(dbPath string) (*sql.DB, error) {
+	dsn := "file:" + filepath.ToSlash(dbPath) + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_pragma=temp_store(MEMORY)&_pragma=cache_size(-20000)"
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
+	return db, nil
+}
+
 // NewApp creates a new App instance rooted at the given directory.
 func NewApp(root string) (*App, error) {
 	dataDir := filepath.Join(root, "data")
@@ -132,12 +157,10 @@ func NewApp(root string) (*App, error) {
 	cryptoSvc := NewCryptoService(key)
 
 	dbPath := filepath.Join(dataDir, "relaycheck.db")
-	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_pragma=temp_store(MEMORY)&_pragma=cache_size(-20000)")
+	db, err := openAppDB(dbPath)
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(4)
-	db.SetMaxIdleConns(4)
 
 	accountAuthRepo := NewAccountAuthRepository(db, cryptoSvc)
 
@@ -365,17 +388,52 @@ func nowCST() time.Time {
 // Non-browser clients (curl, internal scheduler calls) do not send an
 // Origin header and are allowed through, relying on the Host check and
 // the loopback-only bind for isolation.
+//
+// BE-3 (S3): when RemoteAddr is present, state-changing requests must
+// come from a loopback peer. Empty RemoteAddr is allowed for in-process
+// httptest and unit tests; production HTTP always supplies it.
+// There is no multi-user unlock password by design — threat model is
+// "trusted single-user machine" (see docs/OPERATOR_RUNBOOK.md).
 func (a *App) withSession(r *http.Request) (string, error) {
 	if isStateChangingMethod(r.Method) {
 		if err := a.validateOrigin(r); err != nil {
+			return "", err
+		}
+		if err := requireLoopbackRemote(r.RemoteAddr); err != nil {
 			return "", err
 		}
 	}
 	return "local", nil
 }
 
+// requireLoopbackRemote rejects non-loopback peers on state-changing calls.
+// Empty remote is treated as in-process / test traffic.
+func requireLoopbackRemote(remoteAddr string) error {
+	remoteAddr = strings.TrimSpace(remoteAddr)
+	if remoteAddr == "" {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	host = strings.Trim(strings.TrimSpace(host), "[]")
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return errors.New("remote address not allowed")
+	}
+	return nil
+}
+
 func (a *App) requireSession(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Opt-in token gate (default off). When enabled, every wrapped /api/*
+		// route requires the HttpOnly session cookie, closing the residual
+		// read-access gap if the app is ever bound beyond loopback.
+		if !a.validateSessionToken(r) {
+			writeError(w, http.StatusUnauthorized, "会话未授权，请从本机首页重新打开。")
+			return
+		}
 		if _, err := a.withSession(r); err != nil {
 			writeError(w, http.StatusForbidden, err.Error())
 			return

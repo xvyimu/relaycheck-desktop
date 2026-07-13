@@ -55,7 +55,7 @@ func (a *App) healthCheckDB(ctx context.Context) HealthCheck {
 func healthCheckPath(id string, label string, path string, wantDir bool) HealthCheck {
 	info, err := os.Stat(path)
 	if err != nil {
-		return HealthCheck{ID: id, Label: label, Status: "error", Message: err.Error()}
+		return HealthCheck{ID: id, Label: label, Status: "error", Message: "路径不可用。"}
 	}
 	if wantDir && !info.IsDir() {
 		return HealthCheck{ID: id, Label: label, Status: "error", Message: "路径存在，但不是目录。"}
@@ -63,7 +63,8 @@ func healthCheckPath(id string, label string, path string, wantDir bool) HealthC
 	if !wantDir && info.IsDir() {
 		return HealthCheck{ID: id, Label: label, Status: "error", Message: "路径存在，但不是文件。"}
 	}
-	return HealthCheck{ID: id, Label: label, Status: "ok", Message: path}
+	// Do not expose absolute filesystem paths on the unauthenticated health API.
+	return HealthCheck{ID: id, Label: label, Status: "ok", Message: "ok"}
 }
 
 func (a *App) healthCheckScheduler() HealthCheck {

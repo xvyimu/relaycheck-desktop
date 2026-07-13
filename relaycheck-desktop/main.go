@@ -47,7 +47,24 @@ func main() {
 
 	mux := http.NewServeMux()
 	app.RegisterRoutes(mux)
-	registerStatic(mux)
+	// Opt-in local session token (BE-14). Enable by setting
+	// RELAYCHECK_REQUIRE_TOKEN=1; the token is generated per process, written
+	// to data/session-token.txt (0600), and enforced on all /api/* except
+	// /api/health. Default off preserves the trusted-single-user flow.
+	if os.Getenv("RELAYCHECK_REQUIRE_TOKEN") == "1" {
+		if token := core.NewSessionToken(); token != "" {
+			app.SetLocalToken(token)
+			tokenPath := filepath.Join(app.DataDir(), "session-token.txt")
+			if err := os.WriteFile(tokenPath, []byte(token), 0o600); err != nil {
+				log.Printf("[token] failed to persist session token: %v", err)
+			} else {
+				log.Printf("[token] session-token enforcement enabled; token file: %s", tokenPath)
+			}
+		} else {
+			log.Print("[token] RNG failed; session-token enforcement NOT enabled")
+		}
+	}
+	registerStatic(mux, app)
 
 	bind := "127.0.0.1"
 	preferredPort := envInt("RELAYCHECK_PORT", 3001)
@@ -115,7 +132,7 @@ func resolveAppRoot() (string, error) {
 	return filepath.Dir(exe), nil
 }
 
-func registerStatic(mux *http.ServeMux) {
+func registerStatic(mux *http.ServeMux, app *core.App) {
 	dist, err := fs.Sub(staticFiles, "frontend/dist")
 	if err != nil {
 		log.Fatal(err)
@@ -138,6 +155,9 @@ func registerStatic(mux *http.ServeMux) {
 			http.Error(w, "frontend is not built", http.StatusInternalServerError)
 			return
 		}
+		// Hand the browser the opt-in session cookie on first load (no-op
+		// unless token enforcement is enabled).
+		app.SetSessionCookieIfEnabled(w)
 		w.Header().Set("content-type", "text/html; charset=utf-8")
 		_, _ = w.Write(index)
 	})

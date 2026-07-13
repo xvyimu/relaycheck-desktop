@@ -80,6 +80,16 @@ func NewNotificationHub(db *sql.DB, crypto CryptoPort, httpPort NotificationHTTP
 	}
 }
 
+// SetDB swaps the underlying DB handle after restore/reopen.
+func (h *NotificationHub) SetDB(db *sql.DB) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.db = db
+}
+
 // Reload re-reads the notification config from the database, stops any
 // running digest goroutine, and starts a new one for digest-mode webhooks.
 func (h *NotificationHub) Reload(ctx context.Context) error {
@@ -138,19 +148,24 @@ func (h *NotificationHub) Reload(ctx context.Context) error {
 			digestCh: make(chan DigestEntry, 100),
 		}
 		if err := ch.Validate(); err != nil {
-			log.Printf("[notification] digest webhook %q 验证失败: %v", entry.Name, err)
+			log.Printf("[notification] digest webhook %q validate failed: %v", entry.Name, err)
 			continue
 		}
 		h.digestChannels[entry.Name] = ch
+	}
+	// One parent cancel stops every digest loop (BE-8).
+	if len(h.digestChannels) > 0 {
 		digestCtx, digestCancel := context.WithCancel(context.Background())
 		h.digestCancel = digestCancel
-		h.digestWG.Add(1)
-		go func(c *WebhookChannel) {
-			defer h.digestWG.Done()
-			c.StartDigestLoop(digestCtx, c.digestCh)
-		}(ch)
+		for _, ch := range h.digestChannels {
+			h.digestWG.Add(1)
+			go func(c *WebhookChannel) {
+				defer h.digestWG.Done()
+				c.StartDigestLoop(digestCtx, c.digestCh)
+			}(ch)
+		}
 	}
-	// 初始化频率限制器
+	// rate limiters
 	for _, entry := range config.Channels {
 		if !entry.Enabled || entry.RateLimit == nil || entry.RateLimit.MaxPerInterval <= 0 {
 			continue

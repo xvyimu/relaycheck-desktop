@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -175,8 +176,51 @@ func TestRequireSessionRejectsCrossOriginStateChangingRequests(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			called = false
 			req := httptest.NewRequest(tc.method, "http://127.0.0.1:3001/api/example", nil)
+			// httptest defaults RemoteAddr to 192.0.2.1; force loopback so BE-3
+			// remote check does not mask Origin assertions.
+			req.RemoteAddr = "127.0.0.1:55123"
 			if tc.origin != "" {
 				req.Header.Set("Origin", tc.origin)
+			}
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if called != tc.wantCalled {
+				t.Fatalf("handler invoked=%v, want %v (status %d)", called, tc.wantCalled, rec.Code)
+			}
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status=%d, want %d", rec.Code, tc.wantStatus)
+			}
+		})
+	}
+}
+
+func TestRequireSessionRejectsInvalidLocalTokenWhenEnabled(t *testing.T) {
+	app := newTestApp(t)
+	app.SetLocalToken("0123456789abcdef")
+
+	called := false
+	handler := app.requireSession(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	cases := []struct {
+		name       string
+		cookie     string
+		wantCalled bool
+		wantStatus int
+	}{
+		{name: "missing token", cookie: "", wantCalled: false, wantStatus: http.StatusUnauthorized},
+		{name: "wrong token", cookie: "bad", wantCalled: false, wantStatus: http.StatusUnauthorized},
+		{name: "matching token", cookie: "0123456789abcdef", wantCalled: true, wantStatus: http.StatusNoContent},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			called = false
+			req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:3001/api/example", nil)
+			if tc.cookie != "" {
+				req.AddCookie(&http.Cookie{Name: sessionTokenCookie, Value: tc.cookie})
 			}
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
@@ -214,3 +258,151 @@ func TestWriteErrorIncludesStableErrorClass(t *testing.T) {
 		t.Fatalf("expected rate_limited, got %q", got)
 	}
 }
+
+func TestRequireSessionRejectsNonLoopbackRemoteOnWrites(t *testing.T) {
+	app := newTestApp(t)
+	app.SetRuntimeAddress("127.0.0.1", 3001)
+
+	called := false
+	handler := app.requireSession(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	cases := []struct {
+		name       string
+		method     string
+		remote     string
+		wantCalled bool
+		wantStatus int
+	}{
+		{name: "POST loopback remote", method: http.MethodPost, remote: "127.0.0.1:55123", wantCalled: true, wantStatus: http.StatusNoContent},
+		{name: "POST empty remote (in-process)", method: http.MethodPost, remote: "", wantCalled: true, wantStatus: http.StatusNoContent},
+		{name: "POST non-loopback remote", method: http.MethodPost, remote: "192.168.1.10:55123", wantCalled: false, wantStatus: http.StatusForbidden},
+		{name: "GET non-loopback remote allowed", method: http.MethodGet, remote: "192.168.1.10:55123", wantCalled: true, wantStatus: http.StatusNoContent},
+		{name: "POST IPv6 loopback", method: http.MethodPost, remote: "[::1]:55123", wantCalled: true, wantStatus: http.StatusNoContent},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			called = false
+			req := httptest.NewRequest(tc.method, "http://127.0.0.1:3001/api/example", nil)
+			req.RemoteAddr = tc.remote
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if called != tc.wantCalled {
+				t.Fatalf("handler invoked=%v, want %v (status %d)", called, tc.wantCalled, rec.Code)
+			}
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status=%d, want %d", rec.Code, tc.wantStatus)
+			}
+		})
+	}
+}
+
+func TestRequireLoopbackRemoteHelper(t *testing.T) {
+	if err := requireLoopbackRemote(""); err != nil {
+		t.Fatalf("empty remote should pass: %v", err)
+	}
+	if err := requireLoopbackRemote("127.0.0.1:1"); err != nil {
+		t.Fatalf("loopback should pass: %v", err)
+	}
+	if err := requireLoopbackRemote("[::1]:1"); err != nil {
+		t.Fatalf("ipv6 loopback should pass: %v", err)
+	}
+	if err := requireLoopbackRemote("10.0.0.1:1"); err == nil {
+		t.Fatal("non-loopback should fail")
+	}
+	if err := requireLoopbackRemote("not-an-ip"); err == nil {
+		t.Fatal("invalid host should fail")
+	}
+}
+
+func TestClampIntAndErrorClassBranches(t *testing.T) {
+	if got := clampInt(5, 10, 1, 3); got != 5 {
+		// min/max swap path (min=1,max=10); value in range
+		t.Fatalf("swap min/max expected 5, got %d", got)
+	}
+	if got := clampInt(0, 10, 1, 0); got != 1 {
+		// fallback 0 out of range after swap → min
+		t.Fatalf("fallback clamp after swap expected 1, got %d", got)
+	}
+	if got := clampInt(0, 2, 8, 4); got != 4 {
+		t.Fatalf("zero uses fallback, got %d", got)
+	}
+	if got := clampInt(1, 2, 8, 4); got != 2 {
+		t.Fatalf("below min clamps to min, got %d", got)
+	}
+	if got := clampInt(99, 2, 8, 4); got != 8 {
+		t.Fatalf("above max clamps to max, got %d", got)
+	}
+	if got := clampInt(5, 2, 8, 4); got != 5 {
+		t.Fatalf("in range preserved, got %d", got)
+	}
+	if got := clampBatchLimit(-1, 0); got != 1 {
+		t.Fatalf("fallback floor, got %d", got)
+	}
+	if got := clampBatchLimit(1, 20); got != 1 {
+		t.Fatalf("valid value under max, got %d", got)
+	}
+
+	cases := map[int]string{
+		http.StatusUnauthorized:   "auth_error",
+		http.StatusForbidden:      "permission_error",
+		http.StatusNotFound:       "not_found",
+		http.StatusMethodNotAllowed: "method_not_allowed",
+		http.StatusConflict:       "conflict",
+		http.StatusTeapot:         "request_error",
+		http.StatusOK:             "unknown_error",
+	}
+	for status, want := range cases {
+		if got := errorClassForStatus(status); got != want {
+			t.Fatalf("status %d: got %q want %q", status, got, want)
+		}
+	}
+}
+
+func TestAnalyticsDaysBounds(t *testing.T) {
+	if got := analyticsDaysBounds(""); got != 30 {
+		t.Fatalf("empty -> 30, got %d", got)
+	}
+	if got := analyticsDaysBounds("abc"); got != 30 {
+		t.Fatalf("invalid -> 30, got %d", got)
+	}
+	if got := analyticsDaysBounds("0"); got != 30 {
+		t.Fatalf("zero -> 30, got %d", got)
+	}
+	if got := analyticsDaysBounds("7"); got != 7 {
+		t.Fatalf("7 preserved, got %d", got)
+	}
+	if got := analyticsDaysBounds("999"); got != 365 {
+		t.Fatalf("over max -> 365, got %d", got)
+	}
+}
+
+func TestSafeRemoteAddrAndRequestIDContext(t *testing.T) {
+	if got := safeRemoteAddr("127.0.0.1:9999"); got != "127.0.0.1" {
+		t.Fatalf("split host, got %q", got)
+	}
+	if got := safeRemoteAddr("bare-host"); got != "bare-host" {
+		t.Fatalf("bare host, got %q", got)
+	}
+	if got := requestIDFromContext(context.Background()); got != "" {
+		t.Fatalf("empty context id, got %q", got)
+	}
+}
+
+func TestAppDataDirAndPortConflictAccessors(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	if app.DataDir() == "" {
+		t.Fatal("DataDir should be non-empty")
+	}
+	app.SetPortConflict(3001, true)
+	// runtimePort / conflict are private; just ensure SetPortConflict does not panic
+	app.SetRuntimeAddress("127.0.0.1", 3002)
+	if !app.allowedHost("127.0.0.1:3002") {
+		t.Fatal("expected new runtime port allowed")
+	}
+}
+

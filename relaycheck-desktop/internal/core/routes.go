@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"strings"
 )
 
@@ -133,8 +134,8 @@ func (a *App) systemStatus(r *http.Request) (SystemStatus, error) {
 		Port:           port,
 		PreferredPort:  preferredPort,
 		PortConflict:   portConflict,
-		DatabasePath:   a.databasePath(),
-		BackupDir:      a.backupsDir(),
+		DatabasePath:   filepath.Base(a.databasePath()),
+		BackupDir:      filepath.Base(a.backupsDir()),
 		NetworkProxy:   a.networkProxyStatus(),
 		Scheduler:      a.buildSchedulerStatus(r.Context()),
 		LastDiagnostics: SystemStatusDiagnostics{

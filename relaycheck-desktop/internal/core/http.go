@@ -72,9 +72,12 @@ func errorClassForStatus(status int) string {
 	return "unknown_error"
 }
 
+const defaultJSONBodyLimit = 8 << 20 // 8 MiB
+
 func decodeJSON(r *http.Request, out interface{}) error {
 	defer r.Body.Close()
-	return json.NewDecoder(r.Body).Decode(out)
+	limited := http.MaxBytesReader(nil, r.Body, defaultJSONBodyLimit)
+	return json.NewDecoder(limited).Decode(out)
 }
 
 func method(w http.ResponseWriter, r *http.Request, expected string) bool {
@@ -247,3 +250,16 @@ func (a *App) runtimePort() int {
 	defer a.mu.RUnlock()
 	return a.port
 }
+
+func queryInt(r *http.Request, name string, fallback int) int {
+	raw := strings.TrimSpace(r.URL.Query().Get(name))
+	if raw == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return n
+}
+
