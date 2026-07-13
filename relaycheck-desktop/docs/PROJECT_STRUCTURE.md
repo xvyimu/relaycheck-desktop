@@ -1,13 +1,13 @@
 # RelayCheck Desktop Project Structure
 
-Last updated: 2026-07-10
+Last updated: 2026-07-13
 
 ## Active Source
 
 | Path | Purpose |
 |------|---------|
-| `main.go` | Desktop entry, embeds `frontend/dist`, starts the local HTTP server. |
-| `internal/core/` | Assembly root: `App` struct, HTTP handlers, routes, SQLite, scheduler, audit, crypto, network, URL safety, checkin/balance execution, system settings, analytics, diagnostics, and forwarding methods to all domain packages. See `internal/core/PACKAGE_INDEX.md` for the file-by-file map. |
+| `main.go` | Desktop entry, embeds `frontend/dist`, resolves the app data root (`RELAYCHECK_DATA_DIR` or exe dir), starts the local HTTP server, and optionally enables local API token enforcement via `RELAYCHECK_REQUIRE_TOKEN=1`. |
+| `internal/core/` | Assembly root: `App` struct, HTTP handlers, routes, SQLite, scheduler, audit, crypto, network, URL safety, checkin/balance execution, system settings, analytics, diagnostics, opt-in local API token enforcement (`session_token.go`), and forwarding methods to all domain packages. See `internal/core/PACKAGE_INDEX.md` for the file-by-file map. |
 | `internal/notifications/` | Notification hub + 6 channel implementations (webhook/telegram/bark/serverchan/email/desktop). |
 | `internal/backup/` | Encrypted zip export/import (PBKDF2-SHA256 + RCZIP2/RCZIP1). |
 | `internal/versioncheck/` | Remote version manifest check + semver compare. |
@@ -18,14 +18,15 @@ Last updated: 2026-07-10
 | `internal/accounts/` | Account CRUD + 5 import paths (Chrome password, admin API, SQLite, legacy config, local NewAPI) + sync preview + auto-detect. |
 | `internal/lock/` | Single-instance lock implementation for Windows and Unix. |
 | `frontend/src/main.tsx` | React application shell and page orchestration. |
-| `frontend/src/components/` | Domain panels (dashboard, channels, sites, accounts, checkins, notifications, settings, onboarding) and shared UI primitives (ThemeToggle, UpdateBanner, TwoFactorGuide, AnalyticsPanel, Empty). |
-| `frontend/src/api/`, `frontend/src/hooks/`, `frontend/src/lib/`, `frontend/src/types/` | Frontend client, resource-group hooks (`useSystemOverview`, `useInventoryData`, `useOpsHealth`, `useModelUsageOverview`), task/channel hooks, formatting/labels/constants/theme, and shared TypeScript types. |
-| `frontend/scripts/verify-navigation.mjs` | Browser smoke test for desktop and mobile navigation surfaces, run through `npm run smoke`. |
+| `frontend/src/components/` | Domain panels (dashboard, channels, sites/accounts merged surface, accounts, checkins, notifications, settings, onboarding) and shared UI primitives (Button, DialogShell, ThemeToggle, UpdateBanner, TwoFactorGuide, AnalyticsPanel, Empty). Settings heavy card UI is split into `frontend/src/components/settings/SettingsCards.tsx`; accounts lists use `pagination-bar.css` for 50/page paging. |
+| `frontend/src/api/`, `frontend/src/hooks/`, `frontend/src/lib/`, `frontend/src/types/` | Frontend client, resource-group hooks (`useSystemOverview`, `useInventoryData`, `useOpsHealth`, `useModelUsageOverview`), task/channel hooks, formatting/labels/constants/theme, `navigation.ts` Action Center intent mapping, `safeExternalUrl.ts` outbound-link sanitization, and shared TypeScript types. |
+| `frontend/scripts/verify-navigation.mjs` | Browser smoke test for Action Center navigation intents. Current expectations follow IA-2: account/balance intents open the merged `站点与账号` tab and render `.accounts-panel` there. Run through `npm run smoke` or via release verification. |
+| `scripts/verify-release.ps1`, `scripts/package-release.ps1`, `scripts/verify-package.ps1` | Release gates: test/lint/build/vet/smoke, Windows binary build, zip packaging, manifest/checksum verification. `verify-release.ps1 -SkipGoVulnCheck` is the offline path when `govulncheck` cannot reach `proxy.golang.org`. |
 | `vendor/` | Vendored Go dependencies used by `go test -mod=vendor` and `go build -mod=vendor`. |
 
 ## Architecture Notes
 
-- **No login layer:** The app runs as a local single-user tool. `requireSession`/`withSession` are passthrough middlewares kept for route registration uniformity. The `app_users` table, bcrypt import, and auth routes have been removed.
+- **Local single-user security model:** The app binds to loopback for a trusted single-user desktop flow. `requireSession`/`withSession` still enforce Host/Origin/loopback write guards, and S4/P2 adds an opt-in HttpOnly local session token (`RELAYCHECK_REQUIRE_TOKEN=1`) for installations that want every wrapped `/api/*` route gated by a per-process cookie. `/api/health` remains unauthenticated. There is no multi-user unlock password by design.
 - **Unified task engine:** `internal/core/task_runner.go` drives all batch operations (checkin, test_keys, refresh_balances, detect_sites) with SSE streaming progress via `/api/tasks/`.
 - **Theme system:** Three-state toggle (system/light/dark) via `frontend/src/lib/theme.ts`, persisted in localStorage, applied via `html.dark` class.
 - **Onboarding wizard:** 4-step first-run guide in `frontend/src/components/onboarding/`, controlled by localStorage flag.
@@ -47,6 +48,9 @@ Last updated: 2026-07-10
 | `DESIGN_SYSTEM.md` | Control Room UI direction and visual rules. |
 | `CLAUDE.md` | AI agent / Claude Code onboarding: architecture, verification, conventions. |
 | `docs/manual-test-record.md` | Manual test record with before/after comparisons. |
+| `docs/code-review-optimization-2026-07-12.md` | Full-stack review (FE/BE/architecture/config). Source of S3/S4/P2 backlog. |
+| `docs/code-review-s4-implementation-2026-07-13.md` | S4 review-item implementation log: FE dialogEpoch/safeExternalUrl, BE openAppDB/settings whitelist/path redaction, CI. |
+| `docs/frontend-optimization-report-2026-07-12.md` | Frontend optimization close-out: theme integrity, DialogShell, idle tabs, lazy panels, Button ghost, tooling. |
 | `docs/reports/` | Generated/local progress reports, ignored by Git. May be absent after slimming. |
 | `docs/superpowers/specs/2026-07-11-layout-optimization-design.md` | Layout optimization design: dashboard/sites/accounts shell diagnosis, scheme α/β, metrics, DoD. |
 | `docs/superpowers/specs/2026-07-11-layout-optimization-plan.md` | Layout optimization implementation slices S1–S6, PR order, verification matrix. |
@@ -80,17 +84,30 @@ Run from `E:\zidqiandao\relaycheck-desktop`:
 ```powershell
 cd frontend
 npm ci
+npx tsc -b
+npm test
+npm run lint
 npm run build
-npx tsc --noEmit
 cd ..
 go vet -mod=vendor ./...
-go test -mod=vendor ./... -count=1 -timeout 120s
+go test -mod=vendor ./internal/... -count=1 -timeout 120s
 go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .
 ```
 
-If browser smoke is needed, start the desktop server first, set `RELAYCHECK_SMOKE_PASSWORD`, then run:
+Release packaging:
+
+```powershell
+# Offline-friendly gate (skips govulncheck when proxy.golang.org is unreachable)
+.\scripts\verify-release.ps1 -SkipGoVulnCheck
+.\scripts\package-release.ps1
+.\scripts\verify-package.ps1 -PackageDir dist\releases\<package-dir>
+```
+
+If browser smoke is needed, start the Vite dev server first, then run:
 
 ```powershell
 cd frontend
 npm run smoke
 ```
+
+CI entry: `.github/workflows/ci.yml` (Windows go cover floor 55% + frontend lint/test/build). Local Windows binary helper: `scripts/build-desktop.ps1`.
