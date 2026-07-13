@@ -33,6 +33,8 @@ export interface ChannelsPanelProps {
   intent?: NavigationIntent | null;
   /** When false, pause auto-fetch (keep-alive inactive tab). */
   active?: boolean;
+  /** Parent bumps on tab change so keep-alive drawers release body scroll-lock. */
+  dialogEpoch?: number;
   /** Inventory channels — avoids dual GET /api/channels. */
   inventoryChannels?: ImportedChannel[];
   /** Inventory accounts — avoids dual GET /api/accounts. */
@@ -53,6 +55,7 @@ function ChannelsPanelBase({
   onRefresh,
   intent,
   active = true,
+  dialogEpoch = 0,
   inventoryChannels,
   inventoryAccounts,
 }: ChannelsPanelProps) {
@@ -61,7 +64,10 @@ function ChannelsPanelBase({
     initialChannels: inventoryChannels,
     initialAccounts: inventoryAccounts,
   });
-  const { refresh: refreshActions, channels, accounts } = actions;
+  const { refresh: refreshActions, channels, accounts, setDrawer } = actions;
+  useEffect(() => {
+    setDrawer(null);
+  }, [dialogEpoch, setDrawer]);
   const filters = useChannelFilters(channels, accounts, intent);
   const health = useApi<ChannelHealthOverview>("/api/channels/health/overview", emptyHealthOverview, {
     enabled: active,

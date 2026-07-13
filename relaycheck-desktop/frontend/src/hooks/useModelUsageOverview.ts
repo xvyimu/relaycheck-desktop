@@ -3,10 +3,11 @@ import { useCallback } from "react";
 import { useApi } from "@/hooks/useApi";
 import type { ModelOverview, ModelPricingOverview, UsageOverview } from "@/types";
 
-export function useModelUsageOverview() {
-  const model = useApi<ModelOverview | null>("/api/models/overview", null);
-  const pricing = useApi<ModelPricingOverview | null>("/api/models/pricing", null);
-  const usage = useApi<UsageOverview | null>("/api/usage/overview", null);
+export function useModelUsageOverview(options: { enabled?: boolean } = {}) {
+  const enabled = options.enabled ?? true;
+  const model = useApi<ModelOverview | null>("/api/models/overview", null, { enabled });
+  const pricing = useApi<ModelPricingOverview | null>("/api/models/pricing", null, { enabled });
+  const usage = useApi<UsageOverview | null>("/api/usage/overview", null, { enabled });
   const { refresh: refreshModel } = model;
   const { refresh: refreshPricing } = pricing;
   const { refresh: refreshUsage } = usage;

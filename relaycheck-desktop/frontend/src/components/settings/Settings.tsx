@@ -1,16 +1,24 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
-import { reopenOnboarding } from "@/components/onboarding/OnboardingWizard";
-import { formatBuildTime, formatBytes, formatTime } from "@/lib/format";
-import { auditActionLabel, auditLevelLabel, diagnosticLevelLabel, schedulerStatusLabel } from "@/lib/labels";
+import { formatBytes } from "@/lib/format";
 import type { AuditLogItem, ChannelHealthScheduleConfig, ExportResult, NetworkProxyConfig, PortCheckResult, ProxyTestResult, SchedulerStatus, StatusPayload, SyncScheduleConfig, SystemBackup, SystemSetting, VersionCheckResult } from "@/types";
-import { EmptyState } from "@/components/ui/empty-state";
-import { StatusLabel } from "@/components/ui/status-label";
 import { SiteSchedules } from "@/components/settings/SiteSchedules";
 import { SettingsBackup } from "@/components/settings/SettingsBackup";
+import {
+  SettingsAboutCard,
+  SettingsAuditLogCard,
+  SettingsChannelHealthScheduleCard,
+  SettingsHelpCard,
+  SettingsJsonEditor,
+  SettingsLegendCard,
+  SettingsPathCard,
+  SettingsPortCheckCard,
+  SettingsSchedulerCard,
+  SettingsSyncScheduleCard,
+  SettingsVersionCheckCard,
+} from "@/components/settings/SettingsCards";
 import { SettingsExportImport } from "@/components/settings/SettingsExportImport";
 import { SettingsProxy } from "@/components/settings/SettingsProxy";
-import { Button } from "@/components/ui/button";
 
 const DEFAULT_PROXY_CONFIG: NetworkProxyConfig = {
   enabled: false,
@@ -31,13 +39,35 @@ const DEFAULT_CHANNEL_HEALTH_SCHEDULE: ChannelHealthScheduleConfig = {
   onlyRisky: false,
 };
 
-function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () => void }) {
+type BusyState = "" | "backup" | "restore" | "settings" | "proxy" | "delete";
+
+function parseSetting<T>(settings: SystemSetting[], key: string, fallback: T): T {
+  const setting = settings.find((item) => item.key === key);
+  if (!setting) return fallback;
+  try {
+    return { ...fallback, ...(JSON.parse(setting.valueJson) as Partial<T>) };
+  } catch {
+    return fallback;
+  }
+}
+
+function parseStringSetting(setting: SystemSetting | undefined) {
+  if (!setting) return "";
+  try {
+    const parsed = JSON.parse(setting.valueJson);
+    return typeof parsed === "string" ? parsed : "";
+  } catch {
+    return setting.valueJson?.replace(/^"|"$/g, "") || "";
+  }
+}
+
+function SettingsBase({ status, onDone, dialogEpoch = 0 }: { status: StatusPayload; onDone: () => void; dialogEpoch?: number }) {
   const [settings, setSettings] = useState<SystemSetting[]>([]);
   const [backups, setBackups] = useState<SystemBackup[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [scheduler, setScheduler] = useState<SchedulerStatus | null>(status.scheduler || null);
   const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState<"" | "backup" | "restore" | "settings" | "proxy" | "delete">("");
+  const [busy, setBusy] = useState<BusyState>("");
   const [proxyTestTarget, setProxyTestTarget] = useState("https://wxls.ccwu.cc/");
   const [proxyTestResult, setProxyTestResult] = useState<ProxyTestResult | null>(null);
   const [multiSelectBackups, setMultiSelectBackups] = useState(false);
@@ -54,52 +84,21 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
   const [exporting, setExporting] = useState(false);
   const [importPassword, setImportPassword] = useState("");
   const [importFileName, setImportFileName] = useState("");
-  const [exports, setExports] = useState<ExportResult[]>([]);
   const [importing, setImporting] = useState(false);
+  const [exports, setExports] = useState<ExportResult[]>([]);
+
   const totalBackupSize = backups.reduce((sum, backup) => sum + backup.sizeBytes, 0);
-  const proxyConfig = useMemo(() => {
-    const setting = settings.find((item) => item.key === "network.proxy");
-    if (!setting) return DEFAULT_PROXY_CONFIG;
-    try {
-      return { ...DEFAULT_PROXY_CONFIG, ...(JSON.parse(setting.valueJson) as Partial<NetworkProxyConfig>) };
-    } catch {
-      return DEFAULT_PROXY_CONFIG;
-    }
-  }, [settings]);
-  const syncSchedule = useMemo(() => {
-    const setting = settings.find((item) => item.key === "sync.schedule");
-    if (!setting) return DEFAULT_SYNC_SCHEDULE;
-    try {
-      return { ...DEFAULT_SYNC_SCHEDULE, ...(JSON.parse(setting.valueJson) as Partial<SyncScheduleConfig>) };
-    } catch {
-      return DEFAULT_SYNC_SCHEDULE;
-    }
-  }, [settings]);
-  const channelHealthSchedule = useMemo(() => {
-    const setting = settings.find((item) => item.key === "channel.health.schedule");
-    if (!setting) return DEFAULT_CHANNEL_HEALTH_SCHEDULE;
-    try {
-      return {
-        ...DEFAULT_CHANNEL_HEALTH_SCHEDULE,
-        ...(JSON.parse(setting.valueJson) as Partial<ChannelHealthScheduleConfig>),
-      };
-    } catch {
-      return DEFAULT_CHANNEL_HEALTH_SCHEDULE;
-    }
-  }, [settings]);
+  const proxyConfig = useMemo(() => parseSetting(settings, "network.proxy", DEFAULT_PROXY_CONFIG), [settings]);
+  const syncSchedule = useMemo(() => parseSetting(settings, "sync.schedule", DEFAULT_SYNC_SCHEDULE), [settings]);
+  const channelHealthSchedule = useMemo(
+    () => parseSetting(settings, "channel.health.schedule", DEFAULT_CHANNEL_HEALTH_SCHEDULE),
+    [settings],
+  );
   const checkinJob = scheduler?.jobs.find((job) => job.key === "checkin.daily");
-  const syncJob = scheduler?.jobs.find((job) => job.key === "sync.local_newapi");
-  const channelHealthJob = scheduler?.jobs.find((job) => job.key === "channel.health_probe");
-  const versionCheckURLSetting = settings.find((item) => item.key === "app.version_check_url");
-  const currentVersionCheckURL = useMemo(() => {
-    if (!versionCheckURLSetting) return "";
-    try {
-      const parsed = JSON.parse(versionCheckURLSetting.valueJson);
-      return typeof parsed === "string" ? parsed : "";
-    } catch {
-      return versionCheckURLSetting.valueJson?.replace(/^"|"$/g, "") || "";
-    }
-  }, [versionCheckURLSetting]);
+  const currentVersionCheckURL = useMemo(
+    () => parseStringSetting(settings.find((item) => item.key === "app.version_check_url")),
+    [settings],
+  );
 
   function upsertSetting(key: string, valueJson: string) {
     setSettings((current) => {
@@ -114,19 +113,16 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
   }
 
   function updateProxyConfig(patch: Partial<NetworkProxyConfig>) {
-    const nextConfig = { ...proxyConfig, ...patch };
-    upsertSetting("network.proxy", JSON.stringify(nextConfig));
+    upsertSetting("network.proxy", JSON.stringify({ ...proxyConfig, ...patch }));
     setProxyTestResult(null);
   }
 
   function updateSyncSchedule(patch: Partial<SyncScheduleConfig>) {
-    const nextConfig = { ...syncSchedule, ...patch };
-    upsertSetting("sync.schedule", JSON.stringify(nextConfig));
+    upsertSetting("sync.schedule", JSON.stringify({ ...syncSchedule, ...patch }));
   }
 
   function updateChannelHealthSchedule(patch: Partial<ChannelHealthScheduleConfig>) {
-    const nextConfig = { ...channelHealthSchedule, ...patch };
-    upsertSetting("channel.health.schedule", JSON.stringify(nextConfig));
+    upsertSetting("channel.health.schedule", JSON.stringify({ ...channelHealthSchedule, ...patch }));
   }
 
   function toggleBackupSelection(fileName: string) {
@@ -148,10 +144,6 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
       setAuditLogs(nextAuditLogs);
       setExports(nextExports || []);
     } catch (err) {
-      // refresh() is called via `void` on mount and after backup/restore
-      // operations; without this catch a failure of any of the four
-      // unguarded api() calls surfaces as an unhandled rejection and the
-      // panel silently keeps stale data with no error message.
       setMessage(err instanceof Error ? `加载设置失败：${err.message}` : "加载设置失败");
     }
   }
@@ -172,8 +164,7 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
   }
 
   async function restoreBackup(backup: SystemBackup) {
-    const confirmed = window.confirm("确认从 " + backup.fileName + " 恢复数据库？程序会先自动备份当前数据库，然后恢复该快照。恢复后建议刷新页面。");
-    if (!confirmed) return;
+    if (!window.confirm("确认从 " + backup.fileName + " 恢复数据库？程序会先自动备份当前数据库，然后恢复该快照。恢复后建议刷新页面。")) return;
     setBusy("restore");
     setMessage("正在恢复 " + backup.fileName + "…");
     try {
@@ -193,8 +184,7 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
 
   async function deleteSelectedBackups() {
     if (!selectedBackups.length) return;
-    const confirmed = window.confirm("确认删除选中的 " + selectedBackups.length + " 个本地备份？这不会影响当前数据库，但删除后这些快照无法恢复。");
-    if (!confirmed) return;
+    if (!window.confirm("确认删除选中的 " + selectedBackups.length + " 个本地备份？这不会影响当前数据库，但删除后这些快照无法恢复。")) return;
     setBusy("delete");
     setMessage("正在删除选中的备份…");
     try {
@@ -213,9 +203,7 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
   }
 
   async function persistSettings(nextSettings = settings) {
-    for (const setting of nextSettings) {
-      JSON.parse(setting.valueJson);
-    }
+    for (const setting of nextSettings) JSON.parse(setting.valueJson);
     const result = await api<{ updated: number }>("/api/system/settings", {
       method: "PUT",
       body: JSON.stringify({ settings: nextSettings }),
@@ -257,13 +245,83 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
     }
   }
 
-  useEffect(() => {
-    void refresh();
-  }, []);
+  async function checkVersion() {
+    setVersionChecking(true);
+    setVersionCheckResult(null);
+    try {
+      if (versionCheckURL !== currentVersionCheckURL) {
+        upsertSetting("app.version_check_url", JSON.stringify(versionCheckURL));
+        await api("/api/system/settings", {
+          method: "PUT",
+          body: JSON.stringify({ settings: [{ key: "app.version_check_url", valueJson: JSON.stringify(versionCheckURL) }] }),
+        });
+      }
+      const result = await api<VersionCheckResult>("/api/system/version-check");
+      setVersionCheckResult(result);
+    } catch (error) {
+      setVersionCheckResult({
+        currentVersion: status.productVersion,
+        updateAvailable: false,
+        checkedAt: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "检查失败",
+      });
+    } finally {
+      setVersionChecking(false);
+    }
+  }
 
-  useEffect(() => {
-    setVersionCheckURL(currentVersionCheckURL);
-  }, [currentVersionCheckURL]);
+  async function checkPort() {
+    setPortChecking(true);
+    setPortCheckResult(null);
+    try {
+      const result = await api<PortCheckResult>(`/api/system/port-check?port=${encodeURIComponent(portCheckPort)}`);
+      setPortCheckResult(result);
+    } catch {
+      setPortCheckResult({ port: Number(portCheckPort) || 0, available: false, inUse: false, error: "检测失败" });
+    } finally {
+      setPortChecking(false);
+    }
+  }
+
+  async function exportDatabase() {
+    setExporting(true);
+    setExportResult(null);
+    try {
+      const result = await api<ExportResult>("/api/system/export", {
+        method: "POST",
+        body: JSON.stringify({ password: exportPassword }),
+      });
+      setExportResult(result);
+      setExportPassword("");
+      setMessage("加密导出成功");
+      setExports((await api<ExportResult[]>("/api/system/exports")) || []);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "导出失败");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function importDatabase() {
+    if (!window.confirm("导入将覆盖当前数据库，确定继续？")) return;
+    setImporting(true);
+    try {
+      await api("/api/system/import", {
+        method: "POST",
+        body: JSON.stringify({ password: importPassword, fileName: importFileName }),
+      });
+      setMessage("导入成功，正在刷新…");
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "导入失败");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  useEffect(() => { setShowHelpGuide(false); }, [dialogEpoch]);
+  useEffect(() => { void refresh(); }, []);
+  useEffect(() => { setVersionCheckURL(currentVersionCheckURL); }, [currentVersionCheckURL]);
 
   return (
     <section className="panel">
@@ -273,220 +331,37 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
           <h2>本地数据安全与运行配置</h2>
           <p>备份只保存在本机 data/backups 目录。恢复前会自动创建当前数据库快照，避免误操作不可回退。</p>
         </div>
-        <button disabled={busy !== ""} onClick={() => void createBackup()}>
-          {busy === "backup" ? "备份中…" : "立即备份数据库"}
-        </button>
+        <button disabled={busy !== ""} onClick={() => void createBackup()}>{busy === "backup" ? "备份中…" : "立即备份数据库"}</button>
       </div>
 
       <div className="channel-summary">
-        <div>
-          <span>运行端口</span>
-          <strong>{status.port}</strong>
-        </div>
-        <div>
-          <span>备份数量</span>
-          <strong>{backups.length}</strong>
-        </div>
-        <div>
-          <span>备份占用</span>
-          <strong>{formatBytes(totalBackupSize)}</strong>
-        </div>
-        <div>
-          <span>未读通知</span>
-          <strong>{status.summary.unreadNotifications}</strong>
-        </div>
+        <div><span>运行端口</span><strong>{status.port}</strong></div>
+        <div><span>备份数量</span><strong>{backups.length}</strong></div>
+        <div><span>备份占用</span><strong>{formatBytes(totalBackupSize)}</strong></div>
+        <div><span>未读通知</span><strong>{status.summary.unreadNotifications}</strong></div>
       </div>
 
       <div className="settings-grid">
-        <article className="card settings-about-card">
-          <div className="section-heading">
-            <div>
-              <strong>关于 / 版本</strong>
-              <span>{status.productName} &middot; {status.productVersion}</span>
-            </div>
-            <span className="status-pill success"><StatusLabel level="success" label="正式版" /></span>
-          </div>
-          <div className="detail-list">
-            <div><span>显示名</span><strong>{status.productName}</strong></div>
-            <div><span>版本</span><strong>{status.productVersion}</strong></div>
-            <div><span>构建时间</span><strong>{formatBuildTime(status.buildTime)}</strong></div>
-            <div><span>绑定地址</span><strong>{status.bindAddress}:{status.port}</strong></div>
-            {status.portConflict && status.preferredPort ? (
-              <div className="warning-banner" style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, fontSize: 13 }}>
-                <span>端口冲突</span>
-                <strong>首选端口 {status.preferredPort} 被占用，已回退到 {status.port}</strong>
-              </div>
-            ) : null}
-            <div><span>调度器</span><strong>{scheduler ? `${scheduler.jobs.length} 个任务 &middot; ${schedulerStatusLabel(checkinJob?.status || "idle")}` : "读取中"}</strong></div>
-            <div>
-              <span>上次自检</span>
-              <strong>{status.lastDiagnostics ? `${diagnosticLevelLabel(status.lastDiagnostics.overall)} &middot; ${status.lastDiagnostics.itemCount} 项 &middot; ${formatTime(status.lastDiagnostics.generatedAt)}` : "未生成"}</strong>
-            </div>
-          </div>
-        </article>
-
-        <article className="card settings-version-check-card">
-          <div className="section-heading">
-            <div>
-              <strong>版本检查</strong>
-              <span>检查是否有新版本可用</span>
-            </div>
-          </div>
-          <div className="proxy-form-grid">
-            <label className="field">
-              <span>版本清单 URL</span>
-              <input
-                value={versionCheckURL}
-                onChange={(event) => setVersionCheckURL(event.target.value)}
-                onBlur={() => {
-                  if (versionCheckURL !== currentVersionCheckURL) {
-                    upsertSetting("app.version_check_url", JSON.stringify(versionCheckURL));
-                  }
-                }}
-                placeholder="https://example.com/relaycheck-version.json"
-              />
-            </label>
-            <button
-              type="button"
-              disabled={versionChecking}
-              onClick={async () => {
-                setVersionChecking(true);
-                setVersionCheckResult(null);
-                try {
-                  if (versionCheckURL !== currentVersionCheckURL) {
-                    upsertSetting("app.version_check_url", JSON.stringify(versionCheckURL));
-                    await api("/api/system/settings", {
-                      method: "PUT",
-                      body: JSON.stringify({ settings: [{ key: "app.version_check_url", valueJson: JSON.stringify(versionCheckURL) }] }),
-                    });
-                  }
-                  const result = await api<VersionCheckResult>("/api/system/version-check");
-                  setVersionCheckResult(result);
-                } catch (error) {
-                  setVersionCheckResult({
-                    currentVersion: status.productVersion,
-                    updateAvailable: false,
-                    checkedAt: new Date().toISOString(),
-                    error: error instanceof Error ? error.message : "检查失败",
-                  });
-                } finally {
-                  setVersionChecking(false);
-                }
-              }}
-            >
-              {versionChecking ? "检查中…" : "检查更新"}
-            </button>
-          </div>
-          {versionCheckResult ? (
-            <div className="detail-list" style={{ marginTop: 8 }}>
-              <div><span>当前版本</span><strong>{versionCheckResult.currentVersion}</strong></div>
-              {versionCheckResult.latestVersion ? (
-                <div><span>最新版本</span><strong>{versionCheckResult.latestVersion}</strong></div>
-              ) : null}
-              <div>
-                <span>状态</span>
-                <strong>
-                  {versionCheckResult.error
-                    ? versionCheckResult.error
-                    : versionCheckResult.updateAvailable
-                      ? "有新版本可用"
-                      : "已是最新版本"}
-                </strong>
-              </div>
-              {versionCheckResult.updateAvailable && versionCheckResult.releaseUrl ? (
-                <div>
-                  <span>下载</span>
-                  <strong>
-                    <a href={versionCheckResult.releaseUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--v4-blue)" }}>
-                      打开下载页面
-                    </a>
-                  </strong>
-                </div>
-              ) : null}
-              {versionCheckResult.releaseNotes ? (
-                <div style={{ marginTop: 4, padding: "8px 12px", background: "var(--v4-neutral-bg)", borderRadius: 8, fontSize: 13, whiteSpace: "pre-wrap" }}>
-                  {versionCheckResult.releaseNotes}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          <div className="problem-hint detail-hint">
-            配置版本清单 URL 后，可检查远程是否有新版本。清单格式: {"{ \"version\": \"v1.1\", \"releaseUrl\": \"...\", \"releaseNotes\": \"...\" }"}
-          </div>
-        </article>
-
-        <article className="card settings-port-check-card">
-          <div className="section-heading">
-            <div>
-              <strong>端口检测</strong>
-              <span>检查本地端口是否可绑定</span>
-            </div>
-          </div>
-          <div className="proxy-form-grid">
-            <label className="field">
-              <span>端口号</span>
-              <input
-                value={portCheckPort}
-                onChange={(event) => setPortCheckPort(event.target.value)}
-                placeholder="如 3001"
-              />
-            </label>
-            <button
-              type="button"
-              disabled={portChecking}
-              onClick={async () => {
-                setPortChecking(true);
-                setPortCheckResult(null);
-                try {
-                  const result = await api<PortCheckResult>(`/api/system/port-check?port=${encodeURIComponent(portCheckPort)}`);
-                  setPortCheckResult(result);
-                } catch {
-                  setPortCheckResult({ port: Number(portCheckPort) || 0, available: false, inUse: false, error: "检测失败" });
-                } finally {
-                  setPortChecking(false);
-                }
-              }}
-            >
-              {portChecking ? "检测中…" : "检测端口"}
-            </button>
-          </div>
-          {portCheckResult ? (
-            <div className="detail-list">
-              <div>
-                <span>端口</span>
-                <strong>{portCheckResult.port}</strong>
-              </div>
-              <div>
-                <span>状态</span>
-                <strong>
-                  {portCheckResult.available
-                    ? "可用（未被占用）"
-                    : portCheckResult.inUse
-                      ? "已被占用"
-                      : "检测失败"}
-                </strong>
-              </div>
-              {portCheckResult.error ? (
-                <div><span>详情</span><strong>{portCheckResult.error}</strong></div>
-              ) : null}
-            </div>
-          ) : null}
-          <div className="problem-hint detail-hint">
-            启动前检测端口可避免端口冲突。当前运行端口为 {status.port}。
-          </div>
-        </article>
-
-        <article className="card settings-path-card">
-          <strong>本地路径</strong>
-          <div className="detail-list">
-            <div><span>数据库</span><strong>{status.databasePath}</strong></div>
-            <div><span>备份目录</span><strong>{status.backupDir}</strong></div>
-            <div><span>架构</span><strong>{status.architecture}</strong></div>
-            <div><span>代理</span><strong>{status.networkProxy?.enabled ? status.networkProxy.urlMasked : "未启用"}</strong></div>
-          </div>
-          <div className="problem-hint detail-hint">建议在大量导入、批量识别、批量签到前先点一次"立即备份数据库"。</div>
-        </article>
-
+        <SettingsAboutCard status={status} scheduler={scheduler} checkinJob={checkinJob} />
+        <SettingsVersionCheckCard
+          status={status}
+          versionCheckURL={versionCheckURL}
+          currentVersionCheckURL={currentVersionCheckURL}
+          versionChecking={versionChecking}
+          versionCheckResult={versionCheckResult}
+          onURLChange={setVersionCheckURL}
+          onPersistURL={() => upsertSetting("app.version_check_url", JSON.stringify(versionCheckURL))}
+          onCheck={() => void checkVersion()}
+        />
+        <SettingsPortCheckCard
+          status={status}
+          portCheckPort={portCheckPort}
+          portChecking={portChecking}
+          portCheckResult={portCheckResult}
+          onPortChange={setPortCheckPort}
+          onCheck={() => void checkPort()}
+        />
+        <SettingsPathCard status={status} />
         <SettingsExportImport
           exportPassword={exportPassword}
           importPassword={importPassword}
@@ -498,92 +373,11 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
           onExportPasswordChange={setExportPassword}
           onImportPasswordChange={setImportPassword}
           onImportFileNameChange={setImportFileName}
-          onExport={async () => {
-            setExporting(true);
-            setExportResult(null);
-            try {
-              const result = await api<ExportResult>("/api/system/export", {
-                method: "POST",
-                body: JSON.stringify({ password: exportPassword }),
-              });
-              setExportResult(result);
-              setExportPassword("");
-              setMessage("加密导出成功");
-              const list = await api<ExportResult[]>("/api/system/exports");
-              setExports(list || []);
-            } catch (error) {
-              setMessage(error instanceof Error ? error.message : "导出失败");
-            } finally {
-              setExporting(false);
-            }
-          }}
-          onImport={async () => {
-            if (!confirm("导入将覆盖当前数据库，确定继续？")) return;
-            setImporting(true);
-            try {
-              await api("/api/system/import", {
-                method: "POST",
-                body: JSON.stringify({ password: importPassword, fileName: importFileName }),
-              });
-              setMessage("导入成功，正在刷新…");
-              setTimeout(() => window.location.reload(), 1500);
-            } catch (error) {
-              setMessage(error instanceof Error ? error.message : "导入失败");
-            } finally {
-              setImporting(false);
-            }
-          }}
+          onExport={() => void exportDatabase()}
+          onImport={() => void importDatabase()}
         />
-        <article className="card settings-help-card">
-          <div className="section-heading">
-            <div>
-              <strong>帮助 / 文档</strong>
-              <span>把常用说明集中在本地设置页，避免需要翻目录才知道下一步。</span>
-            </div>
-            <div className="toolbar compact-toolbar">
-              <Button variant="ghost" type="button" onClick={() => setShowHelpGuide((current) => !current)}>
-                {showHelpGuide ? "收起" : "查看指引"}
-              </Button>
-              <Button variant="ghost" type="button" onClick={reopenOnboarding}>
-                重新查看引导
-              </Button>
-            </div>
-          </div>
-          <div className="detail-list">
-            <div><span>使用说明</span><strong>relaycheck-desktop/README.md</strong></div>
-            <div><span>总清单</span><strong>relaycheck-desktop/PROMPT_CHECKLIST.md</strong></div>
-            <div><span>设计规则</span><strong>relaycheck-desktop/DESIGN_SYSTEM.md</strong></div>
-            <div><span>接力说明</span><strong>relaycheck-desktop/AGENT_HANDOFF.md</strong></div>
-          </div>
-          {showHelpGuide ? (
-            <div className="detail-stack">
-              <div className="problem-hint detail-hint">新手路径：先去"本机扫描"导入 NewAPI，再到"账号"补授权或 API Key，最后在"签到"和"余额"验证一次。</div>
-              <div className="note">遇到异常优先看"总览"的处理建议中心；做批量操作前先在本页创建数据库备份。</div>
-            </div>
-          ) : null}
-        </article>
-
-        <article className="card settings-legend-card">
-          <div className="section-heading">
-            <div>
-              <strong>能力图例</strong>
-              <span>常驻解释后台、Key、模型和价格 chip，减少状态只靠颜色判断。</span>
-            </div>
-          </div>
-          <div className="chips">
-            <span>NEW = NewAPI</span>
-            <span>ONE = OneAPI</span>
-            <span>SUB = Sub2API</span>
-            <span>MOD = 魔改中转</span>
-          </div>
-          <div className="detail-list">
-            <div><span>Key 有效</span><strong>已读取 /v1/models 且密钥可用</strong></div>
-            <div><span>模型可用</span><strong>最小 chat completion 测试通过</strong></div>
-            <div><span>raw_json</span><strong>来自 NewAPI 渠道原始配置的回退识别</strong></div>
-            <div><span>live</span><strong>使用渠道 Key 实时请求上游模型列表</strong></div>
-          </div>
-        </article>
-
+        <SettingsHelpCard showHelpGuide={showHelpGuide} onToggle={() => setShowHelpGuide((current) => !current)} />
+        <SettingsLegendCard />
         <SettingsProxy
           proxyConfig={proxyConfig}
           proxyTestTarget={proxyTestTarget}
@@ -596,147 +390,24 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
           onTest={() => void testProxy()}
           onReset={() => updateProxyConfig(DEFAULT_PROXY_CONFIG)}
         />
-        <article className="card settings-sync-card">
-          <div className="section-heading">
-            <div>
-              <strong>同步频率</strong>
-              <span>默认每 30 分钟同步一次本地 NewAPI 数据；后台调度器会读取这里的配置。</span>
-            </div>
-            <span className={"status-pill " + (syncSchedule.enabled ? "success" : "neutral")}>
-              <StatusLabel level={syncSchedule.enabled ? "enabled" : "disabled"} label={syncSchedule.enabled ? "已启用" : "未启用"} />
-            </span>
-          </div>
-          <div className="proxy-toggle-row">
-            <label className="check">
-              <input type="checkbox" checked={syncSchedule.enabled} onChange={(event) => updateSyncSchedule({ enabled: event.target.checked })} />
-              启用定时同步
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={syncSchedule.runOnStartup} onChange={(event) => updateSyncSchedule({ runOnStartup: event.target.checked })} />
-              启动后同步一次
-            </label>
-          </div>
-          <div className="proxy-form-grid">
-            <label className="field">
-              <span>同步间隔（分钟）</span>
-              <input type="number" min={5} max={1440} value={syncSchedule.intervalMinutes}
-                onChange={(event) => updateSyncSchedule({ intervalMinutes: Math.max(5, Number(event.target.value) || 30) })} />
-            </label>
-            <label className="field">
-              <span>同步模式</span>
-              <select value={syncSchedule.mode} onChange={(event) => updateSyncSchedule({ mode: event.target.value })}>
-                <option value="local-newapi">本地 NewAPI 实例</option>
-                <option value="manual-only">只手动同步</option>
-              </select>
-            </label>
-          </div>
-          <div className="problem-hint detail-hint">后台同步默认不导入渠道 Key、不做重探测，只更新渠道结构和源端移除状态；失败才发重要通知。</div>
-          <div className="proxy-actions">
-            <button disabled={busy !== "" || !settings.length} onClick={() => void saveSettings()}>
-              {busy === "settings" ? "保存中…" : "保存同步频率"}
-            </button>
-          </div>
-        </article>
-
-        <article className="card settings-sync-card">
-          <div className="section-heading">
-            <div>
-              <strong>渠道健康探测</strong>
-              <span>定期刷新中转站识别、站点健康、渠道模型状态，并把异常推送到处理中心。</span>
-            </div>
-            <span className={"status-pill " + (channelHealthSchedule.enabled ? "success" : "neutral")}>
-              <StatusLabel level={channelHealthSchedule.enabled ? "enabled" : "disabled"} label={channelHealthSchedule.enabled ? "已启用" : "未启用"} />
-            </span>
-          </div>
-          <div className="proxy-toggle-row">
-            <label className="check">
-              <input type="checkbox" checked={channelHealthSchedule.enabled} onChange={(event) => updateChannelHealthSchedule({ enabled: event.target.checked })} />
-              启用自动探测
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={channelHealthSchedule.runOnStartup} onChange={(event) => updateChannelHealthSchedule({ runOnStartup: event.target.checked })} />
-              启动后立即探测
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={channelHealthSchedule.onlyRisky} onChange={(event) => updateChannelHealthSchedule({ onlyRisky: event.target.checked })} />
-              只探测风险站点
-            </label>
-          </div>
-          <div className="proxy-form-grid">
-            <label className="field">
-              <span>探测间隔（分钟）</span>
-              <input type="number" min={5} max={1440} value={channelHealthSchedule.intervalMinutes}
-                onChange={(event) => updateChannelHealthSchedule({ intervalMinutes: Math.max(5, Number(event.target.value) || 60) })} />
-            </label>
-            <label className="field">
-              <span>单次站点上限</span>
-              <input type="number" min={1} max={50} value={channelHealthSchedule.limit}
-                onChange={(event) => updateChannelHealthSchedule({ limit: Math.min(50, Math.max(1, Number(event.target.value) || 20)) })} />
-            </label>
-          </div>
-          <div className="problem-hint detail-hint">调度器会复用渠道页的“探测健康”流程，发现站点不可达、模型同步失败或 Key 状态异常时记录预警。</div>
-          <div className="proxy-actions">
-            <button disabled={busy !== "" || !settings.length} onClick={() => void saveSettings()}>
-              {busy === "settings" ? "保存中…" : "保存健康探测计划"}
-            </button>
-            <Button variant="ghost" disabled={busy !== ""} onClick={() => updateChannelHealthSchedule(DEFAULT_CHANNEL_HEALTH_SCHEDULE)}>恢复默认</Button>
-          </div>
-        </article>
-
-        <article className="card scheduler-card">
-          <div className="section-heading">
-            <div>
-              <strong>后台调度器</strong>
-              <span>{scheduler ? ("状态刷新于 " + formatTime(scheduler.generatedAt)) : "读取自动签到和同步运行状态"}</span>
-            </div>
-            <Button variant="ghost" disabled={busy !== ""} onClick={() => void refresh()}>刷新</Button>
-          </div>
-          <div className="scheduler-job-grid">
-            {[
-              { key: "checkin.daily", fallback: "自动签到", job: checkinJob },
-              { key: "sync.local_newapi", fallback: "NewAPI 定时同步", job: syncJob },
-              { key: "channel.health_probe", fallback: "渠道健康探测", job: channelHealthJob },
-            ].map(({ key, fallback, job }) => (
-              <article className={"scheduler-job " + (job?.status || "idle")} key={key}>
-                <div>
-                  <span>{job?.label || fallback}</span>
-                  <strong><StatusLabel level={job?.status || "idle"} label={schedulerStatusLabel(job?.status || "idle")} /></strong>
-                </div>
-                <div className="scheduler-job-meta">
-                  <span>下次 {formatTime(job?.nextRunAt || "")}</span>
-                  <span>上次 {formatTime(job?.lastFinishedAt || job?.lastStartedAt || "")}</span>
-                  {job?.summary ? <span>{job.summary}</span> : null}
-                  {job?.lastError ? <span className="danger-text">{job.lastError}</span> : null}
-                </div>
-              </article>
-            ))}
-          </div>
-        </article>
-
+        <SettingsSyncScheduleCard
+          syncSchedule={syncSchedule}
+          busy={busy === "settings"}
+          canSave={Boolean(settings.length)}
+          onPatch={updateSyncSchedule}
+          onSave={() => void saveSettings()}
+        />
+        <SettingsChannelHealthScheduleCard
+          channelHealthSchedule={channelHealthSchedule}
+          busy={busy === "settings"}
+          canSave={Boolean(settings.length)}
+          defaultConfig={DEFAULT_CHANNEL_HEALTH_SCHEDULE}
+          onPatch={updateChannelHealthSchedule}
+          onSave={() => void saveSettings()}
+        />
+        <SettingsSchedulerCard scheduler={scheduler} busy={busy !== ""} onRefresh={() => void refresh()} />
         <SiteSchedules />
-
-        <article className="card audit-log-card">
-          <div className="section-heading">
-            <div>
-              <strong>审计日志</strong>
-              <span>最近 {Math.min(auditLogs.length, 12)} 条安全与维护事件，只读留痕。</span>
-            </div>
-            <Button variant="ghost" disabled={busy !== ""} onClick={() => void refresh()}>刷新</Button>
-          </div>
-          <div className="list compact audit-log-list">
-            {auditLogs.slice(0, 12).map((item) => (
-              <article className={"detail-row audit-row " + item.level} key={item.id}>
-                <div>
-                  <strong>{auditActionLabel(item.action)}</strong>
-                  <span>{item.summary} {"·"} {formatTime(item.createdAt)}</span>
-                </div>
-                <b><StatusLabel level={item.level} label={auditLevelLabel(item.level)} /></b>
-              </article>
-            ))}
-            {!auditLogs.length ? <EmptyState title="暂无审计记录" description="登录、设置、备份、账号和站点维护会在这里留下只读记录。" /> : null}
-          </div>
-        </article>
-
+        <SettingsAuditLogCard auditLogs={auditLogs} busy={busy !== ""} onRefresh={() => void refresh()} />
         <SettingsBackup
           backups={backups}
           busy={busy === "delete" || busy === "restore"}
@@ -750,33 +421,7 @@ function SettingsBase({ status, onDone }: { status: StatusPayload; onDone: () =>
         />
       </div>
 
-      <article className="card">
-        <div className="section-heading">
-          <div>
-            <strong>系统设置 JSON</strong>
-            <span>轻量保存扫描目标、签到计划和本地运行偏好。保存前会校验 JSON 格式。</span>
-          </div>
-          <button disabled={busy !== "" || !settings.length} onClick={() => void saveSettings()}>
-            {busy === "settings" ? "保存中…" : "保存设置"}
-          </button>
-        </div>
-        <div className="settings-list">
-          {settings.map((setting, index) => (
-            <label className="settings-editor" key={setting.key}>
-              <span>{setting.key} {"·"} 更新于 {formatTime(setting.updatedAt)}</span>
-              <textarea
-                value={setting.valueJson}
-                onChange={(event) => {
-                  const next = [...settings];
-                  next[index] = { ...setting, valueJson: event.target.value };
-                  setSettings(next);
-                }}
-              />
-            </label>
-          ))}
-          {!settings.length ? <EmptyState title="正在读取设置" description="默认设置会在首次启动时自动初始化。" /> : null}
-        </div>
-      </article>
+      <SettingsJsonEditor settings={settings} busy={busy === "settings"} onSave={() => void saveSettings()} onChange={setSettings} />
       {message ? <div className="note">{message}</div> : null}
     </section>
   );

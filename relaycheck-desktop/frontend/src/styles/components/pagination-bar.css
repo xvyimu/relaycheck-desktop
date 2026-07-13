@@ -1,0 +1,13 @@
+/* Pagination bar for account list and other paginated grids. */
+.pagination-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0;
+}
+.pagination-bar span {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}

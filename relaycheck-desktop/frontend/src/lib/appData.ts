@@ -7,8 +7,9 @@ export interface RefreshableState {
   refresh: () => Promise<void>;
 }
 
-export function appIsInitialLoading(system: LoadState, inventory: LoadState, ops: LoadState) {
-  return !system.loaded || !inventory.loaded || !ops.loaded;
+/** Shell can appear after system (health+status) is ready; inventory/ops hydrate after. */
+export function appIsInitialLoading(system: LoadState, _inventory?: LoadState, _ops?: LoadState) {
+  return !system.loaded;
 }
 
 export async function refreshAppData(

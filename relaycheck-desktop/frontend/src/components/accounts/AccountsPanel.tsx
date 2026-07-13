@@ -18,8 +18,11 @@ export interface AccountsPanelProps {
   intent?: NavigationIntent | null;
 }
 
+const ACCOUNTS_PER_PAGE = 50;
+
 function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanelProps) {
   const [detailAccount, setDetailAccount] = useState<Account | null>(null);
+  const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>(() =>
     intent?.accountStatus === "problem" ? "problem" : "all",
   );
@@ -49,6 +52,9 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
     }
     if (typeof intent.query === "string") setQuery(intent.query);
   }, [intent]);
+  // Reset page when filters change.
+  useEffect(() => { setPage(0); }, [statusFilter, siteFilter, query]);
+
 
   const handleDone = useCallback(async () => {
     await onRefresh();
@@ -101,6 +107,11 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
     setQuery("");
   }
 
+  const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / ACCOUNTS_PER_PAGE));
+  const pageAccounts = useMemo(() => {
+    const start = page * ACCOUNTS_PER_PAGE;
+    return filteredAccounts.slice(start, start + ACCOUNTS_PER_PAGE);
+  }, [filteredAccounts, page]);
   const hasActiveFilter = statusFilter !== "all" || siteFilter !== "all" || query.trim() !== "";
   const selectedSiteName =
     siteFilter === "all" ? "" : siteOptions.find((site) => site.id === siteFilter)?.name || siteFilter;
@@ -177,7 +188,7 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
         ) : null}
       </div>
       <div className="account-grid">
-        {filteredAccounts.map((account) => (
+        {pageAccounts.map((account) => (
           <AccountCard
             account={account}
             key={account.id}
@@ -193,8 +204,20 @@ function AccountsPanelBase({ accounts, sites, onRefresh, intent }: AccountsPanel
                 : "No accounts match current filters."
             }
           />
+
         ) : null}
       </div>
+      {filteredAccounts.length > ACCOUNTS_PER_PAGE ? (
+        <div className="pagination-bar">
+          <Button variant="ghost" type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>
+            上一页
+          </Button>
+          <span>第 {page + 1} / {totalPages} 页 · 共 {filteredAccounts.length} 个</span>
+          <Button variant="ghost" type="button" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+            下一页
+          </Button>
+        </div>
+      ) : null}
       <DialogShell
         open={Boolean(detailAccount)}
         onClose={() => setDetailAccount(null)}

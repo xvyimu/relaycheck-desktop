@@ -40,6 +40,8 @@ function PanelFallback() {
 
 function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
+  // Bump when tab changes so keep-alive panels close open dialogs (scroll-lock).
+  const [dialogEpoch, setDialogEpoch] = useState(0);
   const [navigationIntent, setNavigationIntent] = useState<NavigationIntent | null>(null);
   // Keep visited panels mounted (filters/scroll). Non-pinned idle tabs drop after TTL.
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(["dashboard"]));
@@ -50,7 +52,7 @@ function App() {
   const system = useSystemOverview();
   const inventory = useInventoryData();
   const ops = useOpsHealth();
-  const modelUsage = useModelUsageOverview();
+  const modelUsage = useModelUsageOverview({ enabled: system.loaded });
 
   useEffect(() => {
     const cleanup = initTheme();
@@ -91,7 +93,10 @@ function App() {
     (nextTab: TabKey, intent?: Omit<NavigationIntent, "target">) => {
       if (!TABS.some((item) => item.key === nextTab)) return;
       const target = nextTab as Tab;
-      setTab(target);
+      setTab((prev) => {
+        if (prev !== target) setDialogEpoch((n) => n + 1);
+        return target;
+      });
       setNavigationIntent({ target, ...intent });
       markVisited(target);
     },
@@ -100,7 +105,10 @@ function App() {
 
   const handleTabChange = useCallback(
     (nextTab: Tab) => {
-      setTab(nextTab);
+      setTab((prev) => {
+        if (prev !== nextTab) setDialogEpoch((n) => n + 1);
+        return nextTab;
+      });
       // Sidebar clicks clear residual rich intent from handleNavigate.
       setNavigationIntent(null);
       markVisited(nextTab);
@@ -169,6 +177,7 @@ function App() {
                 onRefresh={reload}
                 intent={navigationIntent?.target === "channels" ? navigationIntent : null}
                 active={tab === "channels"}
+                dialogEpoch={dialogEpoch}
                 inventoryChannels={inventory.channels}
                 inventoryAccounts={inventory.accounts}
               />
@@ -184,6 +193,7 @@ function App() {
                 onRefresh={reload}
                 intent={navigationIntent?.target === "sites" ? navigationIntent : null}
                 onNavigate={handleNavigate}
+                dialogEpoch={dialogEpoch}
               />
             </Suspense>
           </div>
@@ -220,7 +230,7 @@ function App() {
         {visitedTabs.has("settings") ? (
           <div style={{ display: show("settings") }} aria-hidden={tab !== "settings"} inert={tab !== "settings"}>
             <Suspense fallback={<PanelFallback />}>
-              {system.status ? <SettingsPanel status={system.status} onDone={reload} /> : <Empty message="正在加载设置…" />}
+              {system.status ? <SettingsPanel status={system.status} onDone={reload} dialogEpoch={dialogEpoch} /> : <Empty message="正在加载设置…" />}
             </Suspense>
           </div>
         ) : null}

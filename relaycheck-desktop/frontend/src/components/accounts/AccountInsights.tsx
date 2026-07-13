@@ -154,8 +154,12 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
 
   useEffect(() => {
     let cancelled = false;
+    if (!expanded) {
+      return;
+    }
     if (!keyAccounts.length) {
       setModelOverview(null);
+      setPricingOverview(null);
       setKeyExportPreview(null);
       return;
     }
@@ -178,7 +182,7 @@ export function AccountInsights({ accounts, onDone, onModelFilter }: { accounts:
     return () => {
       cancelled = true;
     };
-  }, [keyAccounts.length, validKeyAccounts.length, usableModelAccounts.length, totalKnownModels]);
+  }, [expanded, keyAccounts.length, validKeyAccounts.length, usableModelAccounts.length, totalKnownModels]);
 
   async function testSingleKey(account: Account) {
     if (keyTestBusyId) return;

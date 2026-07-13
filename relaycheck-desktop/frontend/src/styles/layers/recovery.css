@@ -1,8 +1,12 @@
 /* ===== recovery.css (cascade pad) =====
- * CASCADE ORDER (styles.css): tokens → base → layout → domains → control-room →
- * radical-v4 → mobile → recovery (this file) → drawers.
+ * CASCADE ORDER (styles.css — single source of truth):
+ *   tokens -> base -> layout -> domains -> control-room(-finishing) ->
+ *   radical-v4 -> mobile -> recovery (this file) -> drawers.
  * Rules here win on equal specificity. Prefer deleting dead reasserts over adding.
- * FE-4 (2026-07-12): slim duplicate .muted-only block; keep product recovery rules.
+ * FE-4 (2026-07-12): slim duplicate .muted-only block.
+ * FE-4 (2026-07-13 S3): cascade documented; stub layers (control-room-redesign /
+ *   layout-harmonization / linear-calibration) are NOT imported — history only in git.
+ * Do not re-import stubs; do not move recovery earlier without visual smoke.
  */
 /* Global form controls (input/select/textarea/font:inherit) live in base.css — not reasserted here. */
 

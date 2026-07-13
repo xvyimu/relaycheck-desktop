@@ -3,14 +3,24 @@ import { describe, expect, it, vi } from "vitest";
 import { appIsInitialLoading, refreshAppData } from "@/lib/appData";
 
 describe("app data orchestration", () => {
-  it("does not show the startup loading screen after the initial data load", () => {
+  it("shows shell after system load even if inventory still loading", () => {
     expect(
       appIsInitialLoading(
-        { loaded: true, loading: true },
-        { loaded: true, loading: true },
         { loaded: true, loading: false },
+        { loaded: false, loading: true },
+        { loaded: false, loading: true },
       ),
     ).toBe(false);
+  });
+
+  it("keeps startup screen until system is loaded", () => {
+    expect(
+      appIsInitialLoading(
+        { loaded: false, loading: true },
+        { loaded: true, loading: false },
+        { loaded: true, loading: false },
+      ),
+    ).toBe(true);
   });
 
   it("includes model usage data in the global refresh", async () => {

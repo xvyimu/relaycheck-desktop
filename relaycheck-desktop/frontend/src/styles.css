@@ -1,3 +1,4 @@
+/* FE-4 cascade (S3): tokens->base->layout->domains->control-room->radical-v4->mobile->recovery->drawers. Stub layer files under styles/layers/* are not imported. */
 @import "tailwindcss";
 
 @import "./styles/tokens.css";
@@ -22,3 +23,5 @@
 @import "./styles/domains/analytics.css";
 @import "./styles/layers/recovery.css";
 @import "./styles/components/drawers.css";
+
+@import "./styles/components/pagination-bar.css";

@@ -22,6 +22,7 @@ type SitesPanelProps = {
   onRefresh: () => Promise<void>;
   intent?: NavigationIntent | null;
   onNavigate?: (tab: TabKey, intent?: Omit<NavigationIntent, "target">) => void;
+  dialogEpoch?: number;
 };
 
 function isUnhealthy(status: string) {
@@ -43,10 +44,13 @@ function siteLoginDiscovery(site: UpstreamSite, detection?: SiteDetail["detectio
   );
 }
 
-function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate }: SitesPanelProps) {
+function SitesPanelBase({ sites, accounts, onRefresh, intent, onNavigate, dialogEpoch = 0 }: SitesPanelProps) {
   const [busyId, setBusyId] = useState("");
   const [detailBusyId, setDetailBusyId] = useState("");
   const [detail, setDetail] = useState<SiteDetail | null>(null);
+  useEffect(() => {
+    setDetail(null);
+  }, [dialogEpoch]);
   const [message, setMessage] = useState("");
   const [healthFilter, setHealthFilter] = useState<string>("all");
   const [query, setQuery] = useState("");

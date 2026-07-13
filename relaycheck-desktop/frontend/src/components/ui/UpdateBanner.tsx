@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import type { VersionCheckResult } from "@/types";
 import { Button } from "@/components/ui/button";
+import { safeExternalUrl } from "@/lib/safeExternalUrl";
 
 const DISMISS_KEY = "rc.updateBanner.dismissedVersion";
 
@@ -36,6 +37,7 @@ export function UpdateBanner() {
   if (dismissed && dismissed === (result.latestVersion || "")) return null;
 
   const latest = result.latestVersion || "新版本";
+  const releaseHref = safeExternalUrl(result.releaseUrl);
 
   const handleDismiss = () => {
     const version = result.latestVersion || "";
@@ -60,12 +62,12 @@ export function UpdateBanner() {
         </div>
       </div>
       <div className="update-banner-actions">
-        {result.releaseUrl ? (
+        {releaseHref ? (
           <a
             className="update-banner-link"
-            href={result.releaseUrl}
+            href={releaseHref}
             target="_blank"
-            rel="noreferrer"
+            rel="noreferrer noopener"
           >
             查看更新
           </a>

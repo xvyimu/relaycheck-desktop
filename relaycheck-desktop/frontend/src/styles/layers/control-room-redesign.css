@@ -1,4 +1,4 @@
-/* DEPRECATED 2026-07-12: rules live in control-room.css (redesign + linear).
+/* DEPRECATED — Delete after 2026-08-13 if still unused in styles.css. 2026-07-12: rules live in control-room.css (redesign + linear).
  * This file is intentionally empty so accidental dual-import cannot re-apply styles.
  * Source history remains in git. Former path: layers/control-room-redesign.css
  */
