@@ -3,13 +3,13 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-16 (FE-4/BE-2 accounts page+summary+search-index landed; verified; commit/push pending auth)
+**Last updated:** 2026-07-16 (FE-4/BE-2 committed+pushed `5147d2b`; SSH main synced)
 
 ---
 
 ## ⏳ TODO (next session)
 
-1. [ ] **Commit + push FE-4/BE-2 dirty tree** — 账号分页/摘要/search-index + 通知分页等已实现并通过本地 gates；**等用户确认后再 commit/push**。SSH: `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`。勿因 stale `origin/main` 误判 ahead。
+1. [x] **Commit + push FE-4/BE-2** — `5147d2b` via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`；`origin/main` 已 fetch 对齐。
 2. [ ] **可选 re-release** — 本机 Go **1.26.4** vs gate/`.go-version` **1.26.5**；发布前对齐或在 release note 标明。
 3. [x] **Push product work / re-release bdb4767 / docs tip 24d9ed4** — 历史已完成（见下方）。
 
@@ -20,7 +20,7 @@ Read this first, then `CLAUDE.md` for architecture.
   - FE: `useInventoryData` → summary only；`useAccountsPage` + `AccountsPanel` 服务端分页；`useChannelActions`/`useChannelFilters` 改 search-index；`useSiteAccounts` 改 page API；Dashboard 用 accountTotal/problemTotal
   - Gates: `go test -mod=vendor -count=1 ./internal/core/ ./internal/accounts/` PASS · frontend `tsc` 0 · `npm test` 271 · `lint` 0
   - 有意保留: `GET /api/accounts` 兼容；`POST /api/accounts` 创建；站点主从 limit=200/page
-  - **未 commit / 未 push**（用户授权后再动 git）
+  - **已 commit/push:** `5147d2b` (2026-07-16)
 
 
 - [x] **Completion audit (2026-07-13)** — current-state verification rerun after handoff status correction
@@ -73,7 +73,7 @@ git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main
 ## Current state
 
 Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **IA-2** (accounts tab physically merged into 站点与账号), **#8.3 channel-sync UI**, **#9 Phase 2 bulk re-login**, **#8.4/#8.2**, **Action Center site sample deep-links**, **#9 R2 session indicator**, and **2026-07-12 frontend optimization + S0–S2 review** are on branch `main`.  
-**Committed local/remote tip:** `24d9ed4` (SSH remote synced). Working tree has **uncommitted** FE-4/BE-2 + related review fixes (notifications page, prettier noise, etc.). Do not push until authorized. Local `origin/main` tracking may still look stale at `91b9f40`.
+**Committed local/remote tip:** `24d9ed4` (SSH remote synced). **Committed/remote tip:** `5147d2b` (FE-4/BE-2 + review follow-ups). Working tree should be clean after push. Optional next: re-release (note Go 1.26.4 vs 1.26.5).
 
 ### P2 三项落地 (2026-07-13) — done
 
