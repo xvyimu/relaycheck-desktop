@@ -3,17 +3,24 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-16 (FE-4/BE-2 committed+pushed `5147d2b`; SSH main synced)
+**Last updated:** 2026-07-17 (review follow-ups: format/budget/action-center/usage/SSRF/site truncate)
 
 ---
 
 ## ⏳ TODO (next session)
 
-1. [x] **Commit + push FE-4/BE-2** — `5147d2b` via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`；`origin/main` 已 fetch 对齐。
-2. [ ] **可选 re-release** — 本机 Go **1.26.4** vs gate/`.go-version` **1.26.5**；发布前对齐或在 release note 标明。
-3. [x] **Push product work / re-release bdb4767 / docs tip 24d9ed4** — 历史已完成（见下方）。
+1. [x] **Commit + push FE-4/BE-2** — 5147d2b already on SSH main.
+2. [x] **2026-07-16 review follow-ups (2026-07-17)** — Prettier CI; Action Center COUNT batch; usage per-account window; search-index cap; list Deprecation; SSRF resolve+redirect pin; site truncate UI; bundle budget CI; runbook token ACL. Local Go still 1.26.4 (release wants 1.26.5).
+3. [ ] **Optional re-release** — upgrade Go to 1.26.5 then verify-release + package-release.
 
 **已完成（勿重做）**
+
+- [x] **2026-07-16 full-stack review follow-ups (2026-07-17)** — 见 
+  - FE-A Prettier 3 文件；FE-E 站点 truncated 提示；FE-C Insights 标明当前页
+  - BE-B Action Center 零参 COUNT 批量子查询；BE-C usage ROW_NUMBER 每账号2快照；BE-D list Deprecation；BE-H search-index SUBSTR 4k；BE-E resolveOutboundHTTPURL + redirect pin
+  - CF-C  + CI step；CF-E runbook token ACL
+  - Gates: go internal PASS · frontend format/lint/tsc · tests 273 · build+budget OK
+
 
 - [x] **FE-4 / BE-2 accounts scale-out (2026-07-16)** — 启动不再全量 `/api/accounts`
   - BE: `internal/core/accounts_page.go` → `/api/accounts/page` (cursor+filters+totals) · `/api/accounts/summary` · `/api/accounts/search-index`；`routes.go`/`models.go`；`accounts_list_test.go` 覆盖 cursor/filter/summary/index

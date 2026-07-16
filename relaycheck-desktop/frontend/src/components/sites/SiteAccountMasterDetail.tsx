@@ -216,7 +216,10 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
                 <span className="eyebrow">当前站点</span>
                 <strong title={selectedSite.name}>{selectedSite.name}</strong>
                 <p>
-                  {selectedSite.kind || "unknown"} · {selectedSite.healthStatus || "未知"} · {accounts.length} 账号
+                  {selectedSite.kind || "unknown"} · {selectedSite.healthStatus || "未知"} ·{" "}
+                  {siteScoped.truncated
+                    ? `显示 ${accounts.length}/${siteScoped.total} 账号`
+                    : `${accounts.length} 账号`}
                   {siteScoped.loading ? " · 加载中…" : ""}
                 </p>
               </div>
@@ -253,6 +256,11 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
             ))}
             {!accounts.length ? (
               <Empty message={siteScoped.loading ? "正在按站点加载账号…" : "该站点下暂无账号。"} />
+            ) : null}
+            {siteScoped.truncated ? (
+              <Empty
+                message={`该站共 ${siteScoped.total} 个账号，当前仅加载前 ${accounts.length} 个。请到「全部账号」并筛选此站点查看其余账号。`}
+              />
             ) : null}
           </div>
         ) : null}

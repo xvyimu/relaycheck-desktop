@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -250,11 +251,18 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 		},
 	}
 
-	for _, query := range queries {
-		count, err := a.queryActionCount(r, query.countSQL, query.args)
-		if err != nil {
-			return ActionCenter{}, err
-		}
+	countSQL := make([]string, len(queries))
+	countArgs := make([][]interface{}, len(queries))
+	for i, query := range queries {
+		countSQL[i] = query.countSQL
+		countArgs[i] = query.args
+	}
+	counts, err := a.queryActionCountsBatched(r, countSQL, countArgs)
+	if err != nil {
+		return ActionCenter{}, err
+	}
+	for index, query := range queries {
+		count := counts[index]
 		if count <= 0 {
 			continue
 		}
@@ -296,19 +304,14 @@ func (a *App) buildSetupActionItems(r *http.Request) ([]ActionItem, error) {
 		accounts       int
 		checkinLogs    int
 	}{}
-	queries := []struct {
-		target *int
-		sql    string
-	}{
-		{&counts.localInstances, `SELECT COUNT(*) FROM local_newapi_instances`},
-		{&counts.channels, `SELECT COUNT(*) FROM imported_channels`},
-		{&counts.accounts, `SELECT COUNT(*) FROM channel_accounts`},
-		{&counts.checkinLogs, `SELECT COUNT(*) FROM checkin_logs`},
-	}
-	for _, query := range queries {
-		if err := a.db.QueryRowContext(r.Context(), query.sql).Scan(query.target); err != nil {
-			return nil, err
-		}
+	if err := a.db.QueryRowContext(r.Context(), `
+		SELECT
+			(SELECT COUNT(*) FROM local_newapi_instances),
+			(SELECT COUNT(*) FROM imported_channels),
+			(SELECT COUNT(*) FROM channel_accounts),
+			(SELECT COUNT(*) FROM checkin_logs)
+	`).Scan(&counts.localInstances, &counts.channels, &counts.accounts, &counts.checkinLogs); err != nil {
+		return nil, err
 	}
 
 	switch {
@@ -385,6 +388,54 @@ func (a *App) queryActionCount(r *http.Request, query string, args []interface{}
 	err := a.db.QueryRowContext(r.Context(), query, args...).Scan(&count)
 	return count, err
 }
+
+// queryActionCountsBatched folds zero-arg COUNT queries into one multi-subquery
+// SELECT, cutting Action Center cold-path SQLite round-trips from O(n) to ~1+k
+// (k = queries with bind args). Sample SELECTs still run only for count > 0.
+func (a *App) queryActionCountsBatched(r *http.Request, countSQL []string, args [][]interface{}) ([]int, error) {
+	if len(countSQL) != len(args) {
+		return nil, errors.New("action count batch size mismatch")
+	}
+	counts := make([]int, len(countSQL))
+	type batchSlot struct {
+		index int
+		sql   string
+	}
+	var batch []batchSlot
+	for i, sql := range countSQL {
+		if len(args[i]) == 0 {
+			batch = append(batch, batchSlot{index: i, sql: sql})
+			continue
+		}
+		n, err := a.queryActionCount(r, sql, args[i])
+		if err != nil {
+			return nil, err
+		}
+		counts[i] = n
+	}
+	if len(batch) == 0 {
+		return counts, nil
+	}
+	var b strings.Builder
+	b.WriteString("SELECT ")
+	for i, slot := range batch {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("(")
+		b.WriteString(slot.sql)
+		b.WriteString(")")
+	}
+	dests := make([]interface{}, len(batch))
+	for i := range batch {
+		dests[i] = &counts[batch[i].index]
+	}
+	if err := a.db.QueryRowContext(r.Context(), b.String()).Scan(dests...); err != nil {
+		return nil, err
+	}
+	return counts, nil
+}
+
 
 func (a *App) queryActionSamples(r *http.Request, query string, args []interface{}, entityType string) ([]ActionSample, error) {
 	rows, err := a.db.QueryContext(r.Context(), query, args...)

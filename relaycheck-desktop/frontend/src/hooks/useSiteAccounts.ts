@@ -4,19 +4,22 @@ import { api } from "@/api/client";
 import { buildAccountsPageUrl } from "@/hooks/useAccountsPage";
 import type { Account, AccountPage } from "@/types";
 
+/** Default page size for site master-detail (server page API). */
+export const SITE_ACCOUNTS_PAGE_LIMIT = 200;
+
 /** Site-scoped accounts URL via /api/accounts/page (no startup full list). */
-export function accountsListUrl(upstreamSiteId?: string | null): string {
+export function accountsListUrl(upstreamSiteId?: string | null, limit = SITE_ACCOUNTS_PAGE_LIMIT): string {
   const id = (upstreamSiteId || "").trim();
   if (!id || id === "all") {
-    return buildAccountsPageUrl({ limit: 200 });
+    return buildAccountsPageUrl({ limit });
   }
-  return buildAccountsPageUrl({ limit: 200, upstreamSiteId: id });
+  return buildAccountsPageUrl({ limit, upstreamSiteId: id });
 }
 
 /**
  * Site-scoped accounts fetch (α S3 / FE-4).
  * When siteFilter is "all", enabled=false and data stays null.
- * When a site is selected, fetches that site's page (limit 200) without loading global inventory accounts.
+ * When a site is selected, fetches that site's page without loading global inventory accounts.
  */
 export function useSiteAccounts(upstreamSiteId: string) {
   const siteId = (upstreamSiteId || "").trim();
@@ -24,6 +27,8 @@ export function useSiteAccounts(upstreamSiteId: string) {
   const url = enabled ? accountsListUrl(siteId) : null;
 
   const [data, setData] = useState<Account[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -33,6 +38,8 @@ export function useSiteAccounts(upstreamSiteId: string) {
   const refresh = useCallback(async () => {
     if (!url) {
       setData(null);
+      setTotal(0);
+      setTruncated(false);
       setLoading(false);
       setError("");
       setLoaded(false);
@@ -49,7 +56,10 @@ export function useSiteAccounts(upstreamSiteId: string) {
     try {
       const result = await api<AccountPage>(url, { signal: controller.signal });
       if (controller.signal.aborted || requestId !== requestIdRef.current) return;
-      setData(result.items || []);
+      const items = result.items || [];
+      setData(items);
+      setTotal(result.total ?? items.length);
+      setTruncated(Boolean(result.nextCursor) || (result.total ?? 0) > items.length);
       setLoaded(true);
     } catch (err) {
       if (controller.signal.aborted || requestId !== requestIdRef.current) return;
@@ -72,13 +82,15 @@ export function useSiteAccounts(upstreamSiteId: string) {
   useEffect(() => {
     if (!enabled) {
       setData(null);
+      setTotal(0);
+      setTruncated(false);
       setLoaded(false);
       setError("");
       setLoading(false);
     }
   }, [enabled]);
 
-  return { data, loading, loaded, error, enabled, refresh, url };
+  return { data, total, truncated, loading, loaded, error, enabled, refresh, url };
 }
 
 export type SiteAccountsState = ReturnType<typeof useSiteAccounts>;

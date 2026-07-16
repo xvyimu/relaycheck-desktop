@@ -84,6 +84,7 @@ function ChannelsPanelBase({
   }, [active, inventoryChannels, refreshActions]);
 
   const refreshAll = useCallback(async () => {
+    // Domain refresh first; inventory reload is secondary for this panel.
     await refreshActions();
     await refreshHealth();
     await onRefresh();

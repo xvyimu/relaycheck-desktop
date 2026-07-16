@@ -232,10 +232,10 @@ func (a *App) loadAccountSearchIndex(ctx context.Context) ([]AccountSearchIndexI
 	return cachedRead(a, "accounts-search-index", shortReadCacheTTL, func() ([]AccountSearchIndexItem, error) {
 		rows, err := a.db.QueryContext(ctx, `
 			SELECT s.id, s.name, s.base_url,
-			       COALESCE(GROUP_CONCAT(
+			       COALESCE(SUBSTR(GROUP_CONCAT(
 			         TRIM(COALESCE(a.display_name, '') || ' ' || COALESCE(a.email, '') || ' ' || COALESCE(a.username, '')),
 			         ' '
-			       ), '')
+			       ), 1, 4000), '')
 			FROM upstream_sites s
 			LEFT JOIN channel_accounts a ON a.upstream_site_id = s.id
 			GROUP BY s.id, s.name, s.base_url

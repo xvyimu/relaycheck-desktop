@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
+    "budget:check": "node scripts/check-bundle-budget.mjs dist/assets",
     "preview": "vite preview --host 127.0.0.1",
     "smoke": "node scripts/verify-navigation.mjs",
     "smoke:schedules": "node scripts/verify-site-schedules-layout.mjs",

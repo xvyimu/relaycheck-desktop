@@ -28,8 +28,8 @@ import { Button } from "@/components/ui/button";
 
 const API_KEY_STALE_MS = 24 * 60 * 60 * 1000;
 const UNSUPPORTED_CLEANUP_LIMIT = 10;
-const LABELS_TEST_KEYS = { title: "批量测试 Key" } as const;
-const LABELS_REFRESH_BALANCE = { title: "批量刷新余额" } as const;
+const LABELS_TEST_KEYS = { title: "批量测试 Key（当前页）" } as const;
+const LABELS_REFRESH_BALANCE = { title: "批量刷新余额（当前页）" } as const;
 
 function isStaleAPIKeyCheck(account: Account) {
   if (!account.apiKeyFingerprint) return false;
@@ -105,6 +105,7 @@ function downloadJSON(fileName: string, body: string) {
   URL.revokeObjectURL(url);
 }
 
+/** Bulk insights operate on the accounts array passed in (current page only). */
 export function AccountInsights({
   accounts,
   onDone,

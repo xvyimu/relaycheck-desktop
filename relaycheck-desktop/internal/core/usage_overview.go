@@ -70,14 +70,28 @@ func (a *App) handleUsageOverview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) buildUsageOverview(ctx context.Context) (usageOverview, error) {
+	// Two newest snapshots per account (window) so trend/daily-use stay correct
+	// when the global snapshot table grows past a hard LIMIT.
 	rows, err := a.db.QueryContext(ctx, `
-		SELECT b.account_id, a.display_name, b.upstream_site_id, s.name,
-		       b.balance, b.unit, b.created_at
-		FROM balance_snapshots b
-		JOIN channel_accounts a ON a.id = b.account_id
-		JOIN upstream_sites s ON s.id = b.upstream_site_id
-		ORDER BY b.account_id ASC, b.created_at DESC
-		LIMIT 1000
+		SELECT account_id, display_name, upstream_site_id, site_name, balance, unit, created_at
+		FROM (
+			SELECT b.account_id AS account_id,
+			       a.display_name AS display_name,
+			       b.upstream_site_id AS upstream_site_id,
+			       s.name AS site_name,
+			       b.balance AS balance,
+			       b.unit AS unit,
+			       b.created_at AS created_at,
+			       ROW_NUMBER() OVER (
+					PARTITION BY b.account_id
+					ORDER BY b.created_at DESC, b.id DESC
+			       ) AS rn
+			FROM balance_snapshots b
+			JOIN channel_accounts a ON a.id = b.account_id
+			JOIN upstream_sites s ON s.id = b.upstream_site_id
+		)
+		WHERE rn <= 2
+		ORDER BY account_id ASC, created_at DESC
 	`)
 	if err != nil {
 		return usageOverview{}, err

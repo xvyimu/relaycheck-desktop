@@ -110,30 +110,18 @@ function AccountsPanelBase({ sites, onRefresh, intent }: AccountsPanelProps) {
           </label>
           <label className="field">
             <span>状态</span>
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-            >
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="all">全部</option>
               <option value="problem">异常账号</option>
             </select>
           </label>
           <label className="field">
             <span>搜索</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="账号名、邮箱、站点"
-            />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="账号名、邮箱、站点" />
           </label>
         </div>
         <div className="toolbar">
-          <Button
-            variant="ghost"
-            type="button"
-            onClick={clearFilters}
-            disabled={!hasActiveFilter}
-          >
+          <Button variant="ghost" type="button" onClick={clearFilters} disabled={!hasActiveFilter}>
             清除筛选
           </Button>
         </div>
@@ -151,11 +139,7 @@ function AccountsPanelBase({ sites, onRefresh, intent }: AccountsPanelProps) {
               </strong>
               <span>服务端分页查询，仅加载当前页数据。</span>
             </div>
-            <Button
-              variant="ghost"
-              type="button"
-              onClick={clearFilters}
-            >
+            <Button variant="ghost" type="button" onClick={clearFilters}>
               清除
             </Button>
           </div>

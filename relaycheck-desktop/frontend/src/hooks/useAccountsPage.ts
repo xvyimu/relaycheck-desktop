@@ -71,31 +71,34 @@ export function useAccountsPage(options: UseAccountsPageOptions = {}): UseAccoun
   const requestIdRef = useRef(0);
   const filtersRef = useRef({ limit, query, status, upstreamSiteId });
 
-  const fetchPage = useCallback(async (nextCursor: string | undefined) => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const requestId = ++requestIdRef.current;
+  const fetchPage = useCallback(
+    async (nextCursor: string | undefined) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const requestId = ++requestIdRef.current;
 
-    setLoading(true);
-    setError("");
-    try {
-      const result = await api<AccountPage>(
-        buildAccountsPageUrl({ limit, query, status, upstreamSiteId, cursor: nextCursor }),
-        { signal: controller.signal },
-      );
-      if (controller.signal.aborted || requestId !== requestIdRef.current) return;
-      setPage(result);
-      setLoaded(true);
-    } catch (err) {
-      if (controller.signal.aborted || requestId !== requestIdRef.current) return;
-      setError(err instanceof Error ? err.message : "加载账号分页失败");
-    } finally {
-      if (!controller.signal.aborted && requestId === requestIdRef.current) {
-        setLoading(false);
+      setLoading(true);
+      setError("");
+      try {
+        const result = await api<AccountPage>(
+          buildAccountsPageUrl({ limit, query, status, upstreamSiteId, cursor: nextCursor }),
+          { signal: controller.signal },
+        );
+        if (controller.signal.aborted || requestId !== requestIdRef.current) return;
+        setPage(result);
+        setLoaded(true);
+      } catch (err) {
+        if (controller.signal.aborted || requestId !== requestIdRef.current) return;
+        setError(err instanceof Error ? err.message : "加载账号分页失败");
+      } finally {
+        if (!controller.signal.aborted && requestId === requestIdRef.current) {
+          setLoading(false);
+        }
       }
-    }
-  }, [limit, query, status, upstreamSiteId]);
+    },
+    [limit, query, status, upstreamSiteId],
+  );
 
   const refresh = useCallback(async () => {
     await fetchPage(cursor);

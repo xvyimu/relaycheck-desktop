@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -137,7 +138,17 @@ func (a *App) doHTTPWithTimeout(req *http.Request, timeout time.Duration) (*http
 	if a != nil {
 		policy = a.externalURLPolicy()
 	}
-	client := newNetworkHTTPClient(timeout, a.currentNetworkProxyConfig(), policy)
+	var cfg NetworkProxyConfig
+	if a != nil {
+		cfg = a.currentNetworkProxyConfig()
+	}
+	// Preflight SSRF validation (hostname/IP policy).
+	if req != nil && req.URL != nil && strings.TrimSpace(req.URL.Host) != "" {
+		if _, err := resolveOutboundHTTPURL(req.Context(), req.URL.String(), policy); err != nil {
+			return nil, err
+		}
+	}
+	client := newNetworkHTTPClient(timeout, cfg, policy)
 	return client.Do(req)
 }
 
@@ -151,11 +162,39 @@ func (a *App) DoHTTPWithTimeout(req *http.Request, timeout time.Duration) (*http
 func newNetworkHTTPClient(timeout time.Duration, config NetworkProxyConfig, policy outboundURLPolicy) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = proxyURLForRequest(config)
+	var pinMu sync.Mutex
+	pinned := map[string][]net.IP{}
+	baseDialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	baseDial := transport.DialContext
+	if baseDial == nil {
+		baseDial = baseDialer.DialContext
+	}
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, err
+		}
+		pinMu.Lock()
+		ips := append([]net.IP(nil), pinned[strings.ToLower(host)]...)
+		pinMu.Unlock()
+		if len(ips) > 0 {
+			var lastErr error
+			for _, ip := range ips {
+				conn, err := baseDial(ctx, network, net.JoinHostPort(ip.String(), port))
+				if err == nil {
+					return conn, nil
+				}
+				lastErr = err
+			}
+			return nil, lastErr
+		}
+		return baseDial(ctx, network, address)
+	}
 	return &http.Client{
 		Timeout:   timeout,
 		Transport: transport,
-		// Re-validate every redirect hop so a public 302 cannot smuggle traffic
-		// to loopback / link-local / private networks after the first DNS check.
+		// Re-validate every redirect hop and pin non-local resolved IPs so a
+		// public 302 cannot rebind to loopback/metadata after the first check.
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return errors.New("stopped after 5 redirects")
@@ -163,8 +202,17 @@ func newNetworkHTTPClient(timeout time.Duration, config NetworkProxyConfig, poli
 			if req.URL == nil {
 				return errors.New("redirect missing URL")
 			}
-			if _, err := validateOutboundHTTPURL(req.Context(), req.URL.String(), policy); err != nil {
+			resolved, err := resolveOutboundHTTPURL(req.Context(), req.URL.String(), policy)
+			if err != nil {
 				return fmt.Errorf("redirect target rejected: %w", err)
+			}
+			host := strings.ToLower(strings.TrimSpace(resolved.URL.Hostname()))
+			// Only pin when policy forbids local targets; allow-local loopback
+			// hosts keep default dial behavior for NewAPI-on-localhost.
+			if !policy.AllowLocal && len(resolved.IPs) > 0 {
+				pinMu.Lock()
+				pinned[host] = append([]net.IP(nil), resolved.IPs...)
+				pinMu.Unlock()
 			}
 			return nil
 		},

@@ -185,3 +185,16 @@ Record at least the following:
 - Manual critical-flow result
 - First-hour monitoring result
 - Any accepted warnings, with owner and follow-up
+
+
+## Hardened local token (optional)
+
+Set `RELAYCHECK_REQUIRE_TOKEN=1` on multi-user machines. Token is written to `data/session-token.txt`.
+
+On Windows, verify ACL after first start:
+
+```powershell
+Get-Acl .\data\session-token.txt | Format-List
+```
+
+Expect only the current user (and SYSTEM) to have read access. If inherited ACEs are too broad, tighten with `icacls`.

@@ -23,6 +23,9 @@ func (a *App) handleAccounts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) listAccounts(w http.ResponseWriter, r *http.Request) {
+	// Deprecated compatibility list. Prefer /api/accounts/page for cursor pagination.
+	w.Header().Set("Deprecation", "true")
+	w.Header().Set("Link", "</api/accounts/page>; rel=\"successor-version\"")
 	// Honor optional ?upstreamSiteId= and ?limit= (default 500, max 1000).
 	// Cache key is scoped by siteId+limit so filtered/unfiltered do not poison each other.
 	siteID := strings.TrimSpace(r.URL.Query().Get("upstreamSiteId"))
