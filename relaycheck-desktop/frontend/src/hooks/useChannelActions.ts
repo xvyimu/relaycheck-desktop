@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/api/client";
-import type {
-  Account,
-  ChannelModelOverview,
-  DetailDrawerState,
-  ImportedChannel,
-} from "@/types";
+import type { AccountSearchIndexItem, ChannelModelOverview, DetailDrawerState, ImportedChannel } from "@/types";
 
 export interface ChannelActionsResult {
   channels: ImportedChannel[];
-  accounts: Account[];
+  searchIndex: AccountSearchIndexItem[];
   modelOverview: ChannelModelOverview | null;
   modelSyncing: boolean;
   message: string;
@@ -23,10 +18,7 @@ export interface ChannelActionsResult {
     channel: ImportedChannel,
     action: "restore-source-status" | "archive-source-status",
   ) => Promise<void>;
-  bulkUpdateSourceStatus: (
-    fromStatus: "missing" | "archived",
-    toStatus: "active" | "archived",
-  ) => Promise<void>;
+  bulkUpdateSourceStatus: (fromStatus: "missing" | "archived", toStatus: "active" | "archived") => Promise<void>;
 }
 
 export type UseChannelActionsOptions = {
@@ -34,18 +26,18 @@ export type UseChannelActionsOptions = {
   active?: boolean;
   /** Prefer inventory channels to avoid dual-fetch on mount. */
   initialChannels?: ImportedChannel[];
-  /** Prefer inventory accounts to avoid dual-fetch on mount. */
-  initialAccounts?: Account[];
+  /** Prefer inventory search index to avoid dual-fetch on mount. */
+  initialSearchIndex?: AccountSearchIndexItem[];
 };
 
 export function useChannelActions(options: UseChannelActionsOptions = {}): ChannelActionsResult {
-  const { active = true, initialChannels, initialAccounts } = options;
+  const { active = true, initialChannels, initialSearchIndex } = options;
   const [channels, setChannels] = useState<ImportedChannel[]>(() => initialChannels ?? []);
-  const [accounts, setAccounts] = useState<Account[]>(() => initialAccounts ?? []);
+  const [searchIndex, setSearchIndex] = useState<AccountSearchIndexItem[]>(() => initialSearchIndex ?? []);
   const [modelOverview, setModelOverview] = useState<ChannelModelOverview | null>(null);
   const [modelSyncing, setModelSyncing] = useState(false);
   const [message, setMessage] = useState("");
-  const seeded = Boolean(initialChannels && initialAccounts);
+  const seeded = Boolean(initialChannels);
   const [loaded, setLoaded] = useState(seeded);
   const [drawer, setDrawer] = useState<DetailDrawerState | null>(null);
 
@@ -54,40 +46,40 @@ export function useChannelActions(options: UseChannelActionsOptions = {}): Chann
     if (initialChannels) setChannels(initialChannels);
   }, [initialChannels]);
   useEffect(() => {
-    if (initialAccounts) setAccounts(initialAccounts);
-  }, [initialAccounts]);
+    if (initialSearchIndex) setSearchIndex(initialSearchIndex);
+  }, [initialSearchIndex]);
 
   const refresh = useCallback(async () => {
     try {
-      const [nextChannels, nextModels, nextAccounts] = await Promise.all([
+      const [nextChannels, nextModels, nextSearchIndex] = await Promise.all([
         api<ImportedChannel[]>("/api/channels"),
         api<ChannelModelOverview>("/api/channels/models/overview"),
-        api<Account[]>("/api/accounts"),
+        api<AccountSearchIndexItem[]>("/api/accounts/search-index"),
       ]);
       setChannels(nextChannels);
       setModelOverview(nextModels);
-      setAccounts(nextAccounts);
+      setSearchIndex(nextSearchIndex);
       setLoaded(true);
     } catch (err) {
-      // Callers invoke refresh() with `void`; without this catch a network
-      // failure bubbles up as an unhandled rejection and `loaded` never
-      // becomes true, leaving the panel stuck on the loading state.
       setMessage(err instanceof Error ? `加载失败：${err.message}` : "加载渠道数据失败");
       setLoaded(true);
     }
   }, []);
 
-  // Models overview is channels-specific; inventory does not carry it.
-  // When seeded from inventory, only pull models once while active.
+  // Inventory only seeds channels. Models + compact search-index still load once while active.
   useEffect(() => {
     if (!active) return;
     if (!seeded) return;
     let cancelled = false;
     void (async () => {
       try {
-        const overview = await api<ChannelModelOverview>("/api/channels/models/overview");
+        const [overview, nextSearchIndex] = await Promise.all([
+          api<ChannelModelOverview>("/api/channels/models/overview"),
+          api<AccountSearchIndexItem[]>("/api/accounts/search-index"),
+        ]);
         if (!cancelled) {
           setModelOverview(overview);
+          setSearchIndex(nextSearchIndex);
           setLoaded(true);
         }
       } catch {
@@ -111,9 +103,6 @@ export function useChannelActions(options: UseChannelActionsOptions = {}): Chann
       setMessage(`已同步 ${overview.syncedChannels || 0} 个渠道，识别 ${overview.modelCount} 个模型`);
       setChannels(await api<ImportedChannel[]>("/api/channels"));
     } catch (err) {
-      // Without this catch the rejected promise bubbles up as an unhandled
-      // rejection (callers invoke syncChannelModels() with `void`), and the
-      // user sees "正在同步渠道模型…" forever with no error feedback.
       setMessage(err instanceof Error ? `同步失败：${err.message}` : "同步渠道模型失败");
     } finally {
       setModelSyncing(false);
@@ -135,8 +124,6 @@ export function useChannelActions(options: UseChannelActionsOptions = {}): Chann
         setMessage(`${channel.name} 已${nextLabel}`);
         await refresh();
       } catch (err) {
-        // Callers invoke this with `void`; without this catch a POST failure
-        // leaves the "正在…" message displayed forever with no error feedback.
         setMessage(err instanceof Error ? `${nextLabel}失败：${err.message}` : `${nextLabel}失败`);
       }
     },
@@ -148,7 +135,9 @@ export function useChannelActions(options: UseChannelActionsOptions = {}): Chann
       const isArchiving = toStatus === "archived";
       const actionLabel = isArchiving ? "归档" : "恢复";
       const statusLabel = fromStatus === "missing" ? "源端已移除" : "已归档";
-      const confirmed = window.confirm(`确认${actionLabel}全部"${statusLabel}"渠道？这只会修改本地状态，不会删除任何账号、余额或日志。`);
+      const confirmed = window.confirm(
+        `确认${actionLabel}全部"${statusLabel}"渠道？这只会修改本地状态，不会删除任何账号、余额或日志。`,
+      );
       if (!confirmed) return;
       setMessage(`正在批量${actionLabel} ${statusLabel} 渠道…`);
       try {
@@ -167,7 +156,7 @@ export function useChannelActions(options: UseChannelActionsOptions = {}): Chann
 
   return {
     channels,
-    accounts,
+    searchIndex,
     modelOverview,
     modelSyncing,
     message,

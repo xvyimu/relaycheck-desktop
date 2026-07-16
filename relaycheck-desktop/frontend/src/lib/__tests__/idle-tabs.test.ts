@@ -21,7 +21,10 @@ describe("idle tab keep-alive policy", () => {
 
   it("returns null when nothing expired", () => {
     const now = 1_000_000;
-    const last = new Map([["dashboard", now], ["channels", now]]);
+    const last = new Map([
+      ["dashboard", now],
+      ["channels", now],
+    ]);
     const visited = new Set(["dashboard", "channels"]);
     expect(pruneIdleTabs(visited, "channels", last, now, { pinned: PINNED })).toBeNull();
   });

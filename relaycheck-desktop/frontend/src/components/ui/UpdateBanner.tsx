@@ -63,12 +63,7 @@ export function UpdateBanner() {
       </div>
       <div className="update-banner-actions">
         {releaseHref ? (
-          <a
-            className="update-banner-link"
-            href={releaseHref}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
+          <a className="update-banner-link" href={releaseHref} target="_blank" rel="noreferrer noopener">
             查看更新
           </a>
         ) : null}

@@ -227,7 +227,15 @@ describe("pricingCacheStatusLabel", () => {
 });
 
 describe("pricingSourceBadge", () => {
-  const base = { channelId: "1", channelName: "test", kind: "newapi", model: "gpt-4", source: "admin", fieldPath: "/path", confidence: "high" as const };
+  const base = {
+    channelId: "1",
+    channelName: "test",
+    kind: "newapi",
+    model: "gpt-4",
+    source: "admin",
+    fieldPath: "/path",
+    confidence: "high" as const,
+  };
 
   it("returns 价格 when price is present", () => {
     expect(pricingSourceBadge({ ...base, price: 0.03 })).toBe("价格");

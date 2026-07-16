@@ -54,8 +54,7 @@
   overflow: hidden;
   border: 1px solid var(--v4-border);
   border-radius: var(--radius-lg);
-  background:
-    linear-gradient(180deg, var(--v4-card-hover), var(--v4-card-soft));
+  background: linear-gradient(180deg, var(--v4-card-hover), var(--v4-card-soft));
   padding: 12px;
   box-shadow: var(--shadow-sm);
 }

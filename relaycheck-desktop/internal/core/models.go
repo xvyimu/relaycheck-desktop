@@ -456,6 +456,34 @@ type Notification struct {
 	CreatedAt string `json:"createdAt"`
 }
 
+type AccountPage struct {
+	Items        []ChannelAccount `json:"items"`
+	Total        int              `json:"total"`
+	AccountTotal int              `json:"accountTotal"`
+	ProblemTotal int              `json:"problemTotal"`
+	NextCursor   string           `json:"nextCursor,omitempty"`
+}
+
+type AccountSummary struct {
+	AccountTotal int `json:"accountTotal"`
+	ProblemTotal int `json:"problemTotal"`
+}
+
+type AccountSearchIndexItem struct {
+	UpstreamSiteID      string `json:"upstreamSiteId"`
+	UpstreamSiteName    string `json:"upstreamSiteName"`
+	UpstreamSiteBaseURL string `json:"upstreamSiteBaseUrl"`
+	SearchText          string `json:"searchText"`
+}
+
+type NotificationPage struct {
+	Items          []Notification `json:"items"`
+	Total          int            `json:"total"`
+	UnreadTotal    int            `json:"unreadTotal"`
+	ImportantTotal int            `json:"importantTotal"`
+	NextOffset     *int           `json:"nextOffset"`
+}
+
 // NotificationChannelStatus reports the configuration state of a notification
 // channel (e.g. webhook, telegram, email).
 type NotificationChannelStatus struct {

@@ -22,6 +22,95 @@ func enableLocalOutbound(app *App) {
 	}
 }
 
+func insertTestNotifications(t *testing.T, app *App, count int, readCount int) {
+	t.Helper()
+	for i := 0; i < count; i++ {
+		read := 0
+		if i < readCount {
+			read = 1
+		}
+		level := "info"
+		if i%5 == 0 {
+			level = "warning"
+		}
+		createdAt := time.Now().Add(time.Duration(i) * time.Second).UTC().Format(time.RFC3339Nano)
+		if _, err := app.db.Exec(`
+			INSERT INTO app_notifications (id, type, level, title, content, read, related_type, related_id, created_at)
+			VALUES (?, 'test', ?, 'test notification', 'test content', ?, '', '', ?)
+		`, newID(), level, read, createdAt); err != nil {
+			t.Fatalf("insert notification %d: %v", i, err)
+		}
+	}
+}
+
+func TestHandleNotificationsDefaultIsNotCappedByBatchLimit(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	insertTestNotifications(t, app, 25, 0)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/notifications", nil)
+	app.handleNotifications(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		OK   bool            `json:"ok"`
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	var items []Notification
+	if err := json.Unmarshal(response.Data, &items); err != nil {
+		t.Fatalf("decode notifications: %v", err)
+	}
+	if len(items) != 25 {
+		t.Fatalf("expected default list to return 25 notifications, got %d", len(items))
+	}
+}
+
+func TestHandleNotificationsPageReturnsCountsAndNextOffset(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	insertTestNotifications(t, app, 25, 7)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/notifications/page?limit=10&offset=10", nil)
+	app.handleNotificationsPage(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		OK   bool            `json:"ok"`
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	var page NotificationPage
+	if err := json.Unmarshal(response.Data, &page); err != nil {
+		t.Fatalf("decode notification page: %v", err)
+	}
+	if len(page.Items) != 10 {
+		t.Fatalf("expected 10 page items, got %d", len(page.Items))
+	}
+	if page.Total != 25 {
+		t.Fatalf("expected total 25, got %d", page.Total)
+	}
+	if page.UnreadTotal != 18 {
+		t.Fatalf("expected unread total 18, got %d", page.UnreadTotal)
+	}
+	if page.ImportantTotal != 5 {
+		t.Fatalf("expected important total 5, got %d", page.ImportantTotal)
+	}
+	if page.NextOffset == nil || *page.NextOffset != 20 {
+		t.Fatalf("expected next offset 20, got %#v", page.NextOffset)
+	}
+}
+
 // ==================== DispatchNotification 测试 ====================
 
 func TestDispatchNotification_Disabled(t *testing.T) {

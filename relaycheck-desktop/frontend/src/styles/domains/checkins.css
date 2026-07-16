@@ -10,9 +10,7 @@
   overflow: hidden;
   border: 1px solid var(--v4-border);
   border-radius: var(--radius-lg);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 13rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 13rem), var(--v4-card);
   padding: 16px;
   box-shadow: var(--shadow-sm);
 }
@@ -105,11 +103,21 @@
   border-radius: 12px 12px 8px 8px;
 }
 
-.skeleton-chart-bars i:nth-child(1) { height: 42%; }
-.skeleton-chart-bars i:nth-child(2) { height: 72%; }
-.skeleton-chart-bars i:nth-child(3) { height: 54%; }
-.skeleton-chart-bars i:nth-child(4) { height: 86%; }
-.skeleton-chart-bars i:nth-child(5) { height: 64%; }
+.skeleton-chart-bars i:nth-child(1) {
+  height: 42%;
+}
+.skeleton-chart-bars i:nth-child(2) {
+  height: 72%;
+}
+.skeleton-chart-bars i:nth-child(3) {
+  height: 54%;
+}
+.skeleton-chart-bars i:nth-child(4) {
+  height: 86%;
+}
+.skeleton-chart-bars i:nth-child(5) {
+  height: 64%;
+}
 
 .load-more-row {
   display: flex;
@@ -235,16 +243,12 @@
 }
 
 .checkin-success-summary {
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-green-border), transparent 13rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-green-border), transparent 13rem), var(--v4-card);
 }
 
 .checkin-problem-card {
   border-color: var(--v4-red-border);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-red-border), transparent 13rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-red-border), transparent 13rem), var(--v4-card);
 }
 
 .problem-log-list {
@@ -338,9 +342,7 @@
   overflow: hidden;
   border: 1px solid var(--v4-border);
   border-radius: var(--radius-lg);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 12rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 12rem), var(--v4-card);
   padding: 16px;
   box-shadow: var(--shadow-sm);
 }
@@ -388,9 +390,7 @@
 
 .site-balance-card {
   border-color: var(--v4-blue-line);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 13rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 13rem), var(--v4-card);
 }
 
 .section-heading {
@@ -449,9 +449,7 @@
 
 .notification-focus-card {
   border-color: var(--v4-blue-line);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 13rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 13rem), var(--v4-card);
 }
 
 .notification-card {
@@ -781,9 +779,7 @@
   overflow: hidden;
   border: 1px solid var(--v4-blue-line);
   border-radius: 18px;
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 14rem),
-    var(--v4-card-soft);
+  background: radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 14rem), var(--v4-card-soft);
   padding: 13px;
 }
 
@@ -863,7 +859,7 @@
 }
 
 .action-changed .diff-action {
-  background: var(--surface-solid)3d8;
+  background: var(--surface-solid) 3d8;
   color: var(--warning) !important;
 }
 
@@ -887,7 +883,7 @@
   overflow: hidden;
   border: 1px solid var(--v4-amber-border);
   border-radius: 12px;
-  background: var(--surface-solid)8e7;
+  background: var(--surface-solid) 8e7;
   color: var(--warning);
   padding: 9px 11px;
   font-size: 13px;

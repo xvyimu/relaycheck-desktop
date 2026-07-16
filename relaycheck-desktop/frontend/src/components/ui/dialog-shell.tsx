@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useId,
-  useRef,
-  type MouseEvent as ReactMouseEvent,
-  type ReactNode,
-} from "react";
+import { useEffect, useId, useRef, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 const FOCUSABLE =
@@ -59,8 +53,7 @@ export function DialogShell({
 
   useEffect(() => {
     if (!open) return;
-    const previous =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const frame = window.requestAnimationFrame(() => {
@@ -124,10 +117,7 @@ export function DialogShell({
 
   return (
     <div
-      className={cn(
-        variant === "panel" ? "drawer-backdrop" : "dialog-shell-backdrop-modal",
-        backdropClassName,
-      )}
+      className={cn(variant === "panel" ? "drawer-backdrop" : "dialog-shell-backdrop-modal", backdropClassName)}
       role="presentation"
       onMouseDown={onBackdropMouseDown}
     >
@@ -139,10 +129,7 @@ export function DialogShell({
         aria-labelledby={labelledBy}
         data-title-fallback-id={generatedTitleId}
         tabIndex={-1}
-        className={cn(
-          variant === "panel" ? "detail-drawer dialog-shell-panel" : "dialog-shell-modal",
-          className,
-        )}
+        className={cn(variant === "panel" ? "detail-drawer dialog-shell-panel" : "dialog-shell-modal", className)}
         onMouseDown={(event) => event.stopPropagation()}
       >
         {children}

@@ -313,7 +313,9 @@ describe("formatBalanceValue", () => {
 
 describe("formatBalanceMeta", () => {
   it("returns placeholder when no data", () => {
-    expect(formatBalanceMeta({ id: "1", accountName: "a", upstreamSiteName: "s", unit: "usd", createdAt: "" })).toBe("暂无用量详情");
+    expect(formatBalanceMeta({ id: "1", accountName: "a", upstreamSiteName: "s", unit: "usd", createdAt: "" })).toBe(
+      "暂无用量详情",
+    );
   });
 
   it("formats used + total quotas", () => {
@@ -348,7 +350,15 @@ describe("formatBalanceGroup", () => {
 });
 
 describe("formatPricingSource", () => {
-  const base = { channelId: "1", channelName: "test", kind: "newapi", model: "gpt-4", source: "test", fieldPath: "/path", confidence: "high" };
+  const base = {
+    channelId: "1",
+    channelName: "test",
+    kind: "newapi",
+    model: "gpt-4",
+    source: "test",
+    fieldPath: "/path",
+    confidence: "high",
+  };
 
   it("shows prompt ratio when present", () => {
     const result = formatPricingSource({ ...base, promptRatio: 2.0 });

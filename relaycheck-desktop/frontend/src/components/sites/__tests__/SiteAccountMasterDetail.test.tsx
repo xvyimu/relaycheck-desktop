@@ -39,9 +39,7 @@ const sites: UpstreamSite[] = [
 
 describe("SiteAccountMasterDetail", () => {
   it("renders dual-pane shell with site list", () => {
-    const html = renderToStaticMarkup(
-      <SiteAccountMasterDetail sites={sites} onRefresh={async () => {}} />,
-    );
+    const html = renderToStaticMarkup(<SiteAccountMasterDetail sites={sites} onRefresh={async () => {}} />);
     expect(html).toContain("site-account-master-detail");
     expect(html).toContain("Alpha");
     expect(html).toContain("master-detail-left");

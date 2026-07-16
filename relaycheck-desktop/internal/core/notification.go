@@ -108,66 +108,112 @@ func (a *App) recentNotificationExists(ctx context.Context, kind string, related
 
 // ==================== 通知 HTTP handler（从 routes.go 归拢）====================
 
-func (a *App) handleNotifications(w http.ResponseWriter, r *http.Request) {
-	if !method(w, r, http.MethodGet) {
-		return
-	}
-	levelFilter := r.URL.Query().Get("level")
-	typeFilter := r.URL.Query().Get("type")
-	unreadOnly := r.URL.Query().Get("unread") == "1"
-	limit := 100
+type notificationListOptions struct {
+	Level      string
+	Type       string
+	UnreadOnly bool
+	Limit      int
+	Offset     int
+}
+
+func notificationOptions(r *http.Request) notificationListOptions {
+	limit := 50
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
 			limit = v
 		}
 	}
-	limit = clampBatchLimit(limit, 100)
+	limit = clampListLimit(limit, 50, 200)
 	offset := 0
 	if raw := r.URL.Query().Get("offset"); raw != "" {
 		if v, err := strconv.Atoi(raw); err == nil && v >= 0 {
-			offset = v
+				offset = v
+			}
 		}
+	return notificationListOptions{
+		Level:      r.URL.Query().Get("level"),
+		Type:       r.URL.Query().Get("type"),
+		UnreadOnly: r.URL.Query().Get("unread") == "1",
+		Limit:      limit,
+		Offset:     offset,
 	}
+}
 
-	query := `SELECT id, type, level, title, content, read, created_at FROM app_notifications WHERE 1=1`
+func (a *App) listNotificationsPage(ctx context.Context, options notificationListOptions) (NotificationPage, error) {
+	where := ` WHERE 1=1`
 	var args []interface{}
-	if levelFilter != "" {
-		query += ` AND level = ?`
-		args = append(args, levelFilter)
+	if options.Level != "" {
+		where += ` AND level = ?`
+		args = append(args, options.Level)
 	}
-	if typeFilter != "" {
-		query += ` AND type = ?`
-		args = append(args, typeFilter)
+	if options.Type != "" {
+		where += ` AND type = ?`
+		args = append(args, options.Type)
 	}
-	if unreadOnly {
-		query += ` AND read = 0`
+	if options.UnreadOnly {
+		where += ` AND read = 0`
 	}
-	query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
-	args = append(args, limit, offset)
 
-	rows, err := a.db.QueryContext(r.Context(), query, args...)
+	page := NotificationPage{Items: []Notification{}}
+	countQuery := `SELECT
+		COUNT(*),
+		COALESCE(SUM(CASE WHEN read = 0 THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN LOWER(level) IN ('error', 'danger', 'critical', 'warning', 'warn') THEN 1 ELSE 0 END), 0)
+		FROM app_notifications` + where
+	if err := a.db.QueryRowContext(ctx, countQuery, args...).Scan(&page.Total, &page.UnreadTotal, &page.ImportantTotal); err != nil {
+		return page, err
+	}
+
+	query := `SELECT id, type, level, title, content, read, created_at FROM app_notifications` + where + ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	listArgs := append(append([]interface{}{}, args...), options.Limit, options.Offset)
+
+	rows, err := a.db.QueryContext(ctx, query, listArgs...)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		return page, err
 	}
 	defer rows.Close()
 
-	items := []Notification{}
 	for rows.Next() {
 		var item Notification
 		var read int
 		if err := rows.Scan(&item.ID, &item.Type, &item.Level, &item.Title, &item.Content, &read, &item.CreatedAt); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return page, err
 		}
 		item.Read = read == 1
-		items = append(items, item)
+		page.Items = append(page.Items, item)
 	}
 	if err := rows.Err(); err != nil {
+		return page, err
+	}
+	nextOffset := options.Offset + len(page.Items)
+	if nextOffset < page.Total {
+		page.NextOffset = &nextOffset
+	}
+	return page, nil
+}
+
+func (a *App) handleNotifications(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodGet) {
+		return
+	}
+	page, err := a.listNotificationsPage(r.Context(), notificationOptions(r))
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	writeJSON(w, http.StatusOK, page.Items)
+}
+
+func (a *App) handleNotificationsPage(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodGet) {
+		return
+	}
+	page, err := a.listNotificationsPage(r.Context(), notificationOptions(r))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
 }
 
 func (a *App) handleMarkAllNotificationsRead(w http.ResponseWriter, r *http.Request) {

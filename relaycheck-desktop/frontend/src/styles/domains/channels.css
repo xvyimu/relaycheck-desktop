@@ -14,9 +14,7 @@
   overflow: hidden;
   border: 1px solid var(--v4-border);
   border-radius: var(--radius-md);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 8rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 8rem), var(--v4-card);
   padding: 13px 14px;
   box-shadow: var(--shadow-sm);
 }
@@ -308,7 +306,8 @@
   font-size: 13px;
   font-weight: 950;
   letter-spacing: -0.03em;
-  box-shadow: var(--v4-shadow-blue),
+  box-shadow:
+    var(--v4-shadow-blue),
     0 0 0 1px var(--v4-card-soft) inset;
 }
 

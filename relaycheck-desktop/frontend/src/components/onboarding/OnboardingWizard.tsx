@@ -202,7 +202,9 @@ export function OnboardingWizard() {
           method: "POST",
           body: JSON.stringify({ limit: 10 }),
         });
-        setMessage(`模型同步完成：共 ${result.total ?? 0} 个，成功 ${result.synced ?? 0} 个，失败 ${result.failed ?? 0} 个。`);
+        setMessage(
+          `模型同步完成：共 ${result.total ?? 0} 个，成功 ${result.synced ?? 0} 个，失败 ${result.failed ?? 0} 个。`,
+        );
       } else if (step.key === "credentials") {
         setMessage("已记录。请稍后到「站点与账号」页的「全部账号」子视图，为每个站点补充登录凭据或 API Key。");
       } else if (step.key === "checkin") {
@@ -221,8 +223,7 @@ export function OnboardingWizard() {
 
   const step = STEPS[stepIndex];
   const isLast = stepIndex === STEPS.length - 1;
-  const canRun =
-    step.key !== "connect" || (baseUrl.trim().length > 0 && accessToken.trim().length > 0);
+  const canRun = step.key !== "connect" || (baseUrl.trim().length > 0 && accessToken.trim().length > 0);
 
   return (
     <DialogShell
@@ -247,9 +248,7 @@ export function OnboardingWizard() {
               aria-current={idx === stepIndex ? "step" : undefined}
               aria-label={`步骤 ${item.index}/${STEPS.length}：${item.title}${idx < stepIndex ? "，已完成" : ""}`}
               className={
-                "onboarding-step-dot" +
-                (idx === stepIndex ? " active" : "") +
-                (idx < stepIndex ? " completed" : "")
+                "onboarding-step-dot" + (idx === stepIndex ? " active" : "") + (idx < stepIndex ? " completed" : "")
               }
               title={`${item.index}/${STEPS.length} ${item.title}`}
             >
@@ -266,7 +265,9 @@ export function OnboardingWizard() {
             <div className="onboarding-step-meta">
               步骤 {step.index}/{STEPS.length}
             </div>
-            <h3 className="onboarding-step-title" id="onboarding-title">{step.title}</h3>
+            <h3 className="onboarding-step-title" id="onboarding-title">
+              {step.title}
+            </h3>
             <p className="onboarding-step-desc">{step.description}</p>
           </div>
         </div>
@@ -312,18 +313,23 @@ export function OnboardingWizard() {
               />
             </label>
             <label className="onboarding-check">
-              <input
-                type="checkbox"
-                checked={saveToken}
-                onChange={(event) => setSaveToken(event.target.checked)}
-              />
+              <input type="checkbox" checked={saveToken} onChange={(event) => setSaveToken(event.target.checked)} />
               保存令牌以便后续定时同步
             </label>
             <button
               type="submit"
               aria-hidden="true"
               tabIndex={-1}
-              style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", border: 0 }}
+              style={{
+                position: "absolute",
+                width: 1,
+                height: 1,
+                padding: 0,
+                margin: -1,
+                overflow: "hidden",
+                clip: "rect(0,0,0,0)",
+                border: 0,
+              }}
             />
           </form>
         ) : null}
@@ -341,13 +347,19 @@ export function OnboardingWizard() {
         ) : null}
 
         {step.key === "checkin" ? (
-          <div className="onboarding-hint">
-            点击「执行」触发一次签到任务，验证账号凭据和站点规则是否就绪。
-          </div>
+          <div className="onboarding-hint">点击「执行」触发一次签到任务，验证账号凭据和站点规则是否就绪。</div>
         ) : null}
 
-        {message ? <div className="onboarding-status success" {...onboardingStatusProps("success")}>{message}</div> : null}
-        {error ? <div className="onboarding-status danger" {...onboardingStatusProps("danger")}>{error}</div> : null}
+        {message ? (
+          <div className="onboarding-status success" {...onboardingStatusProps("success")}>
+            {message}
+          </div>
+        ) : null}
+        {error ? (
+          <div className="onboarding-status danger" {...onboardingStatusProps("danger")}>
+            {error}
+          </div>
+        ) : null}
       </div>
 
       <footer className="onboarding-footer">
@@ -356,11 +368,7 @@ export function OnboardingWizard() {
         </Button>
         <div className="onboarding-footer-actions">
           {step.key !== "credentials" ? (
-            <button
-              type="button"
-              onClick={() => void runStep()}
-              disabled={busy || !canRun}
-            >
+            <button type="button" onClick={() => void runStep()} disabled={busy || !canRun}>
               {busy ? "执行中…" : "执行"}
             </button>
           ) : null}

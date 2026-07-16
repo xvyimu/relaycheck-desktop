@@ -12,7 +12,7 @@
 
 ### Prerequisites
 
-- Go 1.24+
+- Go 1.26.5+ for release builds (`go.mod` retains the Go 1.24 language baseline)
 - Node.js 20+
 - npm
 
@@ -34,7 +34,7 @@ go build -mod=vendor -o dist/relaycheck.exe .
 
 Then open **http://127.0.0.1:3001** in your browser.
 
-> On first launch, the bootstrap admin password is printed to the console or written to `data/bootstrap-admin-password.txt`.
+RelayCheck Desktop has no separate admin login. It is a loopback-only, trusted single-user console. Set `RELAYCHECK_REQUIRE_TOKEN=1` before launch when the host needs the optional per-process HttpOnly session-token gate.
 
 ### Run Tests
 
@@ -62,8 +62,18 @@ cd frontend && npx tsc --noEmit
 | Frontend | React 19 + Vite, embedded into the Go binary |
 | Storage | SQLite at `data/relaycheck.db` |
 | Default URL | `http://127.0.0.1:3001` |
-| Bootstrap login | `admin` plus `RELAYCHECK_BOOTSTRAP_PASSWORD`; if unset on a fresh DB, read `data/bootstrap-admin-password.txt` |
+| Access model | Loopback-only trusted single-user console; no admin login |
+| Hardened mode | Set `RELAYCHECK_REQUIRE_TOKEN=1`; the generated token is stored in `data/session-token.txt` and delivered to the UI through an HttpOnly cookie |
 | Design direction | Control Room: calm, compact, precise, low-noise |
+
+### Runtime Environment
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `RELAYCHECK_PORT` | Preferred loopback port | `3001` |
+| `RELAYCHECK_DATA_DIR` | Override the data root | Directory containing the executable |
+| `RELAYCHECK_NO_OPEN` | Set to `1` to skip opening the browser | Browser opens automatically |
+| `RELAYCHECK_REQUIRE_TOKEN` | Set to `1` to require the per-process session cookie on wrapped API routes | Disabled |
 
 ## Architecture
 
@@ -120,7 +130,7 @@ See `CLAUDE.md` and `internal/core/PACKAGE_INDEX.md` for the full map.
 | Balances | `/api/balances/snapshots`, `/api/usage/overview` |
 | Models | `/api/models/overview`, `/api/models/sync`, `/api/models/pricing`, `/api/models/pricing/sync` |
 | Keys | `/api/keys/export-preview` |
-| Notifications | `/api/notifications`, `/api/notifications/mark-all-read`, `/api/notifications/clear-read`, `/api/notifications/mark-read`, `/api/notifications/trim` |
+| Notifications | `/api/notifications`, `/api/notifications/page`, `/api/notifications/mark-all-read`, `/api/notifications/clear-read`, `/api/notifications/mark-read`, `/api/notifications/trim` |
 | Local NewAPI | `/api/local-newapi`, `/api/local-newapi/scan`, `/api/local-newapi/import-from-sqlite`, `/api/local-newapi/import-from-admin-api`, `/api/local-newapi/{id}` |
 | Health | `/api/health` (unauthenticated) |
 
@@ -134,27 +144,27 @@ Run from `E:\zidqiandao\relaycheck-desktop`.
 | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\package-release.ps1` | Build `dist\relaycheck.exe` and create a zip release package with manifest and SHA256 checksums under `dist\releases`. Run only after the release gate passes. |
 | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\operator-acceptance.ps1 -BaseUrl http://127.0.0.1:3001` | Run read-only launch-day acceptance checks against a running local RelayCheck Desktop instance. |
 | `cd frontend; npm ci --cache E:\zidqiandao\.npm-cache; npm run build` | Install frontend dependencies and build embedded assets. |
-| `cd frontend; $env:RELAYCHECK_SMOKE_PASSWORD='<local password>'; npm run smoke` | Run the browser smoke test against a running local desktop server. |
-| `go test -mod=vendor ./...` | Run Go test suite using vendored dependencies, including security, audit, health, and SSRF checks. |
+| `cd frontend; npm run smoke` | Run the deterministic browser navigation smoke against the configured smoke base URL. |
+| `go test -mod=vendor ./ ./internal/...` | Run the project Go test suite using vendored dependencies without traversing frontend dependencies. |
 | `go build -mod=vendor -ldflags="-H windowsgui" -o dist\relaycheck.exe .` | Build the Windows desktop executable. |
-| `go vet ./...` | Run static analysis (zero warnings expected). |
+| `go vet -mod=vendor ./ ./internal/...` | Run static analysis over project Go packages (zero warnings expected). |
 | `cd frontend; npx tsc --noEmit` | TypeScript type check (zero errors expected). |
 
 Run `npm run build` before Go compilation if `frontend/dist/` is missing; `main.go` embeds that directory at compile time.
 
 ## Race / cgo Note
 
-The Windows Go environment used for this workspace currently does not enable cgo. Because Go's race detector requires cgo on this platform, `go test -race ./internal/core` is documented as blocked here with `-race requires cgo`. Use `go test -mod=vendor ./...` as the required local regression gate unless cgo is explicitly enabled in a future toolchain setup.
+The Windows Go environment used for this workspace currently does not enable cgo. Because Go's race detector requires cgo on this platform, `go test -race ./internal/core` is documented as blocked here with `-race requires cgo`. Use `go test -mod=vendor ./ ./internal/...` as the required local regression gate unless cgo is explicitly enabled in a future toolchain setup.
 
 ## Verification Checklist
 
 - `powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1`
-- `go test -mod=vendor ./...`
-- `go vet ./...`
+- `go test -mod=vendor ./ ./internal/...`
+- `go vet -mod=vendor ./ ./internal/...`
 - `cd frontend && npm run build`
 - `cd frontend && npx tsc --noEmit`
 - `cd frontend && npm audit --audit-level=low`
-- Browser smoke on desktop and 390px mobile width: set `RELAYCHECK_SMOKE_PASSWORD`, start the desktop server, then run `cd frontend && npm run smoke`
+- Browser smoke on desktop and 390px mobile width: start the configured smoke target, then run `cd frontend && npm run smoke`
 - No real secrets, passwords, tokens, cookies, or API keys in diffs
 
 ## Credential And Export Safety
@@ -163,7 +173,7 @@ The Windows Go environment used for this workspace currently does not enable cgo
 - The encryption envelope is AES-GCM with a local instance key stored under `data/keys/instance.key`; encrypted values use the `v1.<nonce>.<ciphertext>` format.
 - Encrypted zip export/import uses AES-256-GCM with PBKDF2-SHA256 key derivation (200,000 iterations + random 32-byte salt). The RCZIP2 format is current; RCZIP1 (legacy raw SHA-256) is supported for backward-compatible decryption only.
 - Zip import is protected against zip-bomb attacks: total decompressed content is capped at 256 MB, individual entries at 200 MB.
-- On a fresh database, the bootstrap admin password is taken from `RELAYCHECK_BOOTSTRAP_PASSWORD`; if that is not set, a generated local password is written under `data/bootstrap-admin-password.txt`, which is ignored by Git.
+- The local UI has no password login. For shared-host hardening, enable `RELAYCHECK_REQUIRE_TOKEN=1` and protect `data/session-token.txt` and `data/keys/instance.key` with current-user-only filesystem permissions.
 - API key sharing/export surfaces must only expose fingerprints, masked references, model status, and diagnostic metadata.
 - Real passwords, cookies, access tokens, refresh tokens, sync tokens, channel keys, and API keys must never be returned by export endpoints or written into documentation, logs, screenshots, or temporary handoff files.
 

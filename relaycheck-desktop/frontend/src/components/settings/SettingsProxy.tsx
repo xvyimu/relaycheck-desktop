@@ -34,27 +34,46 @@ export function SettingsProxy({
           <span>用于外部中转站探测、签到、余额刷新和 API Key 检测。本地 127.0.0.1 默认直连。</span>
         </div>
         <span className={"status-pill " + (proxyConfig.enabled ? "success" : "neutral")}>
-          <StatusLabel level={proxyConfig.enabled ? "enabled" : "disabled"} label={proxyConfig.enabled ? "已启用" : "未启用"} />
+          <StatusLabel
+            level={proxyConfig.enabled ? "enabled" : "disabled"}
+            label={proxyConfig.enabled ? "已启用" : "未启用"}
+          />
         </span>
       </div>
       <div className="proxy-toggle-row">
         <label className="check">
-          <input type="checkbox" checked={proxyConfig.enabled} onChange={(event) => onPatch({ enabled: event.target.checked })} />
+          <input
+            type="checkbox"
+            checked={proxyConfig.enabled}
+            onChange={(event) => onPatch({ enabled: event.target.checked })}
+          />
           启用代理
         </label>
         <label className="check">
-          <input type="checkbox" checked={proxyConfig.bypassLocal} onChange={(event) => onPatch({ bypassLocal: event.target.checked })} />
+          <input
+            type="checkbox"
+            checked={proxyConfig.bypassLocal}
+            onChange={(event) => onPatch({ bypassLocal: event.target.checked })}
+          />
           绕过本地地址
         </label>
       </div>
       <div className="proxy-form-grid">
         <label className="field">
           <span>代理地址</span>
-          <input value={proxyConfig.url} onChange={(event) => onPatch({ url: event.target.value })} placeholder="http://127.0.0.1:7897" />
+          <input
+            value={proxyConfig.url}
+            onChange={(event) => onPatch({ url: event.target.value })}
+            placeholder="http://127.0.0.1:7897"
+          />
         </label>
         <label className="field">
           <span>测试地址</span>
-          <input value={proxyTestTarget} onChange={(event) => onTargetChange(event.target.value)} placeholder="https://wxls.ccwu.cc/" />
+          <input
+            value={proxyTestTarget}
+            onChange={(event) => onTargetChange(event.target.value)}
+            placeholder="https://wxls.ccwu.cc/"
+          />
         </label>
       </div>
       <div className="proxy-actions">
@@ -68,16 +87,22 @@ export function SettingsProxy({
       {proxyTestResult ? (
         <div className={"proxy-result " + (proxyTestResult.ok ? "success" : "warning")}>
           <strong>
-            <StatusLabel level={proxyTestResult.ok ? "success" : "warning"} label={proxyTestResult.ok ? "连通" : "未连通"} />
+            <StatusLabel
+              level={proxyTestResult.ok ? "success" : "warning"}
+              label={proxyTestResult.ok ? "连通" : "未连通"}
+            />
           </strong>
           <span>
-            {proxyTestResult.targetUrl} {"·"} {proxyTestResult.httpStatus ? "HTTP " + proxyTestResult.httpStatus + " · " : ""}
+            {proxyTestResult.targetUrl} {"·"}{" "}
+            {proxyTestResult.httpStatus ? "HTTP " + proxyTestResult.httpStatus + " · " : ""}
             {proxyTestResult.latencyMs}ms
           </span>
           <p>{proxyTestResult.message}</p>
         </div>
       ) : (
-        <div className="problem-hint detail-hint">如果某些站点 Chrome 能打开但工具检测失败，先开启这里的代理并测试目标站点。</div>
+        <div className="problem-hint detail-hint">
+          如果某些站点 Chrome 能打开但工具检测失败，先开启这里的代理并测试目标站点。
+        </div>
       )}
     </article>
   );

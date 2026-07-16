@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "@/api/client";
-import type { Account } from "@/types";
+import { buildAccountsPageUrl } from "@/hooks/useAccountsPage";
+import type { Account, AccountPage } from "@/types";
 
-/** Build GET /api/accounts URL; empty/"all" → unfiltered list. */
+/** Site-scoped accounts URL via /api/accounts/page (no startup full list). */
 export function accountsListUrl(upstreamSiteId?: string | null): string {
   const id = (upstreamSiteId || "").trim();
-  if (!id || id === "all") return "/api/accounts";
-  return `/api/accounts?upstreamSiteId=${encodeURIComponent(id)}`;
+  if (!id || id === "all") {
+    return buildAccountsPageUrl({ limit: 200 });
+  }
+  return buildAccountsPageUrl({ limit: 200, upstreamSiteId: id });
 }
 
 /**
- * Site-scoped accounts fetch (α S3).
- * When siteFilter is "all", enabled=false and data stays null — callers use inventory.
- * When a site is selected, fetches only that site's accounts without touching channels/sites.
+ * Site-scoped accounts fetch (α S3 / FE-4).
+ * When siteFilter is "all", enabled=false and data stays null.
+ * When a site is selected, fetches that site's page (limit 200) without loading global inventory accounts.
  */
 export function useSiteAccounts(upstreamSiteId: string) {
   const siteId = (upstreamSiteId || "").trim();
@@ -44,14 +47,13 @@ export function useSiteAccounts(upstreamSiteId: string) {
     setLoading(true);
     setError("");
     try {
-      const result = await api<Account[]>(url, { signal: controller.signal });
+      const result = await api<AccountPage>(url, { signal: controller.signal });
       if (controller.signal.aborted || requestId !== requestIdRef.current) return;
-      setData(result);
+      setData(result.items || []);
       setLoaded(true);
     } catch (err) {
       if (controller.signal.aborted || requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : "加载失败");
-      // Keep previous data if any; do not clear so UI can fall back gracefully.
     } finally {
       if (!controller.signal.aborted && requestId === requestIdRef.current) {
         setLoading(false);
@@ -67,7 +69,6 @@ export function useSiteAccounts(upstreamSiteId: string) {
     };
   }, [refresh]);
 
-  // Clear scoped data when returning to "all" so we don't leak a previous site list.
   useEffect(() => {
     if (!enabled) {
       setData(null);

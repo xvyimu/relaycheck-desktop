@@ -75,7 +75,10 @@
   color: var(--muted);
   background: var(--surface-subtle);
   border: 1px solid var(--line);
-  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease;
 }
 
 .onboarding-step-dot.completed {

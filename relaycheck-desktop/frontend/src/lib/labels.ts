@@ -180,10 +180,12 @@ export function formatAPIKeyTestMessage(result: APIKeyTestResult): string {
   const parts = [`${apiKeyStatusLabel(result.status)}`];
   if (result.modelCount !== undefined) parts.push(`模型 ${result.modelCount} 个`);
   if (result.testedModel) parts.push(`测试 ${result.testedModel}`);
-  if (result.modelTestLatencyMs !== undefined && result.modelTestLatencyMs > 0) parts.push(`${result.modelTestLatencyMs}ms`);
+  if (result.modelTestLatencyMs !== undefined && result.modelTestLatencyMs > 0)
+    parts.push(`${result.modelTestLatencyMs}ms`);
   if (result.testedModel) parts.push(result.modelUsable ? "模型可用" : "模型不可用");
   if (result.sampleModels?.length) parts.push(`样例：${result.sampleModels.slice(0, 4).join("、")}`);
   if (result.message) parts.push(result.message);
-  if (result.modelTestMessage && !result.message?.includes(result.modelTestMessage)) parts.push(result.modelTestMessage);
+  if (result.modelTestMessage && !result.message?.includes(result.modelTestMessage))
+    parts.push(result.modelTestMessage);
   return parts.join(" · ");
 }

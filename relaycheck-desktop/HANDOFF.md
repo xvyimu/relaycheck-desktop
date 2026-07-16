@@ -3,25 +3,31 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-13 (S4 + P2 + re-release done; **docs pass** PACKAGE_INDEX + PROJECT_STRUCTURE; local tip `ccd2f98`, origin still `0f13915`)
+**Last updated:** 2026-07-16 (FE-4/BE-2 accounts page+summary+search-index landed; verified; commit/push pending auth)
 
 ---
 
 ## ⏳ TODO (next session)
 
-1. [x] **Push product work** — 已完成。`f61c4c5..0f13915 main -> main` via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`。
-2. [x] **Re-release** — 已完成。`package-release` + `verify-package` 全绿。
-   - Zip: `dist/releases/relaycheck-desktop-1.1.0-bdb476755c64-20260713-073147.zip`
-   - SHA256: `d8eab59e18a452fb9ac92334408470a5df74c44fd6328e31345cf7529b5658f4`
-   - verify-package: 文件 + manifest + checksums 全 PASS
-3. [ ] **Push docs commits**（需授权）— 本地领先 origin 4 个纯 docs 提交：
-   - `bdb4767` handoff push-complete
-   - `2fd935c` handoff re-release record
-   - `c97e85f` core PACKAGE_INDEX (session_token / s3_helpers / errorClass)
-   - `ccd2f98` PROJECT_STRUCTURE refresh (S3/S4/P2 surfaces)
-   - 命令：`git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main`
+1. [ ] **Commit + push FE-4/BE-2 dirty tree** — 账号分页/摘要/search-index + 通知分页等已实现并通过本地 gates；**等用户确认后再 commit/push**。SSH: `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`。勿因 stale `origin/main` 误判 ahead。
+2. [ ] **可选 re-release** — 本机 Go **1.26.4** vs gate/`.go-version` **1.26.5**；发布前对齐或在 release note 标明。
+3. [x] **Push product work / re-release bdb4767 / docs tip 24d9ed4** — 历史已完成（见下方）。
 
 **已完成（勿重做）**
+
+- [x] **FE-4 / BE-2 accounts scale-out (2026-07-16)** — 启动不再全量 `/api/accounts`
+  - BE: `internal/core/accounts_page.go` → `/api/accounts/page` (cursor+filters+totals) · `/api/accounts/summary` · `/api/accounts/search-index`；`routes.go`/`models.go`；`accounts_list_test.go` 覆盖 cursor/filter/summary/index
+  - FE: `useInventoryData` → summary only；`useAccountsPage` + `AccountsPanel` 服务端分页；`useChannelActions`/`useChannelFilters` 改 search-index；`useSiteAccounts` 改 page API；Dashboard 用 accountTotal/problemTotal
+  - Gates: `go test -mod=vendor -count=1 ./internal/core/ ./internal/accounts/` PASS · frontend `tsc` 0 · `npm test` 271 · `lint` 0
+  - 有意保留: `GET /api/accounts` 兼容；`POST /api/accounts` 创建；站点主从 limit=200/page
+  - **未 commit / 未 push**（用户授权后再动 git）
+
+
+- [x] **Completion audit (2026-07-13)** — current-state verification rerun after handoff status correction
+  - Backend: `rtk go test -mod=vendor -count=1 ./internal/accounts/ ./internal/core/` → 529 passed in 2 packages
+  - Frontend: `rtk npx tsc -b` → no errors; `rtk npm test` → 29 files / 268 tests passed; `rtk npm run lint` → exit 0
+  - Release: `scripts/verify-package.ps1 -ZipPath dist/releases/relaycheck-desktop-1.1.0-bdb476755c64-20260713-073147.zip` → package verification passed
+  - Remote: SSH `main` verified at `24d9ed471842a634002ebea89e32ecc970b585b9`; no commit/push/fetch performed
 
 - [x] **Docs pass (2026-07-13)** — 结构文档对齐 S3/S4/P2 落地
   - `internal/core/PACKAGE_INDEX.md`：日期 2026-07-13；新增 `session_token.go` / `session_token_test.go` / `s3_helpers_test.go`；`http.go` 注明 errorClass + token gate + loopback write guard
@@ -53,12 +59,13 @@ Read this first, then `CLAUDE.md` for architecture.
 - [x] Visual smoke / session-expiry runbook / full-stack review report
 - [x] S0 / S1 / S2 review（见 Current state）
 
-**Push 备忘**
+**Git/remote 备忘**
+
+当前 committed `HEAD` 与 SSH 远端 `main` 均为 `24d9ed4`。不要因为本地 stale `origin/main` 显示 `ahead 14` 就重复 push；后续确需发布时仍使用 SSH 别名远端，勿依赖 HTTPS + 7897。本 `HANDOFF.md` 状态修正若未提交，属于本地文档收尾，不代表产品代码未发布。
 
 ```powershell
 cd E:\zidqiandao\relaycheck-desktop
 git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main
-# 勿依赖 https://github.com + 7897
 ```
 
 ---
@@ -66,7 +73,7 @@ git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main
 ## Current state
 
 Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **IA-2** (accounts tab physically merged into 站点与账号), **#8.3 channel-sync UI**, **#9 Phase 2 bulk re-login**, **#8.4/#8.2**, **Action Center site sample deep-links**, **#9 R2 session indicator**, and **2026-07-12 frontend optimization + S0–S2 review** are on branch `main`.  
-**Local tip:** `a611273` + **uncommitted S3+S4+P2**. **origin/main** behind until commit+push.
+**Committed local/remote tip:** `24d9ed4` (SSH remote synced). Working tree has **uncommitted** FE-4/BE-2 + related review fixes (notifications page, prettier noise, etc.). Do not push until authorized. Local `origin/main` tracking may still look stale at `91b9f40`.
 
 ### P2 三项落地 (2026-07-13) — done
 

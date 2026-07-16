@@ -165,7 +165,7 @@
 
 .account-key-card.is-warning {
   border-color: var(--v4-amber-border);
-  background: var(--surface-solid)8e9;
+  background: var(--surface-solid) 8e9;
 }
 
 .account-key-card span,
@@ -344,9 +344,7 @@
 
 .capability-row.comparison-row {
   border-color: var(--v4-blue-line);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 8rem),
-    var(--v4-card-soft);
+  background: radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 8rem), var(--v4-card-soft);
 }
 
 .capability-row.comparison-row b {

@@ -1,7 +1,20 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
 import { formatBytes } from "@/lib/format";
-import type { AuditLogItem, ChannelHealthScheduleConfig, ExportResult, NetworkProxyConfig, PortCheckResult, ProxyTestResult, SchedulerStatus, StatusPayload, SyncScheduleConfig, SystemBackup, SystemSetting, VersionCheckResult } from "@/types";
+import type {
+  AuditLogItem,
+  ChannelHealthScheduleConfig,
+  ExportResult,
+  NetworkProxyConfig,
+  PortCheckResult,
+  ProxyTestResult,
+  SchedulerStatus,
+  StatusPayload,
+  SyncScheduleConfig,
+  SystemBackup,
+  SystemSetting,
+  VersionCheckResult,
+} from "@/types";
 import { SiteSchedules } from "@/components/settings/SiteSchedules";
 import { SettingsBackup } from "@/components/settings/SettingsBackup";
 import {
@@ -61,7 +74,15 @@ function parseStringSetting(setting: SystemSetting | undefined) {
   }
 }
 
-function SettingsBase({ status, onDone, dialogEpoch = 0 }: { status: StatusPayload; onDone: () => void; dialogEpoch?: number }) {
+function SettingsBase({
+  status,
+  onDone,
+  dialogEpoch = 0,
+}: {
+  status: StatusPayload;
+  onDone: () => void;
+  dialogEpoch?: number;
+}) {
   const [settings, setSettings] = useState<SystemSetting[]>([]);
   const [backups, setBackups] = useState<SystemBackup[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
@@ -104,7 +125,9 @@ function SettingsBase({ status, onDone, dialogEpoch = 0 }: { status: StatusPaylo
     setSettings((current) => {
       const existingIndex = current.findIndex((item) => item.key === key);
       if (existingIndex === -1) {
-        return [...current, { key, valueJson, updatedAt: new Date().toISOString() }].sort((a, b) => a.key.localeCompare(b.key));
+        return [...current, { key, valueJson, updatedAt: new Date().toISOString() }].sort((a, b) =>
+          a.key.localeCompare(b.key),
+        );
       }
       const next = [...current];
       next[existingIndex] = { ...next[existingIndex], valueJson };
@@ -126,7 +149,9 @@ function SettingsBase({ status, onDone, dialogEpoch = 0 }: { status: StatusPaylo
   }
 
   function toggleBackupSelection(fileName: string) {
-    setSelectedBackups((current) => current.includes(fileName) ? current.filter((item) => item !== fileName) : [...current, fileName]);
+    setSelectedBackups((current) =>
+      current.includes(fileName) ? current.filter((item) => item !== fileName) : [...current, fileName],
+    );
   }
 
   async function refresh() {
@@ -164,14 +189,22 @@ function SettingsBase({ status, onDone, dialogEpoch = 0 }: { status: StatusPaylo
   }
 
   async function restoreBackup(backup: SystemBackup) {
-    if (!window.confirm("确认从 " + backup.fileName + " 恢复数据库？程序会先自动备份当前数据库，然后恢复该快照。恢复后建议刷新页面。")) return;
+    if (
+      !window.confirm(
+        "确认从 " + backup.fileName + " 恢复数据库？程序会先自动备份当前数据库，然后恢复该快照。恢复后建议刷新页面。",
+      )
+    )
+      return;
     setBusy("restore");
     setMessage("正在恢复 " + backup.fileName + "…");
     try {
-      const result = await api<{ restored: boolean; fileName: string; beforeBackup: SystemBackup }>("/api/system/restore", {
-        method: "POST",
-        body: JSON.stringify({ fileName: backup.fileName }),
-      });
+      const result = await api<{ restored: boolean; fileName: string; beforeBackup: SystemBackup }>(
+        "/api/system/restore",
+        {
+          method: "POST",
+          body: JSON.stringify({ fileName: backup.fileName }),
+        },
+      );
       setMessage("已恢复 " + result.fileName + "，恢复前快照已保存为 " + result.beforeBackup.fileName + "。");
       await refresh();
       onDone();
@@ -184,7 +217,12 @@ function SettingsBase({ status, onDone, dialogEpoch = 0 }: { status: StatusPaylo
 
   async function deleteSelectedBackups() {
     if (!selectedBackups.length) return;
-    if (!window.confirm("确认删除选中的 " + selectedBackups.length + " 个本地备份？这不会影响当前数据库，但删除后这些快照无法恢复。")) return;
+    if (
+      !window.confirm(
+        "确认删除选中的 " + selectedBackups.length + " 个本地备份？这不会影响当前数据库，但删除后这些快照无法恢复。",
+      )
+    )
+      return;
     setBusy("delete");
     setMessage("正在删除选中的备份…");
     try {
@@ -192,7 +230,13 @@ function SettingsBase({ status, onDone, dialogEpoch = 0 }: { status: StatusPaylo
         method: "POST",
         body: JSON.stringify({ fileNames: selectedBackups }),
       });
-      setMessage("已删除 " + result.deleted + " 个备份" + (result.skipped.length ? "，跳过 " + result.skipped.length + " 个" : "") + "。");
+      setMessage(
+        "已删除 " +
+          result.deleted +
+          " 个备份" +
+          (result.skipped.length ? "，跳过 " + result.skipped.length + " 个" : "") +
+          "。",
+      );
       setSelectedBackups([]);
       await refresh();
     } catch (error) {
@@ -253,7 +297,9 @@ function SettingsBase({ status, onDone, dialogEpoch = 0 }: { status: StatusPaylo
         upsertSetting("app.version_check_url", JSON.stringify(versionCheckURL));
         await api("/api/system/settings", {
           method: "PUT",
-          body: JSON.stringify({ settings: [{ key: "app.version_check_url", valueJson: JSON.stringify(versionCheckURL) }] }),
+          body: JSON.stringify({
+            settings: [{ key: "app.version_check_url", valueJson: JSON.stringify(versionCheckURL) }],
+          }),
         });
       }
       const result = await api<VersionCheckResult>("/api/system/version-check");
@@ -319,9 +365,15 @@ function SettingsBase({ status, onDone, dialogEpoch = 0 }: { status: StatusPaylo
     }
   }
 
-  useEffect(() => { setShowHelpGuide(false); }, [dialogEpoch]);
-  useEffect(() => { void refresh(); }, []);
-  useEffect(() => { setVersionCheckURL(currentVersionCheckURL); }, [currentVersionCheckURL]);
+  useEffect(() => {
+    setShowHelpGuide(false);
+  }, [dialogEpoch]);
+  useEffect(() => {
+    void refresh();
+  }, []);
+  useEffect(() => {
+    setVersionCheckURL(currentVersionCheckURL);
+  }, [currentVersionCheckURL]);
 
   return (
     <section className="panel">
@@ -331,14 +383,28 @@ function SettingsBase({ status, onDone, dialogEpoch = 0 }: { status: StatusPaylo
           <h2>本地数据安全与运行配置</h2>
           <p>备份只保存在本机 data/backups 目录。恢复前会自动创建当前数据库快照，避免误操作不可回退。</p>
         </div>
-        <button disabled={busy !== ""} onClick={() => void createBackup()}>{busy === "backup" ? "备份中…" : "立即备份数据库"}</button>
+        <button disabled={busy !== ""} onClick={() => void createBackup()}>
+          {busy === "backup" ? "备份中…" : "立即备份数据库"}
+        </button>
       </div>
 
       <div className="channel-summary">
-        <div><span>运行端口</span><strong>{status.port}</strong></div>
-        <div><span>备份数量</span><strong>{backups.length}</strong></div>
-        <div><span>备份占用</span><strong>{formatBytes(totalBackupSize)}</strong></div>
-        <div><span>未读通知</span><strong>{status.summary.unreadNotifications}</strong></div>
+        <div>
+          <span>运行端口</span>
+          <strong>{status.port}</strong>
+        </div>
+        <div>
+          <span>备份数量</span>
+          <strong>{backups.length}</strong>
+        </div>
+        <div>
+          <span>备份占用</span>
+          <strong>{formatBytes(totalBackupSize)}</strong>
+        </div>
+        <div>
+          <span>未读通知</span>
+          <strong>{status.summary.unreadNotifications}</strong>
+        </div>
       </div>
 
       <div className="settings-grid">
@@ -421,7 +487,12 @@ function SettingsBase({ status, onDone, dialogEpoch = 0 }: { status: StatusPaylo
         />
       </div>
 
-      <SettingsJsonEditor settings={settings} busy={busy === "settings"} onSave={() => void saveSettings()} onChange={setSettings} />
+      <SettingsJsonEditor
+        settings={settings}
+        busy={busy === "settings"}
+        onSave={() => void saveSettings()}
+        onChange={setSettings}
+      />
       {message ? <div className="note">{message}</div> : null}
     </section>
   );

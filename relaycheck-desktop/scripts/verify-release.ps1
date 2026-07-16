@@ -14,6 +14,7 @@ $FrontendDir = Join-Path $RepoRoot "frontend"
 $RuntimeRoot = Join-Path $RepoRoot ".tmp\verify-release"
 $RuntimeDir = Join-Path $RuntimeRoot "runtime"
 $ReleaseExe = Join-Path $RepoRoot "dist\relaycheck.exe"
+$GoVulnCheckVersion = "v1.5.0"
 
 $startedProcesses = New-Object System.Collections.Generic.List[System.Diagnostics.Process]
 $oldNoOpen = $env:RELAYCHECK_NO_OPEN
@@ -47,6 +48,20 @@ function Invoke-Checked {
   } finally {
     Pop-Location
   }
+}
+
+function Assert-MinimumGoVersion {
+  param([version]$Minimum)
+
+  $raw = (& go env GOVERSION).Trim()
+  if ($LASTEXITCODE -ne 0 -or $raw -notmatch '^go(\d+\.\d+(?:\.\d+)?)$') {
+    throw "Unable to determine Go version: $raw"
+  }
+  $current = [version]$Matches[1]
+  if ($current -lt $Minimum) {
+    throw "Go $current is below required release toolchain $Minimum. GO-2026-5856 is fixed in Go 1.26.5."
+  }
+  Write-Host "Go toolchain: $current"
 }
 
 function Assert-WorkspacePath {
@@ -159,11 +174,13 @@ function Stop-OwnedPortListeners {
 try {
   Write-Host "RelayCheck release verification"
   Write-Host "Repo: $RepoRoot"
+  Assert-MinimumGoVersion ([version]"1.26.5")
 
-  Invoke-Checked "Frontend unit tests" $FrontendDir "npm" @("test")
+  Invoke-Checked "Frontend format" $FrontendDir "npm" @("run", "format:check")
   Invoke-Checked "Frontend lint" $FrontendDir "npm" @("run", "lint")
-  Invoke-Checked "Go tests" $RepoRoot "go" @("test", "-mod=vendor", "-count=1", "./...")
-  Invoke-Checked "Go vet" $RepoRoot "go" @("vet", "-mod=vendor", "./...")
+  Invoke-Checked "Frontend unit tests + coverage" $FrontendDir "npm" @("run", "test:coverage")
+  Invoke-Checked "Go tests" $RepoRoot "go" @("test", "-mod=vendor", "-count=1", "./", "./internal/...")
+  Invoke-Checked "Go vet" $RepoRoot "go" @("vet", "-mod=vendor", "./", "./internal/...")
   Invoke-Checked "Frontend build" $FrontendDir "npm" @("run", "build")
   New-Item -ItemType Directory -Force (Split-Path -Parent $ReleaseExe) | Out-Null
   $productVersion = "v1.1.0"
@@ -192,12 +209,12 @@ try {
     Push-Location $RepoRoot
     try {
       if (Get-Command govulncheck -ErrorAction SilentlyContinue) {
-        & govulncheck ./...
+        & govulncheck ./ ./internal/...
       } else {
-        & go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        & go run "golang.org/x/vuln/cmd/govulncheck@$GoVulnCheckVersion" ./ ./internal/...
       }
       if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Go vulnerability scan failed with exit code $LASTEXITCODE (network/proxy often required). Continuing; re-run with -ProxyUrl when online."
+        throw "Go vulnerability scan failed with exit code $LASTEXITCODE. Use -SkipGoVulnCheck only for an explicitly approved offline verification."
       }
     } finally {
       Pop-Location
@@ -274,4 +291,5 @@ try {
   Remove-WorkspaceDirectoryIfEmpty (Join-Path $RepoRoot ".tmp")
   Remove-WorkspaceItem (Join-Path $FrontendDir "verify-canary.txt")
   Remove-WorkspaceItem (Join-Path $FrontendDir "verify-nav-output.txt")
+  Remove-WorkspaceItem (Join-Path $FrontendDir "coverage")
 }

@@ -16,7 +16,8 @@ export function actionItemNavigationIntent(item: NavigableAction): NavigationInt
     case "channels":
       if (item.filter === "health") return { target: "channels", siteHealth: "risk" };
       if (item.filter === "missing") return { target: "channels", sourceStatus: "missing" };
-      if (item.filter === "unknown") return { target: "channels", channelKind: "unknown", sourceStatus: "not_archived" };
+      if (item.filter === "unknown")
+        return { target: "channels", channelKind: "unknown", sourceStatus: "not_archived" };
       return { target: "channels" };
     case "balances":
       // balances tab is not implemented; land on the merged 全部账号 subview (usage/balance surface).

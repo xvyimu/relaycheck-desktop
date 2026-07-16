@@ -18,12 +18,7 @@ import {
 } from "@/lib/accountActions";
 import { formatBalanceValue, formatTime } from "@/lib/format";
 import { apiKeyStatusLabel, loginStatusLabel, statusLabel } from "@/lib/labels";
-import type {
-  Account,
-  BrowserLoginOpenResponse,
-  BrowserLoginSaveResponse,
-  LoginStatusTestResponse,
-} from "@/types";
+import type { Account, BrowserLoginOpenResponse, BrowserLoginSaveResponse, LoginStatusTestResponse } from "@/types";
 import { TwoFactorGuide } from "@/components/ui/TwoFactorGuide";
 import { Button } from "@/components/ui/button";
 
@@ -111,15 +106,16 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
           <p>{account.upstreamSiteName || "未记录站点"}</p>
         </div>
         <div className="detail-actions">
-          <Button variant="ghost" type="button" onClick={onClose}>关闭</Button>
+          <Button variant="ghost" type="button" onClick={onClose}>
+            关闭
+          </Button>
         </div>
       </div>
 
       {showReloginSteps ? (
         <div className="account-relogin-steps" aria-label="重登步骤">
           {RELOGIN_STEPS.map((label, index) => {
-            const stateClass =
-              index < activeStep ? "is-done" : index === activeStep ? "is-current" : "";
+            const stateClass = index < activeStep ? "is-done" : index === activeStep ? "is-current" : "";
             return (
               <span key={label} className={`account-relogin-step ${stateClass}`.trim()}>
                 <b aria-hidden="true">{index + 1}</b>
@@ -158,32 +154,73 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
         <section className="detail-card">
           <h3>运营状态</h3>
           <div className="detail-metrics">
-            <div><span>登录</span><strong>{loginStatusLabel(account.loginStatus)}</strong></div>
-            <div><span>签到</span><strong>{statusLabel(checkinState)}</strong></div>
-            <div><span>余额</span><strong>{account.balance !== undefined ? formatBalanceValue(account.balance, account.balanceUnit || "unknown") : "-"}</strong></div>
+            <div>
+              <span>登录</span>
+              <strong>{loginStatusLabel(account.loginStatus)}</strong>
+            </div>
+            <div>
+              <span>签到</span>
+              <strong>{statusLabel(checkinState)}</strong>
+            </div>
+            <div>
+              <span>余额</span>
+              <strong>
+                {account.balance !== undefined
+                  ? formatBalanceValue(account.balance, account.balanceUnit || "unknown")
+                  : "-"}
+              </strong>
+            </div>
           </div>
           <div className="detail-list">
-            <div><span>标识</span><strong>{identity}</strong></div>
-            <div><span>认证</span><strong>{account.authType}</strong></div>
-            <div><span>最近签到</span><strong>{formatTime(account.lastCheckinAt || "")}</strong></div>
-            <div><span>验证时间</span><strong>{formatTime(account.lastValidatedAt || "")}</strong></div>
+            <div>
+              <span>标识</span>
+              <strong>{identity}</strong>
+            </div>
+            <div>
+              <span>认证</span>
+              <strong>{account.authType}</strong>
+            </div>
+            <div>
+              <span>最近签到</span>
+              <strong>{formatTime(account.lastCheckinAt || "")}</strong>
+            </div>
+            <div>
+              <span>验证时间</span>
+              <strong>{formatTime(account.lastValidatedAt || "")}</strong>
+            </div>
           </div>
         </section>
 
         <section className="detail-card">
           <h3>Key 与模型</h3>
           <div className="detail-list">
-            <div><span>指纹</span><strong>{account.apiKeyFingerprint || "未保存"}</strong></div>
-            <div><span>检测状态</span><strong>{keyState}</strong></div>
-            <div><span>测试模型</span><strong>{account.apiKeyTestModel || "未测速"}</strong></div>
-            <div><span>延迟</span><strong>{account.apiKeyLatencyMs ? `${account.apiKeyLatencyMs}ms` : "未测速"}</strong></div>
+            <div>
+              <span>指纹</span>
+              <strong>{account.apiKeyFingerprint || "未保存"}</strong>
+            </div>
+            <div>
+              <span>检测状态</span>
+              <strong>{keyState}</strong>
+            </div>
+            <div>
+              <span>测试模型</span>
+              <strong>{account.apiKeyTestModel || "未测速"}</strong>
+            </div>
+            <div>
+              <span>延迟</span>
+              <strong>{account.apiKeyLatencyMs ? `${account.apiKeyLatencyMs}ms` : "未测速"}</strong>
+            </div>
           </div>
           {account.apiKeySampleModels?.length ? (
             <div className="signal-list">
-              {account.apiKeySampleModels.slice(0, 8).map((model) => <span key={model}>{model}</span>)}
+              {account.apiKeySampleModels.slice(0, 8).map((model) => (
+                <span key={model}>{model}</span>
+              ))}
             </div>
           ) : null}
-          {account.apiKeyTestMessage ? <div className="problem-hint detail-hint">{account.apiKeyTestMessage}</div> : null}
+          {account.apiKeyTestMessage ? (
+            <div className="problem-hint detail-hint">{account.apiKeyTestMessage}</div>
+          ) : null}
         </section>
 
         <section className="detail-card">
@@ -198,7 +235,9 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
               />
             ) : null}
             {account.loginStatus !== "valid" && !needsTwoFactor ? (
-              <div className="problem-hint detail-hint">登录态异常，需重新登录或保存授权。不自动填密码、不绕过 2FA。</div>
+              <div className="problem-hint detail-hint">
+                登录态异常，需重新登录或保存授权。不自动填密码、不绕过 2FA。
+              </div>
             ) : null}
             {!["success", "already_checked"].includes(checkinState) ? (
               <div className="problem-hint detail-hint">最近签到未确认成功，建议在签到页查看返回消息。</div>

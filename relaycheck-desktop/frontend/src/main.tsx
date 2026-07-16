@@ -179,7 +179,6 @@ function App() {
                 active={tab === "channels"}
                 dialogEpoch={dialogEpoch}
                 inventoryChannels={inventory.channels}
-                inventoryAccounts={inventory.accounts}
               />
             </Suspense>
           </div>
@@ -189,7 +188,6 @@ function App() {
             <Suspense fallback={<PanelFallback />}>
               <SitesPanel
                 sites={inventory.sites}
-                accounts={inventory.accounts}
                 onRefresh={reload}
                 intent={navigationIntent?.target === "sites" ? navigationIntent : null}
                 onNavigate={handleNavigate}
@@ -217,10 +215,17 @@ function App() {
           </div>
         ) : null}
         {visitedTabs.has("notifications") ? (
-          <div style={{ display: show("notifications") }} aria-hidden={tab !== "notifications"} inert={tab !== "notifications"}>
+          <div
+            style={{ display: show("notifications") }}
+            aria-hidden={tab !== "notifications"}
+            inert={tab !== "notifications"}
+          >
             <Suspense fallback={<PanelFallback />}>
               <NotificationsPanel
                 items={ops.notifications}
+                total={ops.notificationPage.total}
+                unreadTotal={ops.notificationPage.unreadTotal}
+                importantTotal={ops.notificationPage.importantTotal}
                 onRefresh={reload}
                 intent={navigationIntent?.target === "notifications" ? navigationIntent : null}
               />
@@ -230,7 +235,11 @@ function App() {
         {visitedTabs.has("settings") ? (
           <div style={{ display: show("settings") }} aria-hidden={tab !== "settings"} inert={tab !== "settings"}>
             <Suspense fallback={<PanelFallback />}>
-              {system.status ? <SettingsPanel status={system.status} onDone={reload} dialogEpoch={dialogEpoch} /> : <Empty message="正在加载设置…" />}
+              {system.status ? (
+                <SettingsPanel status={system.status} onDone={reload} dialogEpoch={dialogEpoch} />
+              ) : (
+                <Empty message="正在加载设置…" />
+              )}
             </Suspense>
           </div>
         ) : null}

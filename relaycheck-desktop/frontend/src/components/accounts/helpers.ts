@@ -8,7 +8,12 @@ export function accountDomainLabel(account: Account): string {
     const url = raw.startsWith("http://") || raw.startsWith("https://") ? new URL(raw) : new URL(`https://${raw}`);
     return url.hostname.replace(/^www\./, "") || raw;
   } catch {
-    return raw.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] || "unknown";
+    return (
+      raw
+        .replace(/^https?:\/\//, "")
+        .replace(/^www\./, "")
+        .split("/")[0] || "unknown"
+    );
   }
 }
 
@@ -42,20 +47,34 @@ export function isLocalURL(value: string): boolean {
 }
 
 export function isProblemAccount(account: Account): boolean {
-  return PROBLEM_LOGIN_STATUSES.has(account.loginStatus) || PROBLEM_CHECKIN_STATUSES.has(account.lastCheckinStatus || "");
+  return (
+    PROBLEM_LOGIN_STATUSES.has(account.loginStatus) || PROBLEM_CHECKIN_STATUSES.has(account.lastCheckinStatus || "")
+  );
 }
 
 export function compareAccounts(left: Account, right: Account, sortKey: string): number {
   const byID = left.id.localeCompare(right.id);
   const compareNumber = (leftValue: number | undefined, rightValue: number | undefined, direction: "asc" | "desc") => {
-    const leftScore = Number.isFinite(leftValue) ? Number(leftValue) : (direction === "asc" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY);
-    const rightScore = Number.isFinite(rightValue) ? Number(rightValue) : (direction === "asc" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY);
+    const leftScore = Number.isFinite(leftValue)
+      ? Number(leftValue)
+      : direction === "asc"
+        ? Number.POSITIVE_INFINITY
+        : Number.NEGATIVE_INFINITY;
+    const rightScore = Number.isFinite(rightValue)
+      ? Number(rightValue)
+      : direction === "asc"
+        ? Number.POSITIVE_INFINITY
+        : Number.NEGATIVE_INFINITY;
     return direction === "asc" ? leftScore - rightScore : rightScore - leftScore;
   };
   const compareTime = (leftValue: string | undefined, rightValue: string | undefined, direction: "asc" | "desc") => {
     const parse = (value: string | undefined) => {
       const timestamp = value ? new Date(value).getTime() : NaN;
-      return Number.isFinite(timestamp) ? timestamp : (direction === "asc" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY);
+      return Number.isFinite(timestamp)
+        ? timestamp
+        : direction === "asc"
+          ? Number.POSITIVE_INFINITY
+          : Number.NEGATIVE_INFINITY;
     };
     const diff = direction === "asc" ? parse(leftValue) - parse(rightValue) : parse(rightValue) - parse(leftValue);
     return diff || byID;

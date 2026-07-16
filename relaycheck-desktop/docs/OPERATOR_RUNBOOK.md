@@ -11,8 +11,8 @@ Use this runbook after the one-command release gate in `docs\LAUNCH_READINESS.md
 - Release executable inside the package: `relaycheck.exe`
 - Intended working directory: the folder that should own `data\relaycheck.db`
 - Local URL: `http://127.0.0.1:3001` unless `RELAYCHECK_PORT` is changed
-- Bootstrap account: `admin`
-- Bootstrap password source: `RELAYCHECK_BOOTSTRAP_PASSWORD` on first launch, or `data\bootstrap-admin-password.txt` if the env var is not set
+- Access mode: loopback-only trusted single-user console; there is no admin login
+- Optional hardened mode: set `RELAYCHECK_REQUIRE_TOKEN=1` before launch and protect `data\session-token.txt`
 - Existing installation backup: a copy of the previous executable and `data\relaycheck.db`
 
 Do not paste real passwords, cookies, bearer tokens, API keys, or exported `.rczip` passwords into tickets, screenshots, logs, or handoff notes.
@@ -39,7 +39,7 @@ Before copying the package to the target machine, `scripts\verify-package.ps1` s
 ## First Launch
 
 1. Confirm the working directory is writable and has enough disk space for `data\`, `data\backups\`, logs, and exports.
-2. If this is a fresh install and a deterministic password is required, set `RELAYCHECK_BOOTSTRAP_PASSWORD` before starting the app.
+2. If the host is shared or requires a stronger local boundary, set `RELAYCHECK_REQUIRE_TOKEN=1` before starting the app.
 3. If this is an upgrade, stop the previous `relaycheck.exe`, copy the previous executable aside, and back up `data\relaycheck.db`.
 4. Extract the release package into the intended working directory.
 5. Confirm `manifest.json` and `checksums.sha256` are present beside `relaycheck.exe`.
@@ -115,9 +115,9 @@ Do not expose the port via port-forward, LAN bind, or reverse proxy without addi
 
 Use non-secret test data only.
 
-1. Sign in with `admin` and the bootstrap password.
-2. Open Dashboard and confirm summary cards, Action Center, scheduler preview, and notifications render.
-3. Open Settings and confirm runtime port, database path, backup dir, scheduler status, and diagnostics are visible.
+1. Open Dashboard and confirm summary cards, Action Center, scheduler preview, and notifications render.
+2. Open Settings and confirm runtime port, database path, backup dir, scheduler status, and diagnostics are visible.
+3. When hardened mode is enabled, confirm a request without the session cookie is rejected and opening the local homepage establishes the cookie.
 4. Create a manual backup from Settings and confirm the new file appears under `data\backups\`.
 5. Open Sites or Channels and create or inspect one relay site with non-secret test values.
 6. Run a dry-run task before any real batch action.

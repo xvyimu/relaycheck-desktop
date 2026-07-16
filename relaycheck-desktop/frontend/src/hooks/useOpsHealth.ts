@@ -1,11 +1,19 @@
 import { useCallback } from "react";
 
 import { useApi } from "@/hooks/useApi";
-import type { ActionCenter, CheckinStatus, NotificationItem, SystemDiagnostics } from "@/types";
+import type { ActionCenter, CheckinStatus, NotificationPage, SystemDiagnostics } from "@/types";
+
+const emptyNotificationPage: NotificationPage = {
+  items: [],
+  total: 0,
+  unreadTotal: 0,
+  importantTotal: 0,
+  nextOffset: null,
+};
 
 export function useOpsHealth() {
   const checkins = useApi<CheckinStatus | null>("/api/checkins/status", null);
-  const notifications = useApi<NotificationItem[]>("/api/notifications", []);
+  const notifications = useApi<NotificationPage>("/api/notifications/page", emptyNotificationPage);
   const diagnostics = useApi<SystemDiagnostics | null>("/api/system/diagnostics", null);
   const actionCenter = useApi<ActionCenter | null>("/api/system/action-center", null);
   const { refresh: refreshCheckins } = checkins;
@@ -14,12 +22,7 @@ export function useOpsHealth() {
   const { refresh: refreshActionCenter } = actionCenter;
 
   const refresh = useCallback(async () => {
-    await Promise.all([
-      refreshCheckins(),
-      refreshNotifications(),
-      refreshDiagnostics(),
-      refreshActionCenter(),
-    ]);
+    await Promise.all([refreshCheckins(), refreshNotifications(), refreshDiagnostics(), refreshActionCenter()]);
   }, [refreshActionCenter, refreshCheckins, refreshDiagnostics, refreshNotifications]);
 
   return {
@@ -27,7 +30,8 @@ export function useOpsHealth() {
     loaded: checkins.loaded && notifications.loaded && diagnostics.loaded && actionCenter.loaded,
     error: checkins.error || notifications.error || diagnostics.error || actionCenter.error,
     checkins: checkins.data,
-    notifications: notifications.data,
+    notifications: notifications.data.items,
+    notificationPage: notifications.data,
     diagnostics: diagnostics.data,
     actionCenter: actionCenter.data,
     refresh,

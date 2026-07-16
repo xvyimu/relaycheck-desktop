@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  loginDiscoverySourceLabel,
-  normalizeLoginDiscovery,
-  parseLoginDiscovery,
-} from "../loginDiscovery";
+import { loginDiscoverySourceLabel, normalizeLoginDiscovery, parseLoginDiscovery } from "../loginDiscovery";
 
 describe("parseLoginDiscovery", () => {
   it("returns null for invalid JSON", () => {

@@ -21,10 +21,28 @@ import {
   type ReloginUiPhase,
 } from "@/lib/accountActions";
 import { formatBalanceValue, formatTime } from "@/lib/format";
-import { apiKeyStatusLabel, formatAPIKeyTestMessage, loginStatusLabel, statusLabel, upstreamKindLabel } from "@/lib/labels";
-import type { Account, APIKeyTestResult, BrowserLoginOpenResponse, BrowserLoginSaveResponse, LoginStatusTestResponse } from "@/types";
+import {
+  apiKeyStatusLabel,
+  formatAPIKeyTestMessage,
+  loginStatusLabel,
+  statusLabel,
+  upstreamKindLabel,
+} from "@/lib/labels";
+import type {
+  Account,
+  APIKeyTestResult,
+  BrowserLoginOpenResponse,
+  BrowserLoginSaveResponse,
+  LoginStatusTestResponse,
+} from "@/types";
 import { AccountKeySummary } from "@/components/accounts/AccountKeySummary";
-import { accountAvatarLabel, accountBackendShort, accountDomainLabel, defaultLoginUrl, isProblemAccount } from "@/components/accounts/helpers";
+import {
+  accountAvatarLabel,
+  accountBackendShort,
+  accountDomainLabel,
+  defaultLoginUrl,
+  isProblemAccount,
+} from "@/components/accounts/helpers";
 import { StatusLabel } from "@/components/ui/status-label";
 import { TwoFactorGuide } from "@/components/ui/TwoFactorGuide";
 import { Button } from "@/components/ui/button";
@@ -45,7 +63,9 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
   const [displayName, setDisplayName] = useState(account.displayName);
   const [siteName, setSiteName] = useState(account.upstreamSiteName);
   const [baseUrl, setBaseUrl] = useState(account.upstreamSiteBaseUrl || "");
-  const [loginUrl, setLoginUrl] = useState(account.upstreamSiteLoginUrl || defaultLoginUrl(account.upstreamSiteBaseUrl || ""));
+  const [loginUrl, setLoginUrl] = useState(
+    account.upstreamSiteLoginUrl || defaultLoginUrl(account.upstreamSiteBaseUrl || ""),
+  );
   const [kind, setKind] = useState(account.upstreamSiteKind || "auto");
   const [siteUpdateScope, setSiteUpdateScope] = useState<"current" | "shared">("current");
   const [email, setEmail] = useState(account.email || "");
@@ -59,7 +79,10 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
   const isProblem = isProblemAccount(account);
   const isBusy = busy !== "";
   const isMessageError =
-    message.includes("失败") || message.includes("错误") || message.includes("失效") || isLikelyAuthFailureMessage(message);
+    message.includes("失败") ||
+    message.includes("错误") ||
+    message.includes("失效") ||
+    isLikelyAuthFailureMessage(message);
   const primaryKeys = primaryActionsForRelogin(reloginPhase);
   const showReloginSteps = shouldShowReloginSteps(account.loginStatus, account.lastCheckinStatus, reloginPhase);
   const activeStep = reloginStepIndex(reloginPhase, account.loginStatus);
@@ -80,7 +103,17 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     setClearApiKey(false);
     setSiteUpdateScope("current");
     setDismissedTwoFactor(false);
-  }, [account.id, account.displayName, account.upstreamSiteName, account.upstreamSiteBaseUrl, account.upstreamSiteLoginUrl, account.upstreamSiteKind, account.email, account.username, account.authType]);
+  }, [
+    account.id,
+    account.displayName,
+    account.upstreamSiteName,
+    account.upstreamSiteBaseUrl,
+    account.upstreamSiteLoginUrl,
+    account.upstreamSiteKind,
+    account.email,
+    account.username,
+    account.authType,
+  ]);
 
   useEffect(() => {
     setReloginPhase("idle");
@@ -159,16 +192,27 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
 
   async function saveAccount() {
     if (clearApiKey) {
-      const confirmed = window.confirm(`确认清空"${account.displayName}"当前保存的 API Key？保存后需要重新录入密钥才能恢复模型检测。`);
+      const confirmed = window.confirm(
+        `确认清空"${account.displayName}"当前保存的 API Key？保存后需要重新录入密钥才能恢复模型检测。`,
+      );
       if (!confirmed) return;
     }
     await runAction("保存账号", async () => {
       await api(`/api/accounts/${account.id}`, {
         method: "PUT",
         body: JSON.stringify({
-          displayName, siteName, baseUrl, loginUrl,
+          displayName,
+          siteName,
+          baseUrl,
+          loginUrl,
           kind: kind === "auto" ? "" : kind,
-          email, username, authType, password, apiKey, clearApiKey, siteUpdateScope,
+          email,
+          username,
+          authType,
+          password,
+          apiKey,
+          clearApiKey,
+          siteUpdateScope,
         }),
       });
       setEditing(false);
@@ -191,7 +235,9 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
   }
 
   async function deleteAccount() {
-    const confirmed = window.confirm(`确认删除账号"${account.displayName}"？这会删除该账号保存的密码、Cookie、Token 和 API Key 等凭据。`);
+    const confirmed = window.confirm(
+      `确认删除账号"${account.displayName}"？这会删除该账号保存的密码、Cookie、Token 和 API Key 等凭据。`,
+    );
     if (!confirmed) return;
     await runAction("删除账号", () => api(`/api/accounts/${account.id}`, { method: "DELETE" }));
   }
@@ -260,14 +306,23 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
   return (
     <article className={`account-card account-card-v4 ${isProblem ? "is-problem" : ""}`} aria-busy={isBusy}>
       <div className="account-card-head">
-        <div className="account-avatar-stack" aria-label={`${accountDomainLabel(account)}，${upstreamKindLabel(account.upstreamSiteKind || "unknown")}`}>
-          <div className="account-avatar" aria-hidden="true">{accountAvatarLabel(account)}</div>
-          <span className={`account-kind-chip kind-${account.upstreamSiteKind || "unknown"}`}>{accountBackendShort(account.upstreamSiteKind || "unknown")}</span>
+        <div
+          className="account-avatar-stack"
+          aria-label={`${accountDomainLabel(account)}，${upstreamKindLabel(account.upstreamSiteKind || "unknown")}`}
+        >
+          <div className="account-avatar" aria-hidden="true">
+            {accountAvatarLabel(account)}
+          </div>
+          <span className={`account-kind-chip kind-${account.upstreamSiteKind || "unknown"}`}>
+            {accountBackendShort(account.upstreamSiteKind || "unknown")}
+          </span>
         </div>
         <div className="account-identity">
           <span title={account.upstreamSiteName}>{account.upstreamSiteName}</span>
           <strong title={account.displayName}>{account.displayName}</strong>
-          <em title={account.upstreamSiteBaseUrl || "未记录站点地址"}>{account.upstreamSiteBaseUrl || "未记录站点地址"}</em>
+          <em title={account.upstreamSiteBaseUrl || "未记录站点地址"}>
+            {account.upstreamSiteBaseUrl || "未记录站点地址"}
+          </em>
         </div>
         <div className={`account-status status-${account.loginStatus}`}>
           <StatusLabel level={account.loginStatus} label={loginStatusLabel(account.loginStatus)} />
@@ -285,17 +340,29 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
         </div>
         <div className="metric-balance">
           <span>余额</span>
-          <strong>{account.balance !== undefined ? formatBalanceValue(account.balance, account.balanceUnit || "unknown") : "-"}</strong>
+          <strong>
+            {account.balance !== undefined
+              ? formatBalanceValue(account.balance, account.balanceUnit || "unknown")
+              : "-"}
+          </strong>
         </div>
         <div className="metric-key">
           <span>Key</span>
-          <strong>{account.apiKeyFingerprint ? apiKeyStatusLabel(account.apiKeyStatus || "unchecked") : "未保存"}</strong>
+          <strong>
+            {account.apiKeyFingerprint ? apiKeyStatusLabel(account.apiKeyStatus || "unchecked") : "未保存"}
+          </strong>
         </div>
       </div>
 
       <div className="chips secondary-chips">
         <span>{account.authType}</span>
-        {account.apiKeyFingerprint ? <span>{account.apiKeyFingerprint} · {apiKeyStatusLabel(account.apiKeyStatus || "unchecked")}</span> : <span>未保存密钥</span>}
+        {account.apiKeyFingerprint ? (
+          <span>
+            {account.apiKeyFingerprint} · {apiKeyStatusLabel(account.apiKeyStatus || "unchecked")}
+          </span>
+        ) : (
+          <span>未保存密钥</span>
+        )}
         {account.lastCheckinAt ? <span>签到 {formatTime(account.lastCheckinAt)}</span> : null}
       </div>
 
@@ -356,23 +423,51 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
           </label>
           <label className="field span-2">
             <span>站点网址</span>
-            <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://example.com" />
+            <input
+              value={baseUrl}
+              onChange={(event) => setBaseUrl(event.target.value)}
+              placeholder="https://example.com"
+            />
           </label>
           <label className="field span-2">
             <span>登录页</span>
-            <input value={loginUrl} onChange={(event) => setLoginUrl(event.target.value)} placeholder="默认使用 /login" />
+            <input
+              value={loginUrl}
+              onChange={(event) => setLoginUrl(event.target.value)}
+              placeholder="默认使用 /login"
+            />
           </label>
           <div className="field span-2">
             <span>站点修改范围</span>
             <div className="segmented scope-segmented">
-              <button type="button" className={siteUpdateScope === "current" ? "active" : ""} onClick={() => setSiteUpdateScope("current")}>只改当前账号</button>
-              <button type="button" className={siteUpdateScope === "shared" ? "active" : ""} onClick={() => setSiteUpdateScope("shared")}>同步同站点全部账号</button>
+              <button
+                type="button"
+                className={siteUpdateScope === "current" ? "active" : ""}
+                onClick={() => setSiteUpdateScope("current")}
+              >
+                只改当前账号
+              </button>
+              <button
+                type="button"
+                className={siteUpdateScope === "shared" ? "active" : ""}
+                onClick={() => setSiteUpdateScope("shared")}
+              >
+                同步同站点全部账号
+              </button>
             </div>
-            <em className="field-help">{siteUpdateScope === "current" ? "适合一个渠道有多个账号时，只修正这张账号卡。" : "会更新这个上游站点，并影响绑定在同一站点下的账号。"}</em>
+            <em className="field-help">
+              {siteUpdateScope === "current"
+                ? "适合一个渠道有多个账号时，只修正这张账号卡。"
+                : "会更新这个上游站点，并影响绑定在同一站点下的账号。"}
+            </em>
           </div>
           <label className="field">
             <span>显示名称</span>
-            <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="显示名称" />
+            <input
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              placeholder="显示名称"
+            />
           </label>
           <label className="field">
             <span>邮箱</span>
@@ -394,11 +489,21 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
           </label>
           <label className="field">
             <span>新密码，不填则保留</span>
-            <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="留空不覆盖旧密码" type="password" />
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="留空不覆盖旧密码"
+              type="password"
+            />
           </label>
           <label className="field">
             <span>新 API Key，不填则保留</span>
-            <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="留空不覆盖旧密钥" type="password" />
+            <input
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder="留空不覆盖旧密钥"
+              type="password"
+            />
           </label>
           {account.apiKeyFingerprint ? (
             <label className="check">
@@ -407,8 +512,12 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
             </label>
           ) : null}
           <div className="toolbar">
-            <button type="button" disabled={isBusy} onClick={() => void saveAccount()}>{accountActionButtonLabel("保存账号", busy, "保存中…")}</button>
-            <Button variant="ghost" type="button" disabled={isBusy} onClick={() => setEditing(false)}>取消</Button>
+            <button type="button" disabled={isBusy} onClick={() => void saveAccount()}>
+              {accountActionButtonLabel("保存账号", busy, "保存中…")}
+            </button>
+            <Button variant="ghost" type="button" disabled={isBusy} onClick={() => setEditing(false)}>
+              取消
+            </Button>
           </div>
         </div>
       ) : null}
@@ -416,7 +525,8 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
       <div className="account-card-actions">
         <div className="account-action-group primary">
           {primaryKeys.map((key) => renderPrimaryButton(key))}
-          <Button variant="ghost"
+          <Button
+            variant="ghost"
             type="button"
             className={`more-toggle ${moreOpen ? "active" : ""}`}
             disabled={isBusy}
@@ -431,7 +541,10 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
             <div className="account-action-label">会话与余额</div>
             <div className="account-action-group secondary">
               {!saveIsPrimary ? (
-                <Button variant="ghost" type="button" disabled={isBusy}
+                <Button
+                  variant="ghost"
+                  type="button"
+                  disabled={isBusy}
                   aria-label={`保存 ${account.displayName} 的浏览器授权`}
                   onClick={() => void finishBrowserLogin()}
                 >
@@ -439,7 +552,10 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
                 </Button>
               ) : null}
               {!testIsPrimary ? (
-                <Button variant="ghost" type="button" disabled={isBusy}
+                <Button
+                  variant="ghost"
+                  type="button"
+                  disabled={isBusy}
                   aria-label={`测试 ${account.displayName} 的登录态`}
                   onClick={() => void testLoginStatus()}
                 >
@@ -447,35 +563,64 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
                 </Button>
               ) : null}
               {!primaryKeys.includes("checkin") ? (
-                <Button variant="ghost" type="button" disabled={isBusy}
+                <Button
+                  variant="ghost"
+                  type="button"
+                  disabled={isBusy}
                   aria-label={`为 ${account.displayName} 执行签到`}
-                  onClick={() => void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))}
+                  onClick={() =>
+                    void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))
+                  }
                 >
                   {accountActionButtonLabel("签到", busy)}
                 </Button>
               ) : null}
-              <Button variant="ghost" type="button" disabled={isBusy}
+              <Button
+                variant="ghost"
+                type="button"
+                disabled={isBusy}
                 aria-label={`刷新 ${account.displayName} 的余额`}
-                onClick={() => void runAction("刷新余额", () => api(`/api/accounts/${account.id}/refresh-balance`, { method: "POST" }))}
+                onClick={() =>
+                  void runAction("刷新余额", () =>
+                    api(`/api/accounts/${account.id}/refresh-balance`, { method: "POST" }),
+                  )
+                }
               >
                 {accountActionButtonLabel("刷新余额", busy)}
               </Button>
             </div>
             <div className="account-action-label">维护操作</div>
             <div className="account-action-group secondary">
-              <Button variant="ghost" type="button" disabled={isBusy} onClick={() => setEditing((current) => !current)}>{editing ? "收起编辑" : "编辑账号"}</Button>
-              <Button variant="ghost" type="button" disabled={!account.apiKeyFingerprint || isBusy} onClick={() => void testAPIKey()}>{accountActionButtonLabel("检测密钥", busy, "检测中…")}</Button>
-              <Button variant="ghost" type="button" disabled={isBusy} onClick={() => setShowTwoFactorGuide(true)}>2FA 指引</Button>
+              <Button variant="ghost" type="button" disabled={isBusy} onClick={() => setEditing((current) => !current)}>
+                {editing ? "收起编辑" : "编辑账号"}
+              </Button>
+              <Button
+                variant="ghost"
+                type="button"
+                disabled={!account.apiKeyFingerprint || isBusy}
+                onClick={() => void testAPIKey()}
+              >
+                {accountActionButtonLabel("检测密钥", busy, "检测中…")}
+              </Button>
+              <Button variant="ghost" type="button" disabled={isBusy} onClick={() => setShowTwoFactorGuide(true)}>
+                2FA 指引
+              </Button>
             </div>
             <div className="account-action-label danger-label">危险操作</div>
             <div className="account-action-group danger-zone">
-              <button type="button" className="danger" disabled={isBusy} onClick={() => void deleteAccount()}>{accountActionButtonLabel("删除账号", busy)}</button>
+              <button type="button" className="danger" disabled={isBusy} onClick={() => void deleteAccount()}>
+                {accountActionButtonLabel("删除账号", busy)}
+              </button>
             </div>
           </div>
         ) : null}
       </div>
       {message ? (
-        <div className={isMessageError ? "error" : "note"} role={isMessageError ? "alert" : "status"} aria-live={isMessageError ? "assertive" : "polite"}>
+        <div
+          className={isMessageError ? "error" : "note"}
+          role={isMessageError ? "alert" : "status"}
+          aria-live={isMessageError ? "assertive" : "polite"}
+        >
           {message}
         </div>
       ) : null}

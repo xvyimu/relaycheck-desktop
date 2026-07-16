@@ -34,7 +34,6 @@ function MetricTile({ label, value }: { label: string; value: number | string })
 }
 
 function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) {
-  const [message, setMessage] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const task = useTaskProgress();
@@ -84,7 +83,7 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
     if (query.trim()) {
       const normalized = query.trim().toLowerCase();
       result = result.filter((log: CheckinLog) =>
-        [log.accountName || "", log.siteName || "", log.message || ""].join(" ").toLowerCase().includes(normalized)
+        [log.accountName || "", log.siteName || "", log.message || ""].join(" ").toLowerCase().includes(normalized),
       );
     }
     return result;
@@ -118,8 +117,6 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
         </div>
       </div>
 
-      {message ? <div className="problem-hint">{message}</div> : null}
-
       <div className="checkin-toolbar card">
         <div className="proxy-form-grid">
           <label className="field">
@@ -137,15 +134,22 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
           </label>
         </div>
         <div className="toolbar">
-          <Button variant="ghost" type="button" onClick={clearFilters}>清除筛选</Button>
+          <Button variant="ghost" type="button" onClick={clearFilters}>
+            清除筛选
+          </Button>
         </div>
         {statusFilter !== "all" ? (
           <div className="channel-active-filter">
             <div>
               <strong>签到状态筛选已启用</strong>
-              <span>仅显示 {statusFilter === "failed" ? "失败" : statusFilter === "unsupported" ? "不支持" : "需授权"} 的签到记录。</span>
+              <span>
+                仅显示 {statusFilter === "failed" ? "失败" : statusFilter === "unsupported" ? "不支持" : "需授权"}{" "}
+                的签到记录。
+              </span>
             </div>
-            <Button variant="ghost" type="button" onClick={clearFilters}>清除</Button>
+            <Button variant="ghost" type="button" onClick={clearFilters}>
+              清除
+            </Button>
           </div>
         ) : null}
       </div>
@@ -157,9 +161,7 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
               <strong>运行状态</strong>
               <span>当前批次进度与活动账号。</span>
             </div>
-            <span className={`status-pill ${running ? "success" : "neutral"}`}>
-              {running ? "运行中" : "待机"}
-            </span>
+            <span className={`status-pill ${running ? "success" : "neutral"}`}>{running ? "运行中" : "待机"}</span>
           </div>
 
           <div className="checkin-progress" aria-label="签到进度">
@@ -194,9 +196,7 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
           </dl>
 
           {checkins?.currentMessage || checkins?.lastRunMessage ? (
-            <div className="problem-hint detail-hint">
-              {checkins.currentMessage || checkins.lastRunMessage}
-            </div>
+            <div className="problem-hint detail-hint">{checkins.currentMessage || checkins.lastRunMessage}</div>
           ) : null}
 
           <button
@@ -242,8 +242,18 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
                     <div className="log-main">
                       <span className="log-account">{log.accountName || "未知账号"}</span>
                       <span className="log-site">{log.siteName || "未知站点"}</span>
-                      <span className={`log-status status-pill ${log.status === "failed" ? "danger" : log.status === "unsupported" || log.status === "auth_expired" ? "warning" : "success"}`}>
-                        {log.status === "failed" ? "失败" : log.status === "unsupported" ? "不支持" : log.status === "auth_expired" ? "需授权" : log.status === "success" ? "成功" : log.status}
+                      <span
+                        className={`log-status status-pill ${log.status === "failed" ? "danger" : log.status === "unsupported" || log.status === "auth_expired" ? "warning" : "success"}`}
+                      >
+                        {log.status === "failed"
+                          ? "失败"
+                          : log.status === "unsupported"
+                            ? "不支持"
+                            : log.status === "auth_expired"
+                              ? "需授权"
+                              : log.status === "success"
+                                ? "成功"
+                                : log.status}
                       </span>
                     </div>
                     {log.message && <div className="log-message">{log.message}</div>}
@@ -276,9 +286,7 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
             <dt>时间</dt>
             <dd>{schedule?.time || "-"}</dd>
             <dt>随机延迟</dt>
-            <dd>
-              {schedule ? `${schedule.randomDelayMin}-${schedule.randomDelayMax} 分钟` : "-"}
-            </dd>
+            <dd>{schedule ? `${schedule.randomDelayMin}-${schedule.randomDelayMax} 分钟` : "-"}</dd>
             <dt>窗口开始</dt>
             <dd>{formatTime(schedule?.nextWindowStartAt || "")}</dd>
             <dt>窗口结束</dt>
@@ -289,7 +297,7 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
             <dd>{formatCountdown(schedule?.nextRunInSeconds)}</dd>
           </dl>
           {schedule?.message ? <div className="note">{schedule.message}</div> : null}
-      </article>
+        </article>
       </div>
     </section>
   );

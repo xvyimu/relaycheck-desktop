@@ -59,7 +59,12 @@ function ScanPanelBase({ onRefresh }: ScanPanelProps) {
   const hasErrors = Boolean(result?.results.some((r) => r.error) || result?.message.includes("失败"));
 
   return (
-    <section className="scan-panel" aria-label="本机 NewAPI 扫描" aria-busy={busy} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <section
+      className="scan-panel"
+      aria-label="本机 NewAPI 扫描"
+      aria-busy={busy}
+      style={{ display: "flex", flexDirection: "column", gap: 16 }}
+    >
       <Card>
         <CardHeader>
           <CardTitle>本机 NewAPI 扫描</CardTitle>
@@ -98,21 +103,19 @@ function ScanPanelBase({ onRefresh }: ScanPanelProps) {
           <CardHeader>
             <CardTitle>
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {result.found ? (
-                  <LineIcon name="success" />
-                ) : (
-                  <LineIcon name="info" />
-                )}
+                {result.found ? <LineIcon name="success" /> : <LineIcon name="info" />}
                 扫描结果
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <p className="text-sm" style={{ margin: 0 }}>{result.message}</p>
+            <p className="text-sm" style={{ margin: 0 }}>
+              {result.message}
+            </p>
 
             {result.results.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {result.results.map((item, i) => (
+                {result.results.map((item) => (
                   <div
                     key={item.dbPath}
                     style={{
@@ -126,7 +129,16 @@ function ScanPanelBase({ onRefresh }: ScanPanelProps) {
                       background: item.error ? "rgba(239,68,68,0.04)" : undefined,
                     }}
                   >
-                    <code className="text-xs" style={{ flex: "1 1 240px", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <code
+                      className="text-xs"
+                      style={{
+                        flex: "1 1 240px",
+                        minWidth: 0,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {item.dbPath}
                     </code>
                     {item.error ? (

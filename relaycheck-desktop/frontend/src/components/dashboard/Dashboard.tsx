@@ -12,12 +12,7 @@ import type { SystemOverviewState } from "@/hooks/useSystemOverview";
 import { formatDuration, formatTime } from "@/lib/format";
 import { actionItemNavigationIntent, actionSampleNavigationIntent } from "@/lib/navigation";
 import { statusTone, toneBadgeVariant } from "@/lib/tone";
-import type {
-  ActionItem,
-  ActionSample,
-  NavigationIntent,
-  TabKey,
-} from "@/types";
+import type { ActionItem, ActionSample, NavigationIntent, TabKey } from "@/types";
 import { Button } from "@/components/ui/button";
 
 export interface DashboardProps {
@@ -109,33 +104,20 @@ function navigateAction(onNavigate: DashboardProps["onNavigate"], item: ActionIt
   onNavigate(target, nextIntent);
 }
 
-function navigateActionSample(
-  onNavigate: DashboardProps["onNavigate"],
-  item: ActionItem,
-  sample: ActionSample,
-) {
+function navigateActionSample(onNavigate: DashboardProps["onNavigate"], item: ActionItem, sample: ActionSample) {
   const intent = actionSampleNavigationIntent(item, sample);
   const { target, ...nextIntent } = intent;
   onNavigate(target, nextIntent);
 }
 
-function DashboardBase({
-  system,
-  inventory,
-  ops,
-  modelUsage,
-  onNavigate,
-  onRefresh,
-}: DashboardProps) {
+function DashboardBase({ system, inventory, ops, modelUsage, onNavigate, onRefresh }: DashboardProps) {
   const { status } = system;
-  const { accounts, channels } = inventory;
-  const { actionCenter, checkins, diagnostics, notifications } = ops;
-  const { problemChannels, problemAccounts, unread } = useMemo(() => {
-    const problemChannels = channels.filter((item) => item.sourceSyncStatus === "missing" || item.upstreamKind === "unknown").length;
-    const problemAccounts = accounts.filter((item) => ["expired", "invalid", "failed"].includes((item.loginStatus || "").toLowerCase())).length;
-    const unread = notifications.filter((item) => !item.read).length;
-    return { problemChannels, problemAccounts, unread };
-  }, [channels, accounts, notifications]);
+  const { accountTotal, problemTotal, channels } = inventory;
+  const { actionCenter, checkins, diagnostics, notificationPage } = ops;
+  const { unread } = useMemo(() => {
+    const unread = notificationPage.unreadTotal;
+    return { unread };
+  }, [notificationPage.unreadTotal]);
   const actionItems = actionCenter?.items || [];
   const priorityActions = actionItems;
 
@@ -220,7 +202,9 @@ function DashboardBase({
             <h2>运营待办</h2>
             <span>{actionCenterSubtitle(priorityActions)}</span>
           </div>
-          <Button variant="ghost" type="button" onClick={() => void onRefresh()}>刷新待办</Button>
+          <Button variant="ghost" type="button" onClick={() => void onRefresh()}>
+            刷新待办
+          </Button>
         </div>
         {priorityActions.length ? (
           <div className="dashboard-priority-list">
@@ -256,8 +240,12 @@ function DashboardBase({
                 ) : null}
                 <em>{item.recommendedAction || item.action}</em>
                 <div className="dashboard-priority-actions">
-                  <button type="button" onClick={() => navigateAction(onNavigate, item)}>处理</button>
-                  <Button variant="ghost" type="button" onClick={() => navigateAction(onNavigate, item)}>查看列表</Button>
+                  <button type="button" onClick={() => navigateAction(onNavigate, item)}>
+                    处理
+                  </button>
+                  <Button variant="ghost" type="button" onClick={() => navigateAction(onNavigate, item)}>
+                    查看列表
+                  </Button>
                 </div>
               </article>
             ))}
@@ -272,7 +260,7 @@ function DashboardBase({
         <Metric title="本地 NewAPI" value={status?.summary.localNewApiCount} />
         <Metric title="渠道" value={status?.summary.importedChannelCount ?? channels.length} />
         <Metric title="已识别" value={status?.summary.identifiedChannelCount} />
-        <Metric title="账号" value={status?.summary.accountCount ?? accounts.length} />
+        <Metric title="账号" value={status?.summary.accountCount ?? accountTotal} />
         <Metric title="未读" value={status?.summary.unreadNotifications ?? unread} />
       </section>
 
@@ -292,8 +280,13 @@ function DashboardBase({
         </CollapsibleCard>
         <CollapsibleCard title="运营" expanded={opsOpen} onToggle={() => setOpsOpen((v) => !v)}>
           <div className="stack">
-            <Row label="待复核渠道" value={problemChannels} />
-            <Row label="待复核账号" value={problemAccounts} />
+            <Row
+              label="待复核渠道"
+              value={
+                channels.filter((item) => item.sourceSyncStatus === "missing" || item.upstreamKind === "unknown").length
+              }
+            />
+            <Row label="待复核账号" value={problemTotal} />
             <Row label="今日待签到" value={checkins?.today.dueAccounts ?? 0} />
             <Row label="今日签到失败" value={checkins?.today.failedCount ?? 0} />
           </div>
@@ -304,13 +297,18 @@ function DashboardBase({
       </section>
 
       {/* S4.4: Analytics default collapsed; mount only when open to avoid idle polling */}
-      <section className={`card dashboard-collapsible-card dashboard-analytics-shell ${analyticsOpen ? "is-expanded" : "is-collapsed"}`}>
+      <section
+        className={`card dashboard-collapsible-card dashboard-analytics-shell ${analyticsOpen ? "is-expanded" : "is-collapsed"}`}
+      >
         <div className="section-heading dashboard-collapsible-head">
           <div>
             <h2>数据分析</h2>
             <span>余额趋势、签到分布与站点可靠性</span>
           </div>
-          <Button variant="ghost" type="button" aria-expanded={analyticsOpen}
+          <Button
+            variant="ghost"
+            type="button"
+            aria-expanded={analyticsOpen}
             onClick={() => setAnalyticsOpen((v) => !v)}
           >
             {analyticsOpen ? "收起分析" : "展开分析"}

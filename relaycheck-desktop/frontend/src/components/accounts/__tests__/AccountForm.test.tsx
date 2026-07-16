@@ -29,7 +29,7 @@ describe("AccountForm accessibility", () => {
     expect(html).toContain("account-create-collapsed");
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain("+ 添加账号");
-    expect(html).not.toContain('aria-busy=');
+    expect(html).not.toContain("aria-busy=");
   });
 
   it("exposes busy state and selected mode semantics when expanded", () => {

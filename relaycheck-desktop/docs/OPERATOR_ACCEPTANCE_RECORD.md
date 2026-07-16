@@ -31,7 +31,7 @@ Do not record real passwords, cookies, bearer tokens, API keys, exported `.rczip
 | Operator launch record path | | |
 | Operator reviewed runbook | Pending / Pass / Fail | |
 | Target working directory writable | Pending / Pass / Fail | |
-| Bootstrap password source chosen | Env var / Generated local file / Existing admin | Do not paste the password |
+| Local access mode chosen | Trusted loopback / Hardened session token | Do not paste the token |
 | Existing database backed up | N/A / Pending / Pass / Fail | Path only, no contents |
 | Previous executable backed up | N/A / Pending / Pass / Fail | |
 | Rollback path confirmed | Pending / Pass / Fail | |
@@ -56,7 +56,7 @@ Use non-secret test data only.
 
 | Flow | Result | Notes |
 | --- | --- | --- |
-| Admin sign-in works | Pending / Pass / Fail | |
+| Local UI opens; token mode rejects requests without the session cookie when enabled | Pending / Pass / Fail | |
 | Dashboard renders summary, Action Center, scheduler preview, and notifications | Pending / Pass / Fail | |
 | Settings runtime, diagnostics, database, and backup information render | Pending / Pass / Fail | |
 | Manual backup can be created and found under `data\backups\` | Pending / Pass / Fail | |

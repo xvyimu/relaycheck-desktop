@@ -17,7 +17,9 @@ export function Topbar({ activeTab, onRefresh }: TopbarProps) {
       </div>
       <div className="topbar-actions">
         <ThemeToggle />
-        <button type="button" onClick={onRefresh}>刷新</button>
+        <button type="button" onClick={onRefresh}>
+          刷新
+        </button>
       </div>
     </header>
   );

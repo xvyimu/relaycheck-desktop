@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  CHANNELS_INITIAL_VISIBLE_LIMIT,
-  CHANNEL_RAW_SEARCH_KEYS,
-  TARGET_RELAY_KINDS,
-} from "@/lib/constants";
-import type { Account, ImportedChannel, NavigationIntent } from "@/types";
+import { CHANNELS_INITIAL_VISIBLE_LIMIT, CHANNEL_RAW_SEARCH_KEYS, TARGET_RELAY_KINDS } from "@/lib/constants";
+import type { AccountSearchIndexItem, ImportedChannel, NavigationIntent } from "@/types";
 
 function isTargetRelayKindUI(kind?: string | null): boolean {
   return TARGET_RELAY_KINDS.has(kind || "");
@@ -20,7 +16,10 @@ function safeParseJSON(value: string): unknown | null {
 }
 
 function normalizeSearchURL(value: string): string {
-  return value.replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase();
+  return value
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
 }
 
 function rawChannelSearchText(rawJson?: string): string {
@@ -30,8 +29,7 @@ function rawChannelSearchText(rawJson?: string): string {
   function visit(value: unknown, key = "", depth = 0) {
     if (depth > 4 || value === null || value === undefined) return;
     const normalizedKey = key.replace(/[_-]/g, "").toLowerCase();
-    const shouldCollect =
-      CHANNEL_RAW_SEARCH_KEYS.has(key.toLowerCase()) || CHANNEL_RAW_SEARCH_KEYS.has(normalizedKey);
+    const shouldCollect = CHANNEL_RAW_SEARCH_KEYS.has(key.toLowerCase()) || CHANNEL_RAW_SEARCH_KEYS.has(normalizedKey);
 
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
       if (shouldCollect) parts.push(String(value));
@@ -60,19 +58,19 @@ function rawChannelSearchText(rawJson?: string): string {
   return parts.join(" ");
 }
 
-function channelAccountSearchText(channel: ImportedChannel, accounts: Account[]): string {
+function channelAccountSearchText(channel: ImportedChannel, searchIndex: AccountSearchIndexItem[]): string {
   const channelBase = normalizeSearchURL(channel.baseUrl || "");
   const channelName = channel.name.trim().toLowerCase();
-  return accounts
-    .filter((account) => {
-      const accountBase = normalizeSearchURL(account.upstreamSiteBaseUrl || "");
-      const accountSite = account.upstreamSiteName.trim().toLowerCase();
+  return searchIndex
+    .filter((entry) => {
+      const entryBase = normalizeSearchURL(entry.upstreamSiteBaseUrl || "");
+      const entryName = entry.upstreamSiteName.trim().toLowerCase();
       return (
-        (channelBase && accountBase && channelBase === accountBase) ||
-        (channelName && accountSite && (channelName.includes(accountSite) || accountSite.includes(channelName)))
+        (channelBase && entryBase && channelBase === entryBase) ||
+        (channelName && entryName && (channelName.includes(entryName) || entryName.includes(channelName)))
       );
     })
-    .flatMap((account) => [account.displayName, account.email || "", account.username || ""])
+    .map((entry) => entry.searchText)
     .join(" ")
     .toLowerCase();
 }
@@ -114,7 +112,7 @@ function isHealthRiskChannel(channel: ImportedChannel): boolean {
 
 export function useChannelFilters(
   channels: ImportedChannel[],
-  accounts: Account[],
+  searchIndex: AccountSearchIndexItem[],
   intent?: NavigationIntent | null,
 ): ChannelFiltersResult {
   const [query, setQuery] = useState("");
@@ -127,16 +125,10 @@ export function useChannelFilters(
     (channel) => channel.upstreamKind && channel.upstreamKind !== "unknown",
   ).length;
   const checkinCount = channels.filter((channel) => channel.supportsCheckin).length;
-  const targetRelayCount = channels.filter((channel) =>
-    isTargetRelayKindUI(channel.upstreamKind),
-  ).length;
+  const targetRelayCount = channels.filter((channel) => isTargetRelayKindUI(channel.upstreamKind)).length;
   const missingBaseUrlCount = channels.filter((channel) => !channel.baseUrl).length;
-  const sourceMissingCount = channels.filter(
-    (channel) => channel.sourceSyncStatus === "missing",
-  ).length;
-  const sourceArchivedCount = channels.filter(
-    (channel) => channel.sourceSyncStatus === "archived",
-  ).length;
+  const sourceMissingCount = channels.filter((channel) => channel.sourceSyncStatus === "missing").length;
+  const sourceArchivedCount = channels.filter((channel) => channel.sourceSyncStatus === "archived").length;
   const healthRiskCount = channels.filter(isHealthRiskChannel).length;
 
   const kindOptions = useMemo(() => {
@@ -148,9 +140,11 @@ export function useChannelFilters(
     return channels.filter((channel) => {
       const sourceStatus = channel.sourceSyncStatus || "active";
       if (sourceStatusFilter === "not_archived" && sourceStatus === "archived") return false;
-      if (sourceStatusFilter !== "all" && sourceStatusFilter !== "not_archived" && sourceStatus !== sourceStatusFilter) return false;
+      if (sourceStatusFilter !== "all" && sourceStatusFilter !== "not_archived" && sourceStatus !== sourceStatusFilter)
+        return false;
       if (kindFilter === "target_relay" && !isTargetRelayKindUI(channel.upstreamKind)) return false;
-      if (kindFilter !== "all" && kindFilter !== "target_relay" && (channel.upstreamKind || "unknown") !== kindFilter) return false;
+      if (kindFilter !== "all" && kindFilter !== "target_relay" && (channel.upstreamKind || "unknown") !== kindFilter)
+        return false;
       if (healthFilter === "risk" && !isHealthRiskChannel(channel)) return false;
       if (!normalizedQuery) return true;
       const combined = [
@@ -161,12 +155,14 @@ export function useChannelFilters(
         channel.upstreamKind || "",
         channel.sourceType || "",
         channel.modelsMessage || "",
-        channelAccountSearchText(channel, accounts),
+        channelAccountSearchText(channel, searchIndex),
         rawChannelSearchText(channel.rawJson),
-      ].join(" ").toLowerCase();
+      ]
+        .join(" ")
+        .toLowerCase();
       return combined.includes(normalizedQuery);
     });
-  }, [accounts, channels, healthFilter, kindFilter, query, sourceStatusFilter]);
+  }, [searchIndex, channels, healthFilter, kindFilter, query, sourceStatusFilter]);
 
   const displayedChannels = visibleChannels.slice(0, visibleLimit);
   const hasMoreChannels = visibleChannels.length > displayedChannels.length;
@@ -197,15 +193,20 @@ export function useChannelFilters(
   }
 
   return {
-    query, setQuery,
-    sourceStatusFilter, setSourceStatusFilter,
-    kindFilter, setKindFilter,
-    healthFilter, setHealthFilter,
+    query,
+    setQuery,
+    sourceStatusFilter,
+    setSourceStatusFilter,
+    kindFilter,
+    setKindFilter,
+    healthFilter,
+    setHealthFilter,
     kindOptions,
     visibleChannels,
     displayedChannels,
     hasMoreChannels,
-    visibleLimit, setVisibleLimit,
+    visibleLimit,
+    setVisibleLimit,
     identifiedCount,
     checkinCount,
     targetRelayCount,

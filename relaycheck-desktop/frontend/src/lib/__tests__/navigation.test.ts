@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  actionItemNavigationIntent,
-  actionSampleNavigationIntent,
-  siteAccountsNavigationIntent,
-} from "../navigation";
+import { actionItemNavigationIntent, actionSampleNavigationIntent, siteAccountsNavigationIntent } from "../navigation";
 
 describe("actionItemNavigationIntent", () => {
   it("routes accounts (problem) into the merged sites 全部账号 subview", () => {

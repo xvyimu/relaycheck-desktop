@@ -39,6 +39,14 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {
+	if status >= http.StatusInternalServerError {
+		requestID := strings.TrimSpace(w.Header().Get("x-request-id"))
+		if requestID == "" {
+			requestID = "unavailable"
+		}
+		log.Printf("[http] internal error requestId=%s status=%d: %s", requestID, status, message)
+		message = "服务暂时不可用，请稍后重试。"
+	}
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(apiResponse{OK: false, Error: message, ErrorClass: errorClassForStatus(status)}); err != nil {
@@ -100,6 +108,25 @@ func clampBatchLimit(value int, fallback int) int {
 	}
 	if value > 10 {
 		return 10
+	}
+	return value
+}
+
+func clampListLimit(value int, fallback int, maximum int) int {
+	if maximum < 1 {
+		maximum = 1
+	}
+	if fallback < 1 {
+		fallback = 1
+	}
+	if fallback > maximum {
+		fallback = maximum
+	}
+	if value <= 0 {
+		return fallback
+	}
+	if value > maximum {
+		return maximum
 	}
 	return value
 }
@@ -262,4 +289,3 @@ func queryInt(r *http.Request, name string, fallback int) int {
 	}
 	return n
 }
-

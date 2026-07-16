@@ -34,7 +34,12 @@
   --v4-input-bg: rgba(255, 255, 255, 0.82);
   --v4-input-border: rgba(14, 35, 68, 0.13);
   --v4-input-focus-ring: rgba(30, 100, 230, 0.22);
-  --v4-skeleton: linear-gradient(90deg, rgba(14, 35, 68, 0.06) 25%, rgba(14, 35, 68, 0.1) 50%, rgba(14, 35, 68, 0.06) 75%);
+  --v4-skeleton: linear-gradient(
+    90deg,
+    rgba(14, 35, 68, 0.06) 25%,
+    rgba(14, 35, 68, 0.1) 50%,
+    rgba(14, 35, 68, 0.06) 75%
+  );
   --v4-skeleton-size: 200% 100%;
   --v4-text-xs: 10px;
   --v4-text-sm: 11.5px;
@@ -90,10 +95,14 @@ body {
   background:
     radial-gradient(circle at 18% 0%, rgba(30, 100, 230, 0.11), transparent 26rem),
     radial-gradient(circle at 94% 16%, rgba(71, 175, 215, 0.09), transparent 24rem),
-    linear-gradient(var(--v4-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--v4-grid) 1px, transparent 1px),
+    linear-gradient(var(--v4-grid) 1px, transparent 1px), linear-gradient(90deg, var(--v4-grid) 1px, transparent 1px),
     linear-gradient(180deg, var(--v4-card-soft) 0%, var(--v4-bg) 50%, var(--v4-neutral-bg) 100%);
-  background-size: auto, auto, 28px 28px, 28px 28px, auto;
+  background-size:
+    auto,
+    auto,
+    28px 28px,
+    28px 28px,
+    auto;
   color: var(--v4-text);
 }
 
@@ -152,8 +161,7 @@ body {
 
 .sidebar-v4 nav button.active {
   border-color: var(--v4-blue-line);
-  background:
-    linear-gradient(180deg, var(--surface-solid), var(--v4-card-soft));
+  background: linear-gradient(180deg, var(--surface-solid), var(--v4-card-soft));
   color: var(--v4-blue-active);
 }
 
@@ -245,8 +253,7 @@ body {
   align-items: center;
   border-radius: var(--v4-radius-lg);
   border-color: var(--v4-border);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.91), rgba(247, 251, 255, 0.82));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.91), rgba(247, 251, 255, 0.82));
   box-shadow: var(--v4-shadow);
 }
 
@@ -372,8 +379,7 @@ body {
 .settings-hero {
   border-color: var(--v4-border);
   border-radius: var(--v4-radius);
-  background:
-    linear-gradient(180deg, var(--v4-card), var(--v4-card-soft));
+  background: linear-gradient(180deg, var(--v4-card), var(--v4-card-soft));
   box-shadow: var(--v4-shadow);
 }
 

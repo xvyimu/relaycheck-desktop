@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { applyTheme, getTheme, setTheme, initTheme, type Theme } from "../theme";
+import { applyTheme, getTheme, setTheme, initTheme } from "../theme";
 
 function createLocalStorageMock() {
   const store: Record<string, string> = {};

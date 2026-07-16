@@ -545,6 +545,26 @@ export type BalanceSnapshot = {
   createdAt: string;
 };
 
+export type AccountPage = {
+  items: Account[];
+  total: number;
+  accountTotal: number;
+  problemTotal: number;
+  nextCursor?: string;
+};
+
+export type AccountSummary = {
+  accountTotal: number;
+  problemTotal: number;
+};
+
+export type AccountSearchIndexItem = {
+  upstreamSiteId: string;
+  upstreamSiteName: string;
+  upstreamSiteBaseUrl: string;
+  searchText: string;
+};
+
 export type UsageAccountItem = {
   accountId: string;
   accountName: string;
@@ -590,6 +610,14 @@ export type NotificationItem = {
   content: string;
   read: boolean;
   createdAt: string;
+};
+
+export type NotificationPage = {
+  items: NotificationItem[];
+  total: number;
+  unreadTotal: number;
+  importantTotal: number;
+  nextOffset: number | null;
 };
 
 export type ChromePasswordMatch = {

@@ -97,22 +97,14 @@ export function SiteSchedules() {
   async function refreshCalendar() {
     try {
       const [cal, runs] = await Promise.all([
-        api<{ generatedAt: string; items: ScheduleCalendarItem[] }>(
-          "/api/scheduler/calendar?days=7",
-        ),
-        api<{ generatedAt: string; items: NextRunItem[] }>(
-          "/api/scheduler/next-runs",
-        ),
+        api<{ generatedAt: string; items: ScheduleCalendarItem[] }>("/api/scheduler/calendar?days=7"),
+        api<{ generatedAt: string; items: NextRunItem[] }>("/api/scheduler/next-runs"),
       ]);
       setCalendarItems(cal.items);
       setNextRuns(runs.items);
       setPreviewError("");
     } catch (error) {
-      setPreviewError(
-        error instanceof Error
-          ? `排程预览加载失败：${error.message}`
-          : "排程预览加载失败，可刷新重试",
-      );
+      setPreviewError(error instanceof Error ? `排程预览加载失败：${error.message}` : "排程预览加载失败，可刷新重试");
     }
   }
 
@@ -123,19 +115,12 @@ export function SiteSchedules() {
     setBusy("saving");
     setMessage("");
     try {
-      const result = await api<{ ok: boolean }>(
-        "/api/scheduler/channel-schedules",
-        {
-          method: "PUT",
-          body: JSON.stringify(form),
-        },
-      );
+      const result = await api<{ ok: boolean }>("/api/scheduler/channel-schedules", {
+        method: "PUT",
+        body: JSON.stringify(form),
+      });
       if (result.ok) {
-        setMessage(
-          "已保存 " +
-            (sites.find((s) => s.id === siteId)?.name || siteId) +
-            " 的签到排程。",
-        );
+        setMessage("已保存 " + (sites.find((s) => s.id === siteId)?.name || siteId) + " 的签到排程。");
         await refresh();
         await refreshCalendar();
       }
@@ -184,28 +169,19 @@ export function SiteSchedules() {
 
   function removeSkipDate(siteId: string, date: string) {
     const existing = forms[siteId]?.skipDates || [];
-    updateForm(
-      siteId,
-      { skipDates: existing.filter((d) => d !== date) },
-    );
+    updateForm(siteId, { skipDates: existing.filter((d) => d !== date) });
   }
 
   // Determine scheduled real sites (exclude the global schedule compatibility row).
   const visibleSiteIds = new Set(sites.map((site) => site.id));
   const scheduledSiteIds = new Set(
     schedules
-      .filter(
-        (schedule) =>
-          schedule.enabled &&
-          visibleSiteIds.has(schedule.upstreamSiteId),
-      )
+      .filter((schedule) => schedule.enabled && visibleSiteIds.has(schedule.upstreamSiteId))
       .map((schedule) => schedule.upstreamSiteId),
   );
 
   // Filter next-runs to show only per-site items (prefixed with "channel.")
-  const siteNextRuns = nextRuns.filter(
-    (r) => r.siteId && visibleSiteIds.has(r.siteId),
-  );
+  const siteNextRuns = nextRuns.filter((r) => r.siteId && visibleSiteIds.has(r.siteId));
 
   useEffect(() => {
     void refresh();
@@ -223,7 +199,14 @@ export function SiteSchedules() {
               已启用 {scheduledSiteIds.size} / {sites.length} 个站点 · 取消勾选"启用"即恢复全局调度
             </span>
           </div>
-          <Button variant="ghost" disabled={busy !== ""} onClick={() => { void refresh(); void refreshCalendar(); }}>
+          <Button
+            variant="ghost"
+            disabled={busy !== ""}
+            onClick={() => {
+              void refresh();
+              void refreshCalendar();
+            }}
+          >
             刷新
           </Button>
         </div>
@@ -236,23 +219,17 @@ export function SiteSchedules() {
           <div className="site-schedule-list">
             {sites.map((site) => {
               const form = forms[site.id];
-              const schedule = schedules.find(
-                (s) => s.upstreamSiteId === site.id,
-              );
+              const schedule = schedules.find((s) => s.upstreamSiteId === site.id);
               const isEnabled = form?.enabled ?? false;
               const skipDates = form?.skipDates || [];
 
               return (
-                <article
-                  className={`site-schedule-row ${isEnabled ? "is-active" : "is-idle"}`}
-                  key={site.id}
-                >
+                <article className={`site-schedule-row ${isEnabled ? "is-active" : "is-idle"}`} key={site.id}>
                   <div className="site-schedule-header">
                     <div className="site-schedule-info">
                       <strong>{site.name}</strong>
                       <span className="site-schedule-meta">
-                        {site.accountCount} 个账号 ·{" "}
-                        {site.supportsCheckin ? "支持签到" : "不支持签到"}
+                        {site.accountCount} 个账号 · {site.supportsCheckin ? "支持签到" : "不支持签到"}
                       </span>
                     </div>
                     <label className="check">
@@ -339,7 +316,10 @@ export function SiteSchedules() {
                               }))
                             }
                           />
-                          <Button variant="ghost" onClick={() => addSkipDate(site.id)} className="compact"
+                          <Button
+                            variant="ghost"
+                            onClick={() => addSkipDate(site.id)}
+                            className="compact"
                             disabled={!skipInputs[site.id]}
                           >
                             + 添加
@@ -350,7 +330,10 @@ export function SiteSchedules() {
                             {skipDates.map((d) => (
                               <span key={d} className="skip-date-chip">
                                 {formatDate(d)}
-                                <Button variant="ghost" onClick={() => removeSkipDate(site.id, d)} className="chip-remove"
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => removeSkipDate(site.id, d)}
+                                  className="chip-remove"
                                 >
                                   ×
                                 </Button>
@@ -367,34 +350,24 @@ export function SiteSchedules() {
                       {schedule ? (
                         <div className="site-schedule-times">
                           {schedule.lastRunAt ? (
-                            <span className="detail-hint">
-                              上次签到：{formatTime(schedule.lastRunAt)}
-                            </span>
+                            <span className="detail-hint">上次签到：{formatTime(schedule.lastRunAt)}</span>
                           ) : null}
                           {schedule.nextRunAt ? (
-                            <span className="detail-hint">
-                              下次签到：{formatTime(schedule.nextRunAt)}
-                            </span>
+                            <span className="detail-hint">下次签到：{formatTime(schedule.nextRunAt)}</span>
                           ) : null}
                         </div>
                       ) : null}
 
-                      <Button variant="ghost" disabled={busy !== ""}
-                        onClick={() => void saveSchedule(site.id)}
-                      >
+                      <Button variant="ghost" disabled={busy !== ""} onClick={() => void saveSchedule(site.id)}>
                         {busy === "saving" ? "保存中…" : "保存排程"}
                       </Button>
                     </div>
                   ) : form && schedule ? (
                     <div className="site-schedule-times">
                       {schedule.lastRunAt ? (
-                        <span className="detail-hint">
-                          上次签到：{formatTime(schedule.lastRunAt)} · 排程已暂停
-                        </span>
+                        <span className="detail-hint">上次签到：{formatTime(schedule.lastRunAt)} · 排程已暂停</span>
                       ) : null}
-                      <Button variant="ghost" disabled={busy !== ""}
-                        onClick={() => void saveSchedule(site.id)}
-                      >
+                      <Button variant="ghost" disabled={busy !== ""} onClick={() => void saveSchedule(site.id)}>
                         保存更改（暂停状态）
                       </Button>
                     </div>
@@ -428,19 +401,13 @@ export function SiteSchedules() {
                   className={`calendar-preview-row ${item.enabled ? "" : "dimmed"}`}
                   key={`${item.date}-${item.time}-${item.siteId}-${i}`}
                 >
-                  <span className="calendar-preview-date">
-                    {formatDate(item.date)}
-                  </span>
+                  <span className="calendar-preview-date">{formatDate(item.date)}</span>
                   <span className="calendar-preview-time">{item.time}</span>
                   <span className="calendar-preview-site">{item.siteName}</span>
-                  <span
-                    className={`calendar-preview-type ${isCheckin ? "type-checkin" : "type-sync"}`}
-                  >
+                  <span className={`calendar-preview-type ${isCheckin ? "type-checkin" : "type-sync"}`}>
                     {isCheckin ? "签到" : "同步"}
                   </span>
-                  {!item.enabled && (
-                    <span className="calendar-preview-paused">已暂停</span>
-                  )}
+                  {!item.enabled && <span className="calendar-preview-paused">已暂停</span>}
                 </div>
               );
             })}
@@ -461,11 +428,7 @@ export function SiteSchedules() {
             {siteNextRuns.map((run) => (
               <div className="next-run-row" key={run.jobKey}>
                 <span className="next-run-label">{run.siteName || run.label}</span>
-                <span className="next-run-time">
-                  {run.nextRunAt
-                    ? formatTime(run.nextRunAt)
-                    : "—"}
-                </span>
+                <span className="next-run-time">{run.nextRunAt ? formatTime(run.nextRunAt) : "—"}</span>
                 {run.nextRunInSeconds >= 0 && (
                   <span className="next-run-countdown">
                     {run.nextRunInSeconds < 60
@@ -475,9 +438,7 @@ export function SiteSchedules() {
                         : `${Math.floor(run.nextRunInSeconds / 3600)} 小时后`}
                   </span>
                 )}
-                <span
-                  className={`next-run-status ${run.status === "scheduled" ? "status-ok" : "status-idle"}`}
-                >
+                <span className={`next-run-status ${run.status === "scheduled" ? "status-ok" : "status-idle"}`}>
                   {run.status === "scheduled" ? "已排程" : run.status}
                 </span>
               </div>

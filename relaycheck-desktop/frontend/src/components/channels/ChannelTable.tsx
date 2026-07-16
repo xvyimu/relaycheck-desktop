@@ -1,12 +1,7 @@
 import { api } from "@/api/client";
 import { CHANNELS_VISIBLE_INCREMENT } from "@/lib/constants";
 import { channelInitials, formatTime } from "@/lib/format";
-import {
-  channelModelStatusLabel,
-  channelSourceLabel,
-  channelSourceSyncLabel,
-  upstreamKindLabel,
-} from "@/lib/labels";
+import { channelModelStatusLabel, channelSourceLabel, channelSourceSyncLabel, upstreamKindLabel } from "@/lib/labels";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip } from "@/components/ui/tooltip";
 import { LoadingSkeleton } from "../loading-skeleton";
@@ -26,7 +21,6 @@ interface ChannelTableProps {
   filters: ChannelFiltersResult;
 }
 
-
 export function ChannelTable({
   channels,
   loaded,
@@ -41,26 +35,21 @@ export function ChannelTable({
   return (
     <>
       <div className="channel-grid">
-        {!loaded ? (
-          <LoadingSkeleton variant="table" title="正在读取渠道列表" rows={5} />
-        ) : null}
+        {!loaded ? <LoadingSkeleton variant="table" title="正在读取渠道列表" rows={5} /> : null}
         {displayedChannels.map((channel) => (
           <article
             className={`channel-card channel-card-v4 ${
               channel.baseUrl ? "" : "is-incomplete"
             } ${channel.sourceSyncStatus === "missing" ? "is-source-missing" : ""} ${
               channel.sourceSyncStatus === "archived" ? "is-source-archived" : ""
-            } ${filters.healthFilter === "risk" ? "is-health-risk" : ""
-            }`}
+            } ${filters.healthFilter === "risk" ? "is-health-risk" : ""}`}
             key={channel.id}
           >
             <div className="channel-card-head">
               <div className="channel-avatar">{channelInitials(channel.name)}</div>
               <div>
                 <strong title={channel.name}>{channel.name}</strong>
-                <span title={channel.baseUrl || "未配置 Base URL"}>
-                  {channel.baseUrl || "未配置 Base URL"}
-                </span>
+                <span title={channel.baseUrl || "未配置 Base URL"}>{channel.baseUrl || "未配置 Base URL"}</span>
               </div>
               <span className={`status-pill source-${channel.sourceSyncStatus || "active"}`}>
                 <span className={`status-label level-${channel.sourceSyncStatus || "active"}`}>
@@ -92,10 +81,14 @@ export function ChannelTable({
                 <span>余额 {channel.supportsBalance ? "支持" : "未知/不支持"}</span>
               </Tooltip>
               {channel.supportsModels ? (
-                <Tooltip content="渠道可通过 /v1/models 查询"><span>模型列表</span></Tooltip>
+                <Tooltip content="渠道可通过 /v1/models 查询">
+                  <span>模型列表</span>
+                </Tooltip>
               ) : null}
               {channel.supportsPricing ? (
-                <Tooltip content="渠道提供价格/倍率信息"><span>价格/倍率</span></Tooltip>
+                <Tooltip content="渠道提供价格/倍率信息">
+                  <span>价格/倍率</span>
+                </Tooltip>
               ) : null}
               {channel.channelKeyMasked ? <span>Key {channel.channelKeyMasked}</span> : null}
             </div>
@@ -108,11 +101,8 @@ export function ChannelTable({
             ) : null}
             {channel.modelsStatus ? (
               <div className="channel-subtle">
-                模型同步 {channelModelStatusLabel(channel.modelsStatus)} ·{" "}
-                {channel.modelsSource || "未知来源"}
-                {channel.modelsLastSyncedAt
-                  ? ` · ${formatTime(channel.modelsLastSyncedAt)}`
-                  : ""}
+                模型同步 {channelModelStatusLabel(channel.modelsStatus)} · {channel.modelsSource || "未知来源"}
+                {channel.modelsLastSyncedAt ? ` · ${formatTime(channel.modelsLastSyncedAt)}` : ""}
               </div>
             ) : null}
             {channel.lastDetectedAt ? (
@@ -121,20 +111,15 @@ export function ChannelTable({
             {channel.sourceSyncStatus === "missing" ? (
               <div className="problem-hint detail-hint">
                 源端 channels 本次未返回该渠道
-                {channel.sourceMissingAt
-                  ? `，标记于 ${formatTime(channel.sourceMissingAt)}`
-                  : ""}
+                {channel.sourceMissingAt ? `，标记于 ${formatTime(channel.sourceMissingAt)}` : ""}
                 。本地记录已保留，未自动删除。
               </div>
             ) : null}
             {channel.sourceSyncStatus === "archived" ? (
-              <div className="problem-hint detail-hint">
-                该渠道已归档保留，不会参与日常关注。可以随时恢复为活跃。
-              </div>
+              <div className="problem-hint detail-hint">该渠道已归档保留，不会参与日常关注。可以随时恢复为活跃。</div>
             ) : null}
             <div className="channel-actions action-dock">
-              <Button variant="ghost" onClick={() => onSetDrawer({ kind: "channel", channel })}
-              >
+              <Button variant="ghost" onClick={() => onSetDrawer({ kind: "channel", channel })}>
                 详情
               </Button>
               <button
@@ -156,28 +141,17 @@ export function ChannelTable({
                 识别并生成站点
               </button>
               {channel.sourceSyncStatus === "missing" ? (
-                <Button variant="ghost" onClick={() =>
-                    void onUpdateSourceStatus(channel, "restore-source-status")
-                  }
-                >
+                <Button variant="ghost" onClick={() => void onUpdateSourceStatus(channel, "restore-source-status")}>
                   恢复活跃
                 </Button>
               ) : null}
               {channel.sourceSyncStatus === "missing" ? (
-                <button
-                  className="danger"
-                  onClick={() =>
-                    void onUpdateSourceStatus(channel, "archive-source-status")
-                  }
-                >
+                <button className="danger" onClick={() => void onUpdateSourceStatus(channel, "archive-source-status")}>
                   归档保留
                 </button>
               ) : null}
               {channel.sourceSyncStatus === "archived" ? (
-                <Button variant="ghost" onClick={() =>
-                    void onUpdateSourceStatus(channel, "restore-source-status")
-                  }
-                >
+                <Button variant="ghost" onClick={() => void onUpdateSourceStatus(channel, "restore-source-status")}>
                   恢复活跃
                 </Button>
               ) : null}
@@ -201,11 +175,10 @@ export function ChannelTable({
       </div>
       {hasMoreChannels ? (
         <div className="load-more-row">
-          <Button variant="ghost" type="button" onClick={() =>
-              setVisibleLimit(
-                (current: number) => current + CHANNELS_VISIBLE_INCREMENT,
-              )
-            }
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={() => setVisibleLimit((current: number) => current + CHANNELS_VISIBLE_INCREMENT)}
           >
             加载更多渠道（已显示 {displayedChannels.length}/{visibleChannels.length}）
           </Button>

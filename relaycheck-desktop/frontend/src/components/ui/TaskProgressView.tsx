@@ -41,14 +41,7 @@ const statusLabels: Record<string, string> = {
   unknown: "未知",
 };
 
-export function TaskProgressView({
-  progress,
-  loading,
-  error,
-  onCancel,
-  onDismiss,
-  labels,
-}: TaskProgressViewProps) {
+export function TaskProgressView({ progress, loading, error, onCancel, onDismiss, labels }: TaskProgressViewProps) {
   if (loading && !progress) {
     return (
       <div className="task-progress-card" aria-live="polite">
@@ -61,7 +54,11 @@ export function TaskProgressView({
     return (
       <div className="task-progress-card" aria-live="polite">
         <div className="task-progress-error">{error}</div>
-        {onDismiss ? <Button variant="ghost" type="button" onClick={onDismiss}>关闭</Button> : null}
+        {onDismiss ? (
+          <Button variant="ghost" type="button" onClick={onDismiss}>
+            关闭
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -71,12 +68,14 @@ export function TaskProgressView({
   const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
   const isRunning = progress.status === "running";
   const statusText = isRunning
-    ? (labels?.running || "进行中")
+    ? labels?.running || "进行中"
     : progress.status === "done"
-    ? (labels?.done || "已完成")
-    : (labels?.cancelled || "已取消");
+      ? labels?.done || "已完成"
+      : labels?.cancelled || "已取消";
 
-  const successCount = progress.results.filter((r) => r.status === "success" || r.status === "valid" || r.status === "already_checked").length;
+  const successCount = progress.results.filter(
+    (r) => r.status === "success" || r.status === "valid" || r.status === "already_checked",
+  ).length;
   const failCount = progress.results.filter((r) => r.status === "failed" || r.status === "expired").length;
 
   return (
@@ -91,7 +90,9 @@ export function TaskProgressView({
       </div>
 
       <div className="task-progress-stats" style={{ fontVariantNumeric: "tabular-nums" }}>
-        <span>{progress.current} / {progress.total}</span>
+        <span>
+          {progress.current} / {progress.total}
+        </span>
         {successCount > 0 ? <span className="task-progress-ok">成功 {successCount}</span> : null}
         {failCount > 0 ? <span className="task-progress-fail">失败 {failCount}</span> : null}
       </div>
@@ -115,10 +116,14 @@ export function TaskProgressView({
 
       <div className="task-progress-footer">
         {isRunning && onCancel ? (
-          <Button variant="ghost" type="button" onClick={onCancel}>{labels?.cancel || "取消"}</Button>
+          <Button variant="ghost" type="button" onClick={onCancel}>
+            {labels?.cancel || "取消"}
+          </Button>
         ) : null}
         {!isRunning && onDismiss ? (
-          <Button variant="ghost" type="button" onClick={onDismiss}>{labels?.close || "关闭"}</Button>
+          <Button variant="ghost" type="button" onClick={onDismiss}>
+            {labels?.close || "关闭"}
+          </Button>
         ) : null}
       </div>
     </div>

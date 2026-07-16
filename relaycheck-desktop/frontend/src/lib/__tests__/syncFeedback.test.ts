@@ -19,24 +19,18 @@ describe("syncFeedback", () => {
 
   it("distinguishes empty source, excluded, and token errors", () => {
     expect(formatImportCountersMessage({ fetchedCount: 0, importedCount: 0 })).toMatch(/源端无渠道/);
-    expect(
-      formatImportCountersMessage({ fetchedCount: 3, importedCount: 0, skippedExcluded: 3 }),
-    ).toMatch(/排除/);
+    expect(formatImportCountersMessage({ fetchedCount: 3, importedCount: 0, skippedExcluded: 3 })).toMatch(/排除/);
     const err = formatImportCountersMessage({}, { error: "token invalid" });
     expect(err).toMatch(/系统访问令牌|数据库路径/);
     expect(err).not.toMatch(/关闭 2FA/);
   });
 
   it("needs credential only when no db path and no token", () => {
-    expect(
-      instanceNeedsCredential({ hasSyncToken: false, syncCapability: "admin_api", databasePath: "" }),
-    ).toBe(true);
-    expect(
-      instanceNeedsCredential({ hasSyncToken: true, syncCapability: "admin_api" }),
-    ).toBe(false);
-    expect(
-      instanceNeedsCredential({ hasSyncToken: false, syncCapability: "sqlite", databasePath: "C:/x.db" }),
-    ).toBe(false);
+    expect(instanceNeedsCredential({ hasSyncToken: false, syncCapability: "admin_api", databasePath: "" })).toBe(true);
+    expect(instanceNeedsCredential({ hasSyncToken: true, syncCapability: "admin_api" })).toBe(false);
+    expect(instanceNeedsCredential({ hasSyncToken: false, syncCapability: "sqlite", databasePath: "C:/x.db" })).toBe(
+      false,
+    );
   });
 
   it("token status label never says close 2FA", () => {

@@ -3,11 +3,7 @@ import { useMemo, useState } from "react";
 import { api } from "@/api/client";
 import { isProblemAccount } from "@/components/accounts/helpers";
 import { RELOGIN_STEPS } from "@/lib/accountActions";
-import type {
-  Account,
-  BulkBrowserOpenResponse,
-  BulkBrowserSaveResponse,
-} from "@/types";
+import type { Account, BulkBrowserOpenResponse, BulkBrowserSaveResponse } from "@/types";
 import { Button } from "@/components/ui/button";
 
 export type BulkReloginPhase = "idle" | "opened" | "saved" | "done";
@@ -92,13 +88,9 @@ export function BulkReloginWizard({ accounts, onDone }: BulkReloginWizardProps) 
       <div className="bulk-relogin-head">
         <div>
           <strong>批量会话重登</strong>
-          <span>
-            异常账号 {candidates.length} 个。人工完成浏览器登录后保存授权；不自动填密码、不绕过 2FA。
-          </span>
+          <span>异常账号 {candidates.length} 个。人工完成浏览器登录后保存授权；不自动填密码、不绕过 2FA。</span>
         </div>
-        <Button variant="ghost" type="button" aria-expanded={open}
-          onClick={() => setOpen((current) => !current)}
-        >
+        <Button variant="ghost" type="button" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
           {open ? "收起向导" : "打开向导"}
         </Button>
       </div>
@@ -107,8 +99,7 @@ export function BulkReloginWizard({ accounts, onDone }: BulkReloginWizardProps) 
         <>
           <div className="account-relogin-steps bulk-relogin-steps" aria-label="批量重登步骤">
             {RELOGIN_STEPS.map((label, index) => {
-              const stateClass =
-                index < stepIndex ? "is-done" : index === stepIndex ? "is-current" : "";
+              const stateClass = index < stepIndex ? "is-done" : index === stepIndex ? "is-current" : "";
               return (
                 <span key={label} className={`account-relogin-step ${stateClass}`.trim()}>
                   <b aria-hidden="true">{index + 1}</b>
@@ -141,11 +132,7 @@ export function BulkReloginWizard({ accounts, onDone }: BulkReloginWizardProps) 
               <button type="button" disabled={Boolean(busy) || !candidates.length} onClick={() => void openBatch()}>
                 {busy === "open" ? "打开中…" : "1. 批量打开"}
               </button>
-              <button
-                type="button"
-                disabled={Boolean(busy) || phase === "idle"}
-                onClick={() => void saveBatch()}
-              >
+              <button type="button" disabled={Boolean(busy) || phase === "idle"} onClick={() => void saveBatch()}>
                 {busy === "save" ? "保存中…" : "2. 批量保存授权"}
               </button>
               <Button variant="ghost" type="button" disabled={Boolean(busy)} onClick={resetWizard}>

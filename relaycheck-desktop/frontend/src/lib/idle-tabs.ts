@@ -32,10 +32,7 @@ export function pruneIdleTabs<T extends string>(
 }
 
 /** True when at least one non-pinned visited tab exists (interval worth running). */
-export function hasEvictableTabs<T extends string>(
-  visited: ReadonlySet<T>,
-  pinned: ReadonlySet<T>,
-): boolean {
+export function hasEvictableTabs<T extends string>(visited: ReadonlySet<T>, pinned: ReadonlySet<T>): boolean {
   for (const key of visited) {
     if (!pinned.has(key)) return true;
   }

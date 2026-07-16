@@ -31,7 +31,9 @@ export function SettingsBackup({
       <div className="section-heading">
         <div>
           <strong>备份快照</strong>
-          <span>{multiSelect ? "已选择 " + selected.length + " 个备份" : "默认突出最新一个；可打开多选清理旧快照。"}</span>
+          <span>
+            {multiSelect ? "已选择 " + selected.length + " 个备份" : "默认突出最新一个；可打开多选清理旧快照。"}
+          </span>
         </div>
         <div className="toolbar compact-toolbar">
           <Button variant="ghost" disabled={busy} onClick={onRefresh}>
@@ -60,7 +62,11 @@ export function SettingsBackup({
           >
             {multiSelect ? (
               <label className="backup-check">
-                <input type="checkbox" checked={selected.includes(backup.fileName)} onChange={() => onToggleSelect(backup.fileName)} />
+                <input
+                  type="checkbox"
+                  checked={selected.includes(backup.fileName)}
+                  onChange={() => onToggleSelect(backup.fileName)}
+                />
               </label>
             ) : null}
             <div>
@@ -77,7 +83,9 @@ export function SettingsBackup({
             </button>
           </article>
         ))}
-        {!backups.length ? <EmptyState title="暂无备份" description='点击"立即备份数据库"后，这里会出现可恢复的本地快照。' /> : null}
+        {!backups.length ? (
+          <EmptyState title="暂无备份" description='点击"立即备份数据库"后，这里会出现可恢复的本地快照。' />
+        ) : null}
       </div>
     </article>
   );

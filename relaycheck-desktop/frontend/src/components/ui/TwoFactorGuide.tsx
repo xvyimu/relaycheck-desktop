@@ -66,7 +66,8 @@ export function TwoFactorGuide({
     },
     {
       title: "确认登录成功后回到 RelayCheck",
-      description: "浏览器显示登录成功（进入控制台或首页）后，回到本页面点击“保存授权”按钮，RelayCheck 会读取并加密保存当前会话。",
+      description:
+        "浏览器显示登录成功（进入控制台或首页）后，回到本页面点击“保存授权”按钮，RelayCheck 会读取并加密保存当前会话。",
     },
     {
       title: "重新执行签到 / 余额刷新",
@@ -87,7 +88,8 @@ export function TwoFactorGuide({
         <strong>{siteLabel}</strong> 启用了二次验证（2FA）。密码登录会被站点拦截，请按以下步骤通过网页登录完成验证。
         {resolvedLoginUrl ? (
           <>
-            {" "}登录页：<code>{resolvedLoginUrl}</code>
+            {" "}
+            登录页：<code>{resolvedLoginUrl}</code>
           </>
         ) : null}
       </p>

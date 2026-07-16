@@ -11,12 +11,45 @@ export const NAV_ITEMS = [
   { key: "settings", label: "设置", icon: "settings", description: "备份、恢复与本地配置" },
 ] as const satisfies readonly NavItem[];
 
-export const STATUS_ICON_SUCCESS_LEVELS: ReadonlySet<string> = new Set(["success", "valid", "active", "live_key", "scheduled", "enabled", "ok"]);
-export const STATUS_ICON_WARNING_LEVELS: ReadonlySet<string> = new Set(["warning", "missing", "archived", "manual_required", "captcha_required", "two_factor_required", "unchecked", "idle", "partial"]);
-export const STATUS_ICON_DANGER_LEVELS: ReadonlySet<string> = new Set(["danger", "error", "failed", "invalid", "expired", "auth_expired", "key_invalid", "unreachable", "disabled"]);
+export const STATUS_ICON_SUCCESS_LEVELS: ReadonlySet<string> = new Set([
+  "success",
+  "valid",
+  "active",
+  "live_key",
+  "scheduled",
+  "enabled",
+  "ok",
+]);
+export const STATUS_ICON_WARNING_LEVELS: ReadonlySet<string> = new Set([
+  "warning",
+  "missing",
+  "archived",
+  "manual_required",
+  "captcha_required",
+  "two_factor_required",
+  "unchecked",
+  "idle",
+  "partial",
+]);
+export const STATUS_ICON_DANGER_LEVELS: ReadonlySet<string> = new Set([
+  "danger",
+  "error",
+  "failed",
+  "invalid",
+  "expired",
+  "auth_expired",
+  "key_invalid",
+  "unreachable",
+  "disabled",
+]);
 
 export const TARGET_RELAY_KINDS: ReadonlySet<string> = new Set(["newapi", "oneapi", "sub2api", "modified_relay"]);
-export const PROBLEM_LOGIN_STATUSES: ReadonlySet<string> = new Set(["expired", "manual_required", "captcha_required", "two_factor_required"]);
+export const PROBLEM_LOGIN_STATUSES: ReadonlySet<string> = new Set([
+  "expired",
+  "manual_required",
+  "captcha_required",
+  "two_factor_required",
+]);
 export const PROBLEM_CHECKIN_STATUSES: ReadonlySet<string> = new Set(["auth_expired", "manual_required", "failed"]);
 export const SUCCESSFUL_CHECKIN_STATUSES: ReadonlySet<string> = new Set(["success", "already_checked"]);
 

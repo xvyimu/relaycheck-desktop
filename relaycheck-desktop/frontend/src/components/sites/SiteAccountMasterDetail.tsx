@@ -12,9 +12,7 @@ import { Button } from "@/components/ui/button";
 const STORAGE_KEY = "relaycheck_master_detail_site_id";
 
 function isUnhealthy(status: string) {
-  return ["failed", "error", "danger", "invalid", "expired", "unreachable"].includes(
-    status.toLowerCase(),
-  );
+  return ["failed", "error", "danger", "invalid", "expired", "unreachable"].includes(status.toLowerCase());
 }
 
 function readStoredSiteId(): string {
@@ -85,15 +83,10 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
           .includes(normalized),
       );
     }
-    return result
-      .slice()
-      .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
+    return result.slice().sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
   }, [sites, healthFilter, query]);
 
-  const selectedSite = useMemo(
-    () => sites.find((site) => site.id === selectedSiteId) || null,
-    [sites, selectedSiteId],
-  );
+  const selectedSite = useMemo(() => sites.find((site) => site.id === selectedSiteId) || null, [sites, selectedSiteId]);
 
   const accounts = useMemo(() => {
     const list = siteScoped.data || [];
@@ -122,10 +115,7 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
     }
   }, [onRefresh, refreshSiteScoped, siteScopedEnabled]);
 
-  const shellClass = [
-    "master-detail",
-    mobileSubview && selectedSiteId ? "master-detail-subview" : "",
-  ]
+  const shellClass = ["master-detail", mobileSubview && selectedSiteId ? "master-detail-subview" : ""]
     .filter(Boolean)
     .join(" ");
 
@@ -175,11 +165,7 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
                 type="button"
                 role="option"
                 aria-selected={selected}
-                className={[
-                  "master-detail-site-item",
-                  selected ? "is-selected" : "",
-                  unhealthy ? "is-unhealthy" : "",
-                ]
+                className={["master-detail-site-item", selected ? "is-selected" : "", unhealthy ? "is-unhealthy" : ""]
                   .filter(Boolean)
                   .join(" ")}
                 onClick={() => selectSite(site.id)}
@@ -210,7 +196,11 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
       <section className="master-detail-right" aria-label="站点账号">
         <div className="master-detail-right-head card">
           <div className="master-detail-back-row">
-            <Button variant="ghost" type="button" onClick={() => setMobileSubview(false)} className="master-detail-back"
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setMobileSubview(false)}
+              className="master-detail-back"
             >
               返回站点
             </Button>
@@ -226,8 +216,7 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
                 <span className="eyebrow">当前站点</span>
                 <strong title={selectedSite.name}>{selectedSite.name}</strong>
                 <p>
-                  {selectedSite.kind || "unknown"} · {selectedSite.healthStatus || "未知"} ·{" "}
-                  {accounts.length} 账号
+                  {selectedSite.kind || "unknown"} · {selectedSite.healthStatus || "未知"} · {accounts.length} 账号
                   {siteScoped.loading ? " · 加载中…" : ""}
                 </p>
               </div>
@@ -263,13 +252,7 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
               />
             ))}
             {!accounts.length ? (
-              <Empty
-                message={
-                  siteScoped.loading
-                    ? "正在按站点加载账号…"
-                    : "该站点下暂无账号。"
-                }
-              />
+              <Empty message={siteScoped.loading ? "正在按站点加载账号…" : "该站点下暂无账号。"} />
             ) : null}
           </div>
         ) : null}
@@ -282,9 +265,7 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
         ariaLabel={detailAccount ? `账号详情 ${detailAccount.displayName || detailAccount.id}` : "账号详情"}
         initialFocusSelector=".detail-header .ghost, .detail-header button, button.ghost"
       >
-        {detailAccount ? (
-          <AccountDetailContent account={detailAccount} onClose={() => setDetailAccount(null)} />
-        ) : null}
+        {detailAccount ? <AccountDetailContent account={detailAccount} onClose={() => setDetailAccount(null)} /> : null}
       </DialogShell>
     </div>
   );

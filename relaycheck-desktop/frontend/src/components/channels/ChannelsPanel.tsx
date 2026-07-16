@@ -7,7 +7,7 @@ import { useChannelActions } from "@/hooks/useChannelActions";
 import { useChannelFilters } from "@/hooks/useChannelFilters";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { formatTime } from "@/lib/format";
-import type { Account, ChannelHealthOverview, ChannelHealthSite, ImportedChannel, NavigationIntent } from "@/types";
+import type { ChannelHealthOverview, ChannelHealthSite, ImportedChannel, NavigationIntent } from "@/types";
 import { Button } from "@/components/ui/button";
 
 const LABELS_HEALTH_PROBE = { title: "渠道健康探测" } as const;
@@ -37,8 +37,6 @@ export interface ChannelsPanelProps {
   dialogEpoch?: number;
   /** Inventory channels — avoids dual GET /api/channels. */
   inventoryChannels?: ImportedChannel[];
-  /** Inventory accounts — avoids dual GET /api/accounts. */
-  inventoryAccounts?: Account[];
 }
 
 function healthToneClass(level: string) {
@@ -57,18 +55,16 @@ function ChannelsPanelBase({
   active = true,
   dialogEpoch = 0,
   inventoryChannels,
-  inventoryAccounts,
 }: ChannelsPanelProps) {
   const actions = useChannelActions({
     active,
     initialChannels: inventoryChannels,
-    initialAccounts: inventoryAccounts,
   });
-  const { refresh: refreshActions, channels, accounts, setDrawer } = actions;
+  const { refresh: refreshActions, channels, searchIndex, setDrawer } = actions;
   useEffect(() => {
     setDrawer(null);
   }, [dialogEpoch, setDrawer]);
-  const filters = useChannelFilters(channels, accounts, intent);
+  const filters = useChannelFilters(channels, searchIndex, intent);
   const health = useApi<ChannelHealthOverview>("/api/channels/health/overview", emptyHealthOverview, {
     enabled: active,
   });
@@ -83,9 +79,9 @@ function ChannelsPanelBase({
   // When not seeded from inventory, fetch once while active.
   useEffect(() => {
     if (!active) return;
-    if (inventoryChannels && inventoryAccounts) return;
+    if (inventoryChannels) return;
     void refreshActions();
-  }, [active, inventoryAccounts, inventoryChannels, refreshActions]);
+  }, [active, inventoryChannels, refreshActions]);
 
   const refreshAll = useCallback(async () => {
     await refreshActions();
@@ -123,10 +119,15 @@ function ChannelsPanelBase({
         <div className="section-heading">
           <div>
             <h2>渠道健康监控</h2>
-            <span>{health.loading ? "正在刷新健康概览" : `站点 ${health.data.siteCount} · 渠道 ${health.data.channelCount}`}</span>
+            <span>
+              {health.loading ? "正在刷新健康概览" : `站点 ${health.data.siteCount} · 渠道 ${health.data.channelCount}`}
+            </span>
           </div>
           <div className="toolbar">
-            <Button variant="ghost" type="button" onClick={() => void refreshHealthProbe()}
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => void refreshHealthProbe()}
               disabled={healthTask.loading || healthTask.progress?.status === "running"}
             >
               {healthTask.loading || healthTask.progress?.status === "running" ? "探测中..." : "探测健康"}
@@ -137,19 +138,39 @@ function ChannelsPanelBase({
           </div>
         </div>
         <div className="channel-health-metrics">
-          <div><span>健康站点</span><strong>{health.data.healthySiteCount}</strong></div>
-          <div><span>不可达</span><strong>{health.data.unreachableSiteCount}</strong></div>
-          <div><span>有效 Key</span><strong>{health.data.validKeyCount}</strong></div>
-          <div><span>异常 Key</span><strong>{health.data.invalidKeyCount}</strong></div>
-          <div><span>实时模型</span><strong>{health.data.liveModelChannelCount}</strong></div>
-          <div><span>模型异常</span><strong>{health.data.failedModelChannelCount}</strong></div>
+          <div>
+            <span>健康站点</span>
+            <strong>{health.data.healthySiteCount}</strong>
+          </div>
+          <div>
+            <span>不可达</span>
+            <strong>{health.data.unreachableSiteCount}</strong>
+          </div>
+          <div>
+            <span>有效 Key</span>
+            <strong>{health.data.validKeyCount}</strong>
+          </div>
+          <div>
+            <span>异常 Key</span>
+            <strong>{health.data.invalidKeyCount}</strong>
+          </div>
+          <div>
+            <span>实时模型</span>
+            <strong>{health.data.liveModelChannelCount}</strong>
+          </div>
+          <div>
+            <span>模型异常</span>
+            <strong>{health.data.failedModelChannelCount}</strong>
+          </div>
         </div>
         {riskSites.length ? (
           <div className="channel-health-risk-list">
             {riskSites.map((site) => (
               <article className={`channel-health-risk ${healthToneClass(site.level)}`} key={site.siteId}>
                 <div>
-                  <span>{site.kind || "unknown"} · {site.healthStatus}</span>
+                  <span>
+                    {site.kind || "unknown"} · {site.healthStatus}
+                  </span>
                   <strong>{site.siteName}</strong>
                   <em>{site.recommendedAction}</em>
                 </div>
@@ -178,19 +199,38 @@ function ChannelsPanelBase({
       </section>
       <div className="channel-toolbar card">
         <div className="channel-summary compact-summary">
-          <div><span>可见</span><strong>{filters.visibleChannels.length}</strong></div>
-          <div><span>已识别</span><strong>{filters.identifiedCount}</strong></div>
-          <div><span>目标中转</span><strong>{filters.targetRelayCount}</strong></div>
-          <div><span>源端缺失</span><strong>{filters.sourceMissingCount}</strong></div>
+          <div>
+            <span>可见</span>
+            <strong>{filters.visibleChannels.length}</strong>
+          </div>
+          <div>
+            <span>已识别</span>
+            <strong>{filters.identifiedCount}</strong>
+          </div>
+          <div>
+            <span>目标中转</span>
+            <strong>{filters.targetRelayCount}</strong>
+          </div>
+          <div>
+            <span>源端缺失</span>
+            <strong>{filters.sourceMissingCount}</strong>
+          </div>
         </div>
         <div className="proxy-form-grid">
           <label className="field">
             <span>搜索</span>
-            <input value={filters.query} onChange={(event) => filters.setQuery(event.target.value)} placeholder="名称、网址、模型、账号" />
+            <input
+              value={filters.query}
+              onChange={(event) => filters.setQuery(event.target.value)}
+              placeholder="名称、网址、模型、账号"
+            />
           </label>
           <label className="field">
             <span>源端状态</span>
-            <select value={filters.sourceStatusFilter} onChange={(event) => filters.setSourceStatusFilter(event.target.value)}>
+            <select
+              value={filters.sourceStatusFilter}
+              onChange={(event) => filters.setSourceStatusFilter(event.target.value)}
+            >
               <option value="not_archived">活跃 + 缺失</option>
               <option value="all">全部</option>
               <option value="active">活跃</option>
@@ -204,7 +244,9 @@ function ChannelsPanelBase({
               <option value="target_relay">目标中转</option>
               <option value="all">全部类型</option>
               {filters.kindOptions.map((kind) => (
-                <option key={kind} value={kind}>{kind}</option>
+                <option key={kind} value={kind}>
+                  {kind}
+                </option>
               ))}
             </select>
           </label>
@@ -213,8 +255,12 @@ function ChannelsPanelBase({
           <button type="button" onClick={() => void actions.syncChannelModels()} disabled={actions.modelSyncing}>
             {actions.modelSyncing ? "同步中…" : "同步模型"}
           </button>
-          <Button variant="ghost" type="button" onClick={() => void refreshAll()}>刷新</Button>
-          <Button variant="ghost" type="button" onClick={filters.clearFilters}>清除筛选</Button>
+          <Button variant="ghost" type="button" onClick={() => void refreshAll()}>
+            刷新
+          </Button>
+          <Button variant="ghost" type="button" onClick={filters.clearFilters}>
+            清除筛选
+          </Button>
         </div>
         {filters.healthFilter === "risk" ? (
           <div className="channel-active-filter">
@@ -222,7 +268,9 @@ function ChannelsPanelBase({
               <strong>健康风险筛选已启用</strong>
               <span>仅显示需要模型同步或 Key 健康复核的目标中转渠道。</span>
             </div>
-            <Button variant="ghost" type="button" onClick={filters.clearFilters}>清除</Button>
+            <Button variant="ghost" type="button" onClick={filters.clearFilters}>
+              清除
+            </Button>
           </div>
         ) : null}
         {actions.message ? <div className="note">{actions.message}</div> : null}
@@ -242,9 +290,7 @@ function ChannelsPanelBase({
         onClose={() => actions.setDrawer(null)}
         variant="panel"
         className="detail-drawer-wide"
-        ariaLabel={
-          actions.drawer?.kind === "channel" ? `渠道详情 ${actions.drawer.channel.name}` : "渠道详情"
-        }
+        ariaLabel={actions.drawer?.kind === "channel" ? `渠道详情 ${actions.drawer.channel.name}` : "渠道详情"}
         initialFocusSelector=".detail-header .ghost, .detail-header button"
       >
         {actions.drawer?.kind === "channel" ? (

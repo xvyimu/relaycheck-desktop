@@ -1,11 +1,4 @@
-export type Tab =
-  | "dashboard"
-  | "channels"
-  | "sites"
-  | "checkins"
-  | "scan"
-  | "notifications"
-  | "settings";
+export type Tab = "dashboard" | "channels" | "sites" | "checkins" | "scan" | "notifications" | "settings";
 
 export const TABS: Array<{ key: Tab; label: string }> = [
   { key: "dashboard", label: "仪表盘" },

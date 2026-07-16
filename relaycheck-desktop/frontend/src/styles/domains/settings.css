@@ -140,7 +140,9 @@
   border-radius: 14px;
   padding: 12px;
   background: var(--surface-soft);
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .site-schedule-row.is-active {
@@ -466,25 +468,19 @@
   min-width: 0;
   border: 1px solid var(--v4-border);
   border-radius: 18px;
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 10rem),
-    var(--v4-card-soft);
+  background: radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 10rem), var(--v4-card-soft);
   padding: 13px;
 }
 
 .scheduler-job.running {
   border-color: var(--v4-border-strong);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 10rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 10rem), var(--v4-card);
 }
 
 .scheduler-job.warning,
 .scheduler-job.failed {
   border-color: var(--v4-amber-border);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-amber-border), transparent 10rem),
-    var(--v4-amber-bg);
+  background: radial-gradient(circle at 100% 0%, var(--v4-amber-border), transparent 10rem), var(--v4-amber-bg);
 }
 
 .scheduler-job > div:first-child {
@@ -622,9 +618,7 @@
 
 .backup-row.is-latest {
   border-color: var(--v4-blue-line);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 12rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 12rem), var(--v4-card);
   box-shadow: var(--v4-shadow-blue);
 }
 

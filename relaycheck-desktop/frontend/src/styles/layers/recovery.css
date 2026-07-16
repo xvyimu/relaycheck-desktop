@@ -29,7 +29,6 @@
   margin: 0;
 }
 
-
 .notice {
   border-radius: 8px;
   padding: 12px 14px;
@@ -263,12 +262,12 @@
 }
 
 .badge.warn {
-  background: var(--surface-solid)7df;
+  background: var(--surface-solid) 7df;
   color: var(--warning);
 }
 
 .badge.bad {
-  background: var(--surface-solid)1f2;
+  background: var(--surface-solid) 1f2;
   color: var(--v4-red);
 }
 
@@ -325,7 +324,7 @@ input[type="checkbox"] {
 }
 
 .status-pill.danger {
-  background: var(--surface-solid)1f2;
+  background: var(--surface-solid) 1f2;
   color: var(--v4-red);
 }
 
@@ -508,16 +507,12 @@ input[type="checkbox"] {
 
 .channel-health-center.level-danger {
   border-color: var(--v4-red-border);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-red-border), transparent 12rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-red-border), transparent 12rem), var(--v4-card);
 }
 
 .channel-health-center.level-warning {
   border-color: var(--v4-amber-border);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-amber-border), transparent 12rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-amber-border), transparent 12rem), var(--v4-card);
 }
 
 .channel-health-metrics {
@@ -568,12 +563,12 @@ input[type="checkbox"] {
 
 .channel-health-risk.level-danger {
   border-color: var(--v4-red-border);
-  background: var(--surface-solid)6f8;
+  background: var(--surface-solid) 6f8;
 }
 
 .channel-health-risk.level-warning {
   border-color: var(--v4-amber-border);
-  background: var(--surface-solid)9e8;
+  background: var(--surface-solid) 9e8;
 }
 
 .channel-health-risk strong,
@@ -618,7 +613,7 @@ input[type="checkbox"] {
   gap: 10px;
   border: 1px solid var(--v4-amber-border);
   border-radius: 8px;
-  background: var(--surface-solid)9e8;
+  background: var(--surface-solid) 9e8;
   padding: 9px 10px;
 }
 
@@ -647,8 +642,7 @@ input[type="checkbox"] {
 
 .channel-card-v4.is-health-risk {
   border-color: var(--v4-amber-border);
-  background:
-    linear-gradient(180deg, var(--v4-amber-bg), var(--v4-card));
+  background: linear-gradient(180deg, var(--v4-amber-bg), var(--v4-card));
 }
 
 .compact-summary {
@@ -914,9 +908,7 @@ input[type="checkbox"] {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 12px 14px;
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 10rem),
-    var(--v4-card);
+  background: radial-gradient(circle at 100% 0%, var(--v4-blue-line), transparent 10rem), var(--v4-card);
 }
 
 .notification-toolbar {
@@ -934,16 +926,12 @@ input[type="checkbox"] {
 
 .notification-card.tone-bad {
   border-color: var(--v4-red-border);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-red-border), transparent 10rem),
-    var(--v4-red-bg);
+  background: radial-gradient(circle at 100% 0%, var(--v4-red-border), transparent 10rem), var(--v4-red-bg);
 }
 
 .notification-card.tone-warn {
   border-color: var(--v4-amber-border);
-  background:
-    radial-gradient(circle at 100% 0%, var(--v4-amber-border), transparent 10rem),
-    var(--v4-amber-bg);
+  background: radial-gradient(circle at 100% 0%, var(--v4-amber-border), transparent 10rem), var(--v4-amber-bg);
 }
 
 .notification-card.tone-good {
@@ -1151,5 +1139,5 @@ input[type="checkbox"] {
 .issue-row,
 .is-warning {
   border-color: var(--v4-amber-border);
-  background: var(--surface-solid)9e8;
+  background: var(--surface-solid) 9e8;
 }

@@ -21,7 +21,12 @@ class ApiError extends Error {
 }
 
 function shouldCacheRead(url: string, method: string, options?: RequestInit) {
-  return method === "GET" && !options?.body && !options?.signal && !uncachedReadPrefixes.some((prefix) => url.startsWith(prefix));
+  return (
+    method === "GET" &&
+    !options?.body &&
+    !options?.signal &&
+    !uncachedReadPrefixes.some((prefix) => url.startsWith(prefix))
+  );
 }
 
 function clearClientReadCache() {
@@ -40,13 +45,17 @@ export async function api<T>(url: string, options?: RequestInit): Promise<T> {
     }
   }
 
-  const headers = options?.body ? { ...(options.headers as Record<string, string> | undefined), "content-type": "application/json" } : options?.headers;
+  const headers = options?.body
+    ? { ...(options.headers as Record<string, string> | undefined), "content-type": "application/json" }
+    : options?.headers;
   const request = fetch(url, {
     ...options,
     credentials: "same-origin",
     headers,
   }).then(async (response) => {
-    const payload = (await response.json().catch(() => ({ ok: false, error: "响应不是有效 JSON。", errorClass: "bad_response" }))) as ApiResult<T>;
+    const payload = (await response
+      .json()
+      .catch(() => ({ ok: false, error: "响应不是有效 JSON。", errorClass: "bad_response" }))) as ApiResult<T>;
     if (!response.ok || !payload.ok) {
       const error = new ApiError(payload.error || "请求失败", {
         errorClass: payload.errorClass,

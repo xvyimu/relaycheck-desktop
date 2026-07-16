@@ -177,8 +177,7 @@ nav button.active .nav-icon {
   margin-bottom: var(--v4-space-7);
   border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: var(--radius-xl);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 250, 252, 0.72));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 250, 252, 0.72));
   padding: var(--v4-space-6) var(--v4-space-7);
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(14px);
@@ -289,8 +288,12 @@ nav button.active .nav-icon {
 }
 
 @keyframes skeletonShimmer {
-  0% { background-position: 120% 0; }
-  100% { background-position: -120% 0; }
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
 }
 
 .stats {

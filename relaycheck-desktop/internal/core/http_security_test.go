@@ -259,6 +259,26 @@ func TestWriteErrorIncludesStableErrorClass(t *testing.T) {
 	}
 }
 
+func TestWriteErrorSanitizesInternalErrors(t *testing.T) {
+	rec := httptest.NewRecorder()
+	rec.Header().Set("x-request-id", "request-500")
+	writeError(rec, http.StatusInternalServerError, "database path C:\\secret\\relaycheck.db: disk I/O error")
+
+	var payload apiResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Error != "服务暂时不可用，请稍后重试。" {
+		t.Fatalf("unexpected public 500 message: %q", payload.Error)
+	}
+	if payload.ErrorClass != "server_error" {
+		t.Fatalf("expected server_error, got %q", payload.ErrorClass)
+	}
+	if strings.Contains(rec.Body.String(), "secret") || strings.Contains(rec.Body.String(), "disk I/O") {
+		t.Fatalf("500 response leaked internal details: %s", rec.Body.String())
+	}
+}
+
 func TestRequireSessionRejectsNonLoopbackRemoteOnWrites(t *testing.T) {
 	app := newTestApp(t)
 	app.SetRuntimeAddress("127.0.0.1", 3001)
@@ -347,13 +367,13 @@ func TestClampIntAndErrorClassBranches(t *testing.T) {
 	}
 
 	cases := map[int]string{
-		http.StatusUnauthorized:   "auth_error",
-		http.StatusForbidden:      "permission_error",
-		http.StatusNotFound:       "not_found",
+		http.StatusUnauthorized:     "auth_error",
+		http.StatusForbidden:        "permission_error",
+		http.StatusNotFound:         "not_found",
 		http.StatusMethodNotAllowed: "method_not_allowed",
-		http.StatusConflict:       "conflict",
-		http.StatusTeapot:         "request_error",
-		http.StatusOK:             "unknown_error",
+		http.StatusConflict:         "conflict",
+		http.StatusTeapot:           "request_error",
+		http.StatusOK:               "unknown_error",
 	}
 	for status, want := range cases {
 		if got := errorClassForStatus(status); got != want {
@@ -405,4 +425,3 @@ func TestAppDataDirAndPortConflictAccessors(t *testing.T) {
 		t.Fatal("expected new runtime port allowed")
 	}
 }
-

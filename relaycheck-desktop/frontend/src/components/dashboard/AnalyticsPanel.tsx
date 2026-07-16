@@ -36,7 +36,12 @@ const RANGE_OPTIONS: Array<{ value: RangeOption; label: string }> = [
 function formatTimeShort(iso: string): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleString("zh-CN", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return iso;
   }
@@ -79,7 +84,7 @@ function BalanceTrendChart({
 
   const points = data.map((d, i) => {
     const x = padding.left + (i / (data.length - 1)) * chartW;
-    const y = padding.top + chartH - ((d.balance ?? 0) - minVal) / range * chartH;
+    const y = padding.top + chartH - (((d.balance ?? 0) - minVal) / range) * chartH;
     return { x, y, date: d.date, balance: d.balance };
   });
 
@@ -96,14 +101,29 @@ function BalanceTrendChart({
       </defs>
       {/* Grid lines */}
       {[0, 0.25, 0.5, 0.75, 1].map((t) => (
-        <line key={t} x1={padding.left} y1={padding.top + t * chartH} x2={padding.left + chartW} y2={padding.top + t * chartH} stroke="var(--v4-border)" strokeWidth="0.5" />
+        <line
+          key={t}
+          x1={padding.left}
+          y1={padding.top + t * chartH}
+          x2={padding.left + chartW}
+          y2={padding.top + t * chartH}
+          stroke="var(--v4-border)"
+          strokeWidth="0.5"
+        />
       ))}
       {/* Area */}
       <path d={areaD} fill="url(#balanceGrad)" />
       {/* Line */}
-      <path d={pathD} fill="none" stroke="var(--v4-blue)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      <path
+        d={pathD}
+        fill="none"
+        stroke="var(--v4-blue)"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
       {/* Points */}
-      {points.map((p, i) => {
+      {points.map((p) => {
         const isSelected = selectedDate === p.date;
         return (
           <circle
@@ -116,7 +136,12 @@ function BalanceTrendChart({
             strokeWidth={isSelected ? 1 : 0}
             className="chart-point"
             onClick={() => onSelectDate?.(p.date)}
-            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelectDate?.(p.date); } }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectDate?.(p.date);
+              }
+            }}
             role="button"
             tabIndex={0}
           >
@@ -125,11 +150,19 @@ function BalanceTrendChart({
         );
       })}
       {/* Y axis labels */}
-      <text x={padding.left - 4} y={padding.top + 4} textAnchor="end" fontSize="9" fill="var(--v4-muted)">${maxVal.toFixed(0)}</text>
-      <text x={padding.left - 4} y={padding.top + chartH} textAnchor="end" fontSize="9" fill="var(--v4-muted)">${minVal.toFixed(0)}</text>
+      <text x={padding.left - 4} y={padding.top + 4} textAnchor="end" fontSize="9" fill="var(--v4-muted)">
+        ${maxVal.toFixed(0)}
+      </text>
+      <text x={padding.left - 4} y={padding.top + chartH} textAnchor="end" fontSize="9" fill="var(--v4-muted)">
+        ${minVal.toFixed(0)}
+      </text>
       {/* X axis labels */}
-      <text x={padding.left} y={height - 4} fontSize="9" fill="var(--v4-muted)">{data[0]?.date.slice(5)}</text>
-      <text x={padding.left + chartW} y={height - 4} textAnchor="end" fontSize="9" fill="var(--v4-muted)">{data[data.length - 1]?.date.slice(5)}</text>
+      <text x={padding.left} y={height - 4} fontSize="9" fill="var(--v4-muted)">
+        {data[0]?.date.slice(5)}
+      </text>
+      <text x={padding.left + chartW} y={height - 4} textAnchor="end" fontSize="9" fill="var(--v4-muted)">
+        {data[data.length - 1]?.date.slice(5)}
+      </text>
     </svg>
   );
 }
@@ -151,9 +184,23 @@ function BalanceDeltaChart({ data }: { data: BalanceDeltaPoint[] }) {
   const barW = Math.max(2, chartW / data.length - 1);
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="analytics-chart balance-delta-chart" role="img" aria-label="余额增量图" preserveAspectRatio="xMidYMid meet">
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="analytics-chart balance-delta-chart"
+      role="img"
+      aria-label="余额增量图"
+      preserveAspectRatio="xMidYMid meet"
+    >
       {/* Zero line */}
-      <line x1={padding.left} y1={zeroY} x2={padding.left + chartW} y2={zeroY} stroke="var(--v4-border)" strokeWidth="0.6" strokeDasharray="3 3" />
+      <line
+        x1={padding.left}
+        y1={zeroY}
+        x2={padding.left + chartW}
+        y2={zeroY}
+        stroke="var(--v4-border)"
+        strokeWidth="0.6"
+        strokeDasharray="3 3"
+      />
       {data.map((d, i) => {
         const x = padding.left + (i / data.length) * chartW;
         const barH = (Math.abs(d.delta) / maxAbs) * (chartH / 2);
@@ -174,11 +221,21 @@ function BalanceDeltaChart({ data }: { data: BalanceDeltaPoint[] }) {
           </rect>
         );
       })}
-      <text x={padding.left - 6} y={padding.top + 6} textAnchor="end" fontSize="11" fill="var(--v4-muted)">+{maxAbs.toFixed(1)}</text>
-      <text x={padding.left - 6} y={zeroY + 4} textAnchor="end" fontSize="11" fill="var(--v4-muted)">0</text>
-      <text x={padding.left - 6} y={padding.top + chartH} textAnchor="end" fontSize="11" fill="var(--v4-muted)">-{maxAbs.toFixed(1)}</text>
-      <text x={padding.left} y={height - 6} fontSize="11" fill="var(--v4-muted)">{data[0]?.date.slice(5)}</text>
-      <text x={padding.left + chartW} y={height - 6} textAnchor="end" fontSize="11" fill="var(--v4-muted)">{data[data.length - 1]?.date.slice(5)}</text>
+      <text x={padding.left - 6} y={padding.top + 6} textAnchor="end" fontSize="11" fill="var(--v4-muted)">
+        +{maxAbs.toFixed(1)}
+      </text>
+      <text x={padding.left - 6} y={zeroY + 4} textAnchor="end" fontSize="11" fill="var(--v4-muted)">
+        0
+      </text>
+      <text x={padding.left - 6} y={padding.top + chartH} textAnchor="end" fontSize="11" fill="var(--v4-muted)">
+        -{maxAbs.toFixed(1)}
+      </text>
+      <text x={padding.left} y={height - 6} fontSize="11" fill="var(--v4-muted)">
+        {data[0]?.date.slice(5)}
+      </text>
+      <text x={padding.left + chartW} y={height - 6} textAnchor="end" fontSize="11" fill="var(--v4-muted)">
+        {data[data.length - 1]?.date.slice(5)}
+      </text>
     </svg>
   );
 }
@@ -224,7 +281,12 @@ function CheckinDonutChart({
               className="donut-segment"
               opacity={selectedStatus && !isSelected ? 0.4 : 1}
               onClick={() => onSelectStatus?.(item.status)}
-              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelectStatus?.(item.status); } }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectStatus?.(item.status);
+                }
+              }}
               role="button"
               tabIndex={0}
             >
@@ -234,8 +296,12 @@ function CheckinDonutChart({
           offset += dash;
           return circle;
         })}
-        <text x="70" y="66" textAnchor="middle" fontSize="20" fontWeight="700" fill="var(--v4-text)">{total}</text>
-        <text x="70" y="80" textAnchor="middle" fontSize="9" fill="var(--v4-muted)">总签到</text>
+        <text x="70" y="66" textAnchor="middle" fontSize="20" fontWeight="700" fill="var(--v4-text)">
+          {total}
+        </text>
+        <text x="70" y="80" textAnchor="middle" fontSize="9" fill="var(--v4-muted)">
+          总签到
+        </text>
       </svg>
       <div className="donut-legend">
         {data.map((item) => (
@@ -270,15 +336,27 @@ function ResponseTimeChart({ data }: { data: ResponseTimePoint[] | null }) {
     <div className="response-time-chart">
       {data.slice(0, 10).map((item, i) => {
         const width = (item.latencyMs / maxLatency) * chartWidth;
-        const color = item.status === "valid" ? "var(--v4-green)" : item.status === "rate_limited" ? "var(--v4-amber)" : "var(--v4-red)";
+        const color =
+          item.status === "valid"
+            ? "var(--v4-green)"
+            : item.status === "rate_limited"
+              ? "var(--v4-amber)"
+              : "var(--v4-red)";
         return (
-          <div key={`${item.accountName}-${item.siteName}`} className="response-time-row" style={{ top: i * (barHeight + gap) }}>
+          <div
+            key={`${item.accountName}-${item.siteName}`}
+            className="response-time-row"
+            style={{ top: i * (barHeight + gap) }}
+          >
             <div className="response-time-label" style={{ width: labelWidth }}>
               <span className="response-time-name">{item.accountName}</span>
               <span className="response-time-site">{item.siteName}</span>
             </div>
             <div className="response-time-bar-track" style={{ width: chartWidth }}>
-              <div className="response-time-bar" style={{ width: `${width}px`, background: color, height: barHeight - 4 }} />
+              <div
+                className="response-time-bar"
+                style={{ width: `${width}px`, background: color, height: barHeight - 4 }}
+              />
               <span className="response-time-value">{item.latencyMs}ms</span>
             </div>
           </div>
@@ -310,7 +388,9 @@ function SiteReliabilityTable({ data }: { data: SiteReliability[] }) {
               <td className="cell-name">{item.siteName}</td>
               <td>{item.totalCheckins}</td>
               <td>
-                <span className={`rate-badge ${item.successRate >= 0.9 ? "good" : item.successRate >= 0.5 ? "warn" : "bad"}`}>
+                <span
+                  className={`rate-badge ${item.successRate >= 0.9 ? "good" : item.successRate >= 0.5 ? "warn" : "bad"}`}
+                >
                   {formatPercent(item.successRate)}
                 </span>
               </td>
@@ -337,7 +417,9 @@ function DrillDownPanel({
     <div className="analytics-drilldown">
       <div className="analytics-drilldown-header">
         <strong>{title}</strong>
-        <button type="button" className="drilldown-close" onClick={onClose} aria-label="关闭详情">×</button>
+        <button type="button" className="drilldown-close" onClick={onClose} aria-label="关闭详情">
+          ×
+        </button>
       </div>
       <div className="analytics-drilldown-body">{children}</div>
     </div>
@@ -374,7 +456,9 @@ function CheckinStatusDetail({ status, label, logs }: { status: string; label: s
   }
   return (
     <div className="analytics-drilldown-list">
-      <div className="drilldown-summary">共 {filtered.length} 条「{label}」记录</div>
+      <div className="drilldown-summary">
+        共 {filtered.length} 条「{label}」记录
+      </div>
       {filtered.slice(0, 20).map((l) => (
         <div key={l.id} className="drilldown-row">
           <span className="drilldown-name">{l.accountName}</span>
@@ -438,7 +522,9 @@ export function AnalyticsPanel() {
       }
     }
     void loadDrill();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedDate, selectedStatus]);
 
   const selectedDistItem = useMemo(
@@ -484,7 +570,11 @@ export function AnalyticsPanel() {
         <div className="card analytics-card">
           <div className="analytics-card-title">
             余额趋势（{data.days ?? range} 天）
-            {selectedDate ? <span className="drilldown-hint"> · 已选 {selectedDate}</span> : <span className="drilldown-hint"> · 点击数据点查看详情</span>}
+            {selectedDate ? (
+              <span className="drilldown-hint"> · 已选 {selectedDate}</span>
+            ) : (
+              <span className="drilldown-hint"> · 点击数据点查看详情</span>
+            )}
           </div>
           <BalanceTrendChart
             data={data.balanceTrend ?? []}
@@ -504,7 +594,11 @@ export function AnalyticsPanel() {
         <div className="card analytics-card">
           <div className="analytics-card-title">
             签到状态分布（7 天）
-            {selectedStatus && selectedDistItem ? <span className="drilldown-hint"> · 已选「{selectedDistItem.label}」</span> : <span className="drilldown-hint"> · 点击筛选</span>}
+            {selectedStatus && selectedDistItem ? (
+              <span className="drilldown-hint"> · 已选「{selectedDistItem.label}」</span>
+            ) : (
+              <span className="drilldown-hint"> · 点击筛选</span>
+            )}
           </div>
           <CheckinDonutChart
             data={data.checkinDistribution ?? []}

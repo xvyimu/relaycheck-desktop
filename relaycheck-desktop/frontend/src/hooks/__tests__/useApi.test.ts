@@ -26,9 +26,7 @@ function mockReactHooks() {
 
 it("keeps the last successful data when a later refresh fails", async () => {
   const { states } = mockReactHooks();
-  const api = vi.fn()
-    .mockResolvedValueOnce(["loaded"])
-    .mockRejectedValueOnce(new Error("offline"));
+  const api = vi.fn().mockResolvedValueOnce(["loaded"]).mockRejectedValueOnce(new Error("offline"));
 
   vi.doMock("@/api/client", () => ({ api }));
 

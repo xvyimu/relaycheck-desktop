@@ -291,9 +291,7 @@
 
 .empty-state {
   border-style: dashed;
-  background:
-    radial-gradient(circle at 50% 0%, var(--v4-blue-subtle), transparent 12rem),
-    var(--v4-card-soft);
+  background: radial-gradient(circle at 50% 0%, var(--v4-blue-subtle), transparent 12rem), var(--v4-card-soft);
 }
 
 .detail-drawer {

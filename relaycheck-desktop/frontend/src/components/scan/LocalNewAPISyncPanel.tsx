@@ -49,9 +49,7 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
 
   const loadExcludeRules = useCallback(async () => {
     try {
-      const result = await api<{ rules?: ExcludedRelaySiteRule[]; note?: string }>(
-        "/api/local-newapi/exclude-rules",
-      );
+      const result = await api<{ rules?: ExcludedRelaySiteRule[]; note?: string }>("/api/local-newapi/exclude-rules");
       setExcludeRules(Array.isArray(result.rules) ? result.rules : []);
       setExcludeNote(result.note || "");
     } catch {
@@ -85,18 +83,12 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
         body.accessToken = draft;
         body.saveAccessToken = true;
       }
-      const result = await api<ImportCounters & { instanceId?: string }>(
-        `/api/local-newapi/${instance.id}/sync`,
-        {
-          method: "POST",
-          body: JSON.stringify(body),
-        },
-      );
+      const result = await api<ImportCounters & { instanceId?: string }>(`/api/local-newapi/${instance.id}/sync`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
       const text = formatImportCountersMessage(result);
-      const sampleHint = formatExcludedSamplesHint(
-        result.skippedExcludedSamples,
-        result.skippedExcludedTruncated,
-      );
+      const sampleHint = formatExcludedSamplesHint(result.skippedExcludedSamples, result.skippedExcludedTruncated);
       const level =
         (result.importedCount ?? 0) > 0
           ? "success"
@@ -138,12 +130,18 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
           </p>
         </div>
         <div className="toolbar">
-          <Button variant="ghost" type="button" disabled={loading || Boolean(busyId)}
+          <Button
+            variant="ghost"
+            type="button"
+            disabled={loading || Boolean(busyId)}
             onClick={() => setShowRules((current) => !current)}
           >
             {showRules ? "收起排除规则" : "排除规则"}
           </Button>
-          <Button variant="ghost" type="button" disabled={loading || Boolean(busyId)}
+          <Button
+            variant="ghost"
+            type="button"
+            disabled={loading || Boolean(busyId)}
             onClick={() => void loadInstances()}
           >
             {loading ? "刷新中…" : "刷新实例"}
@@ -154,10 +152,7 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
       {showRules ? (
         <div className="card local-newapi-exclude-rules" data-testid="exclude-rules">
           <strong>排除规则（只读）</strong>
-          <p>
-            {excludeNote ||
-              "同步时若渠道名称或 BaseURL 包含下列关键字则跳过导入，不视为失败。"}
-          </p>
+          <p>{excludeNote || "同步时若渠道名称或 BaseURL 包含下列关键字则跳过导入，不视为失败。"}</p>
           <ul>
             {excludeRules.map((rule) => (
               <li key={rule.token}>
@@ -191,9 +186,7 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
                 <div className="local-newapi-chips">
                   <span className="chip">{syncCapabilityLabel(instance.syncCapability)}</span>
                   <span className={`chip ${instance.hasSyncToken ? "ok" : "warn"}`}>
-                    {instance.hasSyncToken
-                      ? `令牌 ${instance.syncTokenMasked || "已保存"}`
-                      : "未保存令牌"}
+                    {instance.hasSyncToken ? `令牌 ${instance.syncTokenMasked || "已保存"}` : "未保存令牌"}
                   </span>
                   <span className="chip">渠道 {instance.channelCount ?? 0}</span>
                 </div>
@@ -205,16 +198,13 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
 
               {instance.lastSyncSummary ? (
                 <p className="local-newapi-last-sync" title={instance.lastSyncAt || ""}>
-                  上次同步{instance.lastSyncAt ? `（${instance.lastSyncAt}）` : ""}：
-                  {instance.lastSyncSummary}
+                  上次同步{instance.lastSyncAt ? `（${instance.lastSyncAt}）` : ""}：{instance.lastSyncSummary}
                 </p>
               ) : (
                 <p className="local-newapi-last-sync muted">尚无同步摘要</p>
               )}
 
-              {instance.databasePath ? (
-                <p className="local-newapi-db">数据库路径已配置（本地同步）</p>
-              ) : null}
+              {instance.databasePath ? <p className="local-newapi-db">数据库路径已配置（本地同步）</p> : null}
 
               <div className="local-newapi-token-row">
                 <label className="field">
@@ -240,9 +230,7 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
 
               {msg ? (
                 <div
-                  className={
-                    msg.level === "danger" ? "error" : msg.level === "warning" ? "problem-hint" : "note"
-                  }
+                  className={msg.level === "danger" ? "error" : msg.level === "warning" ? "problem-hint" : "note"}
                   role={msg.level === "danger" ? "alert" : "status"}
                 >
                   {msg.text}
@@ -256,9 +244,7 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
           <div className="empty-state">
             <div className="empty-mark">NA</div>
             <strong>暂无 NewAPI 实例</strong>
-            <span>
-              可先使用上方「检测并导入」扫描本机数据库，或在引导中填写后台地址与访问令牌。
-            </span>
+            <span>可先使用上方「检测并导入」扫描本机数据库，或在引导中填写后台地址与访问令牌。</span>
           </div>
         ) : null}
       </div>

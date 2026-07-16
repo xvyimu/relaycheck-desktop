@@ -141,7 +141,12 @@ export function AccountForm({
             </label>
             <label className="field">
               <span>站点名称</span>
-              <input autoComplete="organization" value={siteName} onChange={(event) => setSiteName(event.target.value)} placeholder="可自动用域名" />
+              <input
+                autoComplete="organization"
+                value={siteName}
+                onChange={(event) => setSiteName(event.target.value)}
+                placeholder="可自动用域名"
+              />
             </label>
             <label className="field">
               <span>后台类型</span>
@@ -189,7 +194,12 @@ export function AccountForm({
         </label>
         <label className="field">
           <span>显示名称</span>
-          <input autoComplete="nickname" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="可留空自动生成" />
+          <input
+            autoComplete="nickname"
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            placeholder="可留空自动生成"
+          />
         </label>
         <label className="field">
           <span>邮箱</span>
@@ -240,11 +250,22 @@ export function AccountForm({
       </div>
 
       <div className="toolbar">
-        <button type="submit" disabled={!canSubmit || busy}>{busy ? "添加中…" : "添加账号"}</button>
-        <span className="muted">{isCustomSite ? "只允许添加识别为 NewAPI / OneAPI / Sub2API 的面板型中转站。" : "已有站点会直接绑定新账号，不覆盖旧账号。"}</span>
+        <button type="submit" disabled={!canSubmit || busy}>
+          {busy ? "添加中…" : "添加账号"}
+        </button>
+        <span className="muted">
+          {isCustomSite
+            ? "只允许添加识别为 NewAPI / OneAPI / Sub2API 的面板型中转站。"
+            : "已有站点会直接绑定新账号，不覆盖旧账号。"}
+        </span>
       </div>
       {message ? (
-        <div className={isErrorMessage ? "error" : "note"} role={isErrorMessage ? "alert" : "status"} aria-live={isErrorMessage ? "assertive" : "polite"} aria-atomic="true">
+        <div
+          className={isErrorMessage ? "error" : "note"}
+          role={isErrorMessage ? "alert" : "status"}
+          aria-live={isErrorMessage ? "assertive" : "polite"}
+          aria-atomic="true"
+        >
           {message}
         </div>
       ) : null}

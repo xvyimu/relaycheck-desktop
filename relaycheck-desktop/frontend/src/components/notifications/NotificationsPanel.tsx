@@ -8,11 +8,21 @@ import { Button } from "@/components/ui/button";
 
 type NotificationsPanelProps = {
   items: NotificationItem[];
+  total: number;
+  unreadTotal: number;
+  importantTotal: number;
   onRefresh: () => Promise<void>;
   intent?: NavigationIntent | null;
 };
 
-function NotificationsPanelBase({ items, onRefresh, intent }: NotificationsPanelProps) {
+function NotificationsPanelBase({
+  items,
+  total,
+  unreadTotal,
+  importantTotal,
+  onRefresh,
+  intent,
+}: NotificationsPanelProps) {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [showRead, setShowRead] = useState(true);
@@ -24,11 +34,13 @@ function NotificationsPanelBase({ items, onRefresh, intent }: NotificationsPanel
   }, [intent]);
 
   const summary = useMemo(() => {
-    const unread = items.filter((item) => !item.read).length;
-    const read = items.length - unread;
-    const important = items.filter((item) => ["error", "danger", "critical", "warning", "warn"].includes(item.level.toLowerCase())).length;
-    return { total: items.length, unread, read, important };
-  }, [items]);
+    return {
+      total,
+      unread: unreadTotal,
+      read: Math.max(0, total - unreadTotal),
+      important: importantTotal,
+    };
+  }, [importantTotal, total, unreadTotal]);
 
   const visibleItems = useMemo(() => {
     return showRead ? items : items.filter((item) => !item.read);
@@ -85,26 +97,28 @@ function NotificationsPanelBase({ items, onRefresh, intent }: NotificationsPanel
       </div>
 
       <div className="notification-toolbar">
-        <button
-          disabled={Boolean(busy) || summary.unread === 0}
-          onClick={() => void markAllRead()}
-          type="button"
-        >
+        <button disabled={Boolean(busy) || summary.unread === 0} onClick={() => void markAllRead()} type="button">
           {busy === "全部标记已读" ? "标记中…" : "全部标记已读"}
         </button>
-        <Button variant="ghost" disabled={Boolean(busy) || summary.read === 0}
+        <Button
+          variant="ghost"
+          disabled={Boolean(busy) || summary.read === 0}
           onClick={() => void stowAndTrim()}
           type="button"
         >
           {busy === "收纳清理" ? "收纳中…" : `收纳已读`}
         </Button>
-        <Button variant="ghost" disabled={Boolean(busy) || summary.read === 0}
+        <Button
+          variant="ghost"
+          disabled={Boolean(busy) || summary.read === 0}
           onClick={() => void clearRead()}
           type="button"
         >
           {busy === "清除已读" ? "清除中…" : "清除已读"}
         </Button>
-        <Button variant="ghost" onClick={() => setShowRead((prev) => !prev)}
+        <Button
+          variant="ghost"
+          onClick={() => setShowRead((prev) => !prev)}
           type="button"
           style={{ marginLeft: "auto" }}
         >
@@ -118,10 +132,7 @@ function NotificationsPanelBase({ items, onRefresh, intent }: NotificationsPanel
         {visibleItems.map((item) => {
           const tone = statusTone(item.level, { unknown: "neutral" });
           return (
-            <article
-              className={`notification-card is-${item.read ? "read" : "unread"} tone-${tone}`}
-              key={item.id}
-            >
+            <article className={`notification-card is-${item.read ? "read" : "unread"} tone-${tone}`} key={item.id}>
               <div className="notification-card-head">
                 <div>
                   <span>{item.type || "系统"}</span>
@@ -139,7 +150,12 @@ function NotificationsPanelBase({ items, onRefresh, intent }: NotificationsPanel
         })}
 
         {!showRead && summary.read > 0 ? (
-          <Button variant="ghost" onClick={() => setShowRead(true)} type="button" style={{ textAlign: "center", width: "100%", padding: "10px" }}>
+          <Button
+            variant="ghost"
+            onClick={() => setShowRead(true)}
+            type="button"
+            style={{ textAlign: "center", width: "100%", padding: "10px" }}
+          >
             展开 {summary.read} 条已读通知
           </Button>
         ) : null}

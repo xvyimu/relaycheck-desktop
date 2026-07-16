@@ -1,27 +1,28 @@
 import { useCallback } from "react";
 
 import { useApi } from "@/hooks/useApi";
-import type { Account, ImportedChannel, UpstreamSite } from "@/types";
+import type { AccountSummary as AccountSummaryType, ImportedChannel, UpstreamSite } from "@/types";
 
 export function useInventoryData() {
   const channels = useApi<ImportedChannel[]>("/api/channels", []);
   const sites = useApi<UpstreamSite[]>("/api/upstream-sites", []);
-  const accounts = useApi<Account[]>("/api/accounts", []);
+  const summary = useApi<AccountSummaryType | null>("/api/accounts/summary", null);
   const { refresh: refreshChannels } = channels;
   const { refresh: refreshSites } = sites;
-  const { refresh: refreshAccounts } = accounts;
+  const { refresh: refreshSummary } = summary;
 
   const refresh = useCallback(async () => {
-    await Promise.all([refreshChannels(), refreshSites(), refreshAccounts()]);
-  }, [refreshAccounts, refreshChannels, refreshSites]);
+    await Promise.all([refreshChannels(), refreshSites(), refreshSummary()]);
+  }, [refreshChannels, refreshSites, refreshSummary]);
 
   return {
-    loading: channels.loading || sites.loading || accounts.loading,
-    loaded: channels.loaded && sites.loaded && accounts.loaded,
-    error: channels.error || sites.error || accounts.error,
+    loading: channels.loading || sites.loading || summary.loading,
+    loaded: channels.loaded && sites.loaded && summary.loaded,
+    error: channels.error || sites.error || summary.error,
     channels: channels.data,
     sites: sites.data,
-    accounts: accounts.data,
+    accountTotal: summary.data?.accountTotal ?? 0,
+    problemTotal: summary.data?.problemTotal ?? 0,
     refresh,
   };
 }

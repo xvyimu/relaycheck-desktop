@@ -21,8 +21,12 @@ export function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
   }).format(date);
 }
 
@@ -73,7 +77,8 @@ export function formatPricingSource(source: ModelPricingSource) {
   const parts: string[] = [];
   if (typeof source.promptRatio === "number") parts.push(`输入倍率 ${formatCompactNumber(source.promptRatio)}`);
   if (typeof source.completionRatio === "number") parts.push(`输出倍率 ${formatCompactNumber(source.completionRatio)}`);
-  if (typeof source.price === "number") parts.push(`价格 ${formatCompactNumber(source.price)}${source.currency || source.unit || ""}`);
+  if (typeof source.price === "number")
+    parts.push(`价格 ${formatCompactNumber(source.price)}${source.currency || source.unit || ""}`);
   if (source.upstreamModel) parts.push(`映射 ${source.upstreamModel}`);
   if (!parts.length) parts.push(source.source || "配置来源");
   return parts.join(" · ");
@@ -82,7 +87,8 @@ export function formatPricingSource(source: ModelPricingSource) {
 export function formatPriceComparisonMeta(item: ModelPriceComparison) {
   const parts: string[] = [];
   if (typeof item.lowestPromptRatio === "number") parts.push(`最低输入 ${formatCompactNumber(item.lowestPromptRatio)}`);
-  if (typeof item.lowestCompletionRatio === "number") parts.push(`输出 ${formatCompactNumber(item.lowestCompletionRatio)}`);
+  if (typeof item.lowestCompletionRatio === "number")
+    parts.push(`输出 ${formatCompactNumber(item.lowestCompletionRatio)}`);
   if (typeof item.lowestPrice === "number") parts.push(`价格 ${formatCompactNumber(item.lowestPrice)}`);
   if (item.usableAccountCount) parts.push(`${item.usableAccountCount} 个 Key 可用`);
   if (item.fastestLatencyMs) parts.push(`${item.fastestLatencyMs}ms`);

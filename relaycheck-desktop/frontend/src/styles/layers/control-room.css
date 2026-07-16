@@ -35,12 +35,16 @@
 
 html {
   background:
-    linear-gradient(var(--v4-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--v4-grid) 1px, transparent 1px),
+    linear-gradient(var(--v4-grid) 1px, transparent 1px), linear-gradient(90deg, var(--v4-grid) 1px, transparent 1px),
     radial-gradient(circle at 14% 6%, var(--v4-blue-subtle), transparent 26rem),
     radial-gradient(circle at 92% 3%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 24rem),
     linear-gradient(145deg, var(--surface-solid) 0%, var(--rc-bg-1) 38%, var(--rc-bg-0) 100%);
-  background-size: 32px 32px, 32px 32px, auto, auto, auto;
+  background-size:
+    32px 32px,
+    32px 32px,
+    auto,
+    auto,
+    auto;
 }
 
 body {
@@ -264,8 +268,7 @@ nav button.active {
 .settings-grid .card {
   border-color: var(--rc-line);
   border-radius: var(--rc-radius-card);
-  background:
-    linear-gradient(180deg, var(--v4-card), var(--v4-card-soft));
+  background: linear-gradient(180deg, var(--v4-card), var(--v4-card-soft));
   box-shadow: var(--rc-shadow-1);
 }
 
@@ -843,7 +846,12 @@ html {
     radial-gradient(circle at 50% -18%, var(--v4-blue-subtle), transparent 31rem),
     radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--cyan) 7%, transparent), transparent 24rem),
     linear-gradient(180deg, var(--surface-solid) 0%, var(--linear-bg) 42%, var(--v4-bg) 100%);
-  background-size: 28px 28px, 28px 28px, auto, auto, auto;
+  background-size:
+    28px 28px,
+    28px 28px,
+    auto,
+    auto,
+    auto;
 }
 
 body {
@@ -943,14 +951,17 @@ textarea:focus {
     linear-gradient(90deg, var(--linear-bg-grid) 1px, transparent 1px),
     radial-gradient(circle at 50% 0%, var(--v4-blue-subtle), transparent 28rem),
     linear-gradient(180deg, var(--surface-solid), var(--v4-neutral-bg));
-  background-size: 28px 28px, 28px 28px, auto, auto;
+  background-size:
+    28px 28px,
+    28px 28px,
+    auto,
+    auto;
 }
 
 .login form {
   border: 1px solid var(--linear-border);
   border-radius: 24px;
-  background:
-    linear-gradient(180deg, var(--v4-card-hover), var(--v4-card-soft));
+  background: linear-gradient(180deg, var(--v4-card-hover), var(--v4-card-soft));
   box-shadow: var(--v4-shadow-lg);
 }
 
@@ -1002,7 +1013,11 @@ textarea:focus {
   border-radius: 12px;
   background:
     radial-gradient(circle at 30% 18%, color-mix(in srgb, var(--surface-solid) 50%, transparent), transparent 36%),
-    linear-gradient(135deg, color-mix(in srgb, var(--surface-solid) 28%, transparent), color-mix(in srgb, var(--surface-solid) 8%, transparent));
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--surface-solid) 28%, transparent),
+      color-mix(in srgb, var(--surface-solid) 8%, transparent)
+    );
 }
 
 nav button {
@@ -1062,8 +1077,7 @@ nav button.active .nav-icon {
   max-width: 1240px;
   border: 1px solid var(--linear-border);
   border-radius: var(--linear-radius-lg);
-  background:
-    linear-gradient(180deg, var(--v4-card), var(--v4-card-soft));
+  background: linear-gradient(180deg, var(--v4-card), var(--v4-card-soft));
   box-shadow: var(--linear-shadow);
   backdrop-filter: blur(18px);
 }
@@ -1143,8 +1157,7 @@ nav button.active .nav-icon {
 .proxy-result {
   border: 1px solid var(--linear-border);
   border-radius: var(--linear-radius);
-  background:
-    linear-gradient(180deg, var(--linear-surface), var(--linear-surface-soft));
+  background: linear-gradient(180deg, var(--linear-surface), var(--linear-surface-soft));
   box-shadow: var(--linear-shadow);
 }
 
@@ -1228,8 +1241,7 @@ nav button.active .nav-icon {
 .hub-radar {
   border: 1px solid var(--linear-border);
   border-radius: 22px;
-  background:
-    linear-gradient(180deg, var(--v4-card-soft), var(--v4-card-soft));
+  background: linear-gradient(180deg, var(--v4-card-soft), var(--v4-card-soft));
   padding: 11px;
 }
 
@@ -1301,16 +1313,14 @@ nav button.active .nav-icon {
 .checkin-problem-card,
 .account-card.is-problem {
   border-color: var(--v4-red-border);
-  background:
-    linear-gradient(180deg, var(--v4-card-hover), var(--v4-red-bg));
+  background: linear-gradient(180deg, var(--v4-card-hover), var(--v4-red-bg));
 }
 
 .action-card.level-warning,
 .diagnostic-card.level-warning,
 .hub-radar-card.is-warning {
   border-color: var(--v4-amber-border);
-  background:
-    linear-gradient(180deg, var(--v4-card-hover), var(--v4-amber-bg));
+  background: linear-gradient(180deg, var(--v4-card-hover), var(--v4-amber-bg));
 }
 
 .channel-summary div {
@@ -1402,13 +1412,11 @@ nav button.active .nav-icon {
 
 .notification-card.important {
   border-color: var(--v4-blue-line);
-  background:
-    linear-gradient(180deg, var(--v4-card-hover), var(--v4-blue-soft));
+  background: linear-gradient(180deg, var(--v4-card-hover), var(--v4-blue-soft));
 }
 
 .settings-hero {
-  background:
-    linear-gradient(180deg, var(--v4-card-hover), var(--v4-card-soft));
+  background: linear-gradient(180deg, var(--v4-card-hover), var(--v4-card-soft));
 }
 
 .settings-hero::before {
@@ -1422,8 +1430,7 @@ nav button.active .nav-icon {
 
 .detail-drawer {
   border-left: 1px solid var(--linear-border);
-  background:
-    linear-gradient(180deg, var(--v4-card-hover), var(--v4-card-soft));
+  background: linear-gradient(180deg, var(--v4-card-hover), var(--v4-card-soft));
   box-shadow: var(--v4-shadow-lg);
 }
 

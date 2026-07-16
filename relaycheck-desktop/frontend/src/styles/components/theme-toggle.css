@@ -13,7 +13,10 @@
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
 }
 
 .theme-toggle:hover {
@@ -72,7 +75,12 @@ html.dark {
   --v4-input-bg: rgba(22, 32, 48, 0.82);
   --v4-input-border: rgba(120, 150, 200, 0.16);
   --v4-input-focus-ring: rgba(75, 139, 245, 0.28);
-  --v4-skeleton: linear-gradient(90deg, rgba(120, 150, 200, 0.06) 25%, rgba(120, 150, 200, 0.1) 50%, rgba(120, 150, 200, 0.06) 75%);
+  --v4-skeleton: linear-gradient(
+    90deg,
+    rgba(120, 150, 200, 0.06) 25%,
+    rgba(120, 150, 200, 0.1) 50%,
+    rgba(120, 150, 200, 0.06) 75%
+  );
   --surface-solid: #161e2e;
   --text: #d8e2f0;
   --muted: #8a9bb4;
@@ -128,8 +136,7 @@ html.dark body {
   background:
     radial-gradient(circle at 18% 0%, rgba(75, 139, 245, 0.08), transparent 26rem),
     radial-gradient(circle at 94% 16%, rgba(43, 168, 200, 0.06), transparent 24rem),
-    linear-gradient(var(--v4-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--v4-grid) 1px, transparent 1px),
+    linear-gradient(var(--v4-grid) 1px, transparent 1px), linear-gradient(90deg, var(--v4-grid) 1px, transparent 1px),
     linear-gradient(180deg, #0a1118 0%, var(--v4-bg) 50%, #0d1521 100%);
   color: var(--v4-text);
 }

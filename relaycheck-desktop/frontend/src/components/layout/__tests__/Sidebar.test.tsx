@@ -5,9 +5,7 @@ import { NAV_GROUPS, Sidebar, TABS } from "../Sidebar";
 
 describe("Sidebar nav groups α-D / S5", () => {
   it("renders three section labels and all flat TABS keys", () => {
-    const html = renderToStaticMarkup(
-      <Sidebar activeTab="dashboard" onTabChange={() => undefined} />,
-    );
+    const html = renderToStaticMarkup(<Sidebar activeTab="dashboard" onTabChange={() => undefined} />);
 
     expect(html).toContain('class="sidebar"');
     expect(html).toContain("sidebar-section-label");
@@ -28,17 +26,13 @@ describe("Sidebar nav groups α-D / S5", () => {
   });
 
   it("marks the active tab with aria-current", () => {
-    const html = renderToStaticMarkup(
-      <Sidebar activeTab="sites" onTabChange={() => undefined} />,
-    );
+    const html = renderToStaticMarkup(<Sidebar activeTab="sites" onTabChange={() => undefined} />);
     expect(html).toContain('aria-current="page"');
     expect(html).toContain("站点与账号");
   });
 
   it("uses live sidebar class (S6 bridge target, not sidebar-v4)", () => {
-    const html = renderToStaticMarkup(
-      <Sidebar activeTab="dashboard" onTabChange={() => undefined} />,
-    );
+    const html = renderToStaticMarkup(<Sidebar activeTab="dashboard" onTabChange={() => undefined} />);
     expect(html).toContain('class="sidebar"');
     expect(html).not.toContain("sidebar-v4");
   });

@@ -65,7 +65,8 @@ const inventory: InventoryDataState = {
   loading: false,
   loaded: true,
   error: "",
-  accounts: [],
+  accountTotal: 0,
+  problemTotal: 0,
   channels: [],
   sites: [],
   refresh: async () => undefined,
@@ -96,6 +97,13 @@ const ops: OpsHealthState = {
   checkins: null,
   diagnostics: null,
   notifications: [],
+  notificationPage: {
+    items: [],
+    total: 0,
+    unreadTotal: 0,
+    importantTotal: 0,
+    nextOffset: null,
+  },
   refresh: async () => undefined,
 };
 
