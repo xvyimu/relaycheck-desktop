@@ -264,7 +264,45 @@ func newPersistenceTestService(t *testing.T, client *http.Client) (*Service, *sq
 		);
 		CREATE TABLE channel_accounts (
 			id TEXT PRIMARY KEY,
-			upstream_site_id TEXT NOT NULL
+			upstream_site_id TEXT NOT NULL,
+			display_name TEXT NOT NULL DEFAULT '',
+			auth_type TEXT NOT NULL DEFAULT 'cookie',
+			login_status TEXT NOT NULL DEFAULT 'unknown',
+			created_at TEXT NOT NULL DEFAULT 'now',
+			updated_at TEXT NOT NULL DEFAULT 'now'
+		);
+		CREATE TABLE checkin_logs (
+			id TEXT PRIMARY KEY,
+			account_id TEXT NOT NULL,
+			upstream_site_id TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'success',
+			started_at TEXT NOT NULL DEFAULT 'now',
+			finished_at TEXT NOT NULL DEFAULT 'now'
+		);
+		CREATE TABLE balance_snapshots (
+			id TEXT PRIMARY KEY,
+			account_id TEXT NOT NULL,
+			upstream_site_id TEXT NOT NULL,
+			unit TEXT NOT NULL DEFAULT 'unknown',
+			created_at TEXT NOT NULL DEFAULT 'now'
+		);
+		CREATE TABLE channel_schedules (
+			id TEXT PRIMARY KEY,
+			upstream_site_id TEXT,
+			enabled INTEGER NOT NULL DEFAULT 1,
+			checkin_time TEXT NOT NULL DEFAULT '08:00',
+			cron_expr TEXT NOT NULL DEFAULT '',
+			skip_dates_json TEXT NOT NULL DEFAULT '[]',
+			random_delay_min INTEGER NOT NULL DEFAULT 0,
+			random_delay_max INTEGER NOT NULL DEFAULT 30,
+			created_at TEXT NOT NULL DEFAULT 'now',
+			updated_at TEXT NOT NULL DEFAULT 'now'
+		);
+		CREATE TABLE site_pricing_cache (
+			id TEXT PRIMARY KEY,
+			site_id TEXT NOT NULL,
+			site_name TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL DEFAULT 'now'
 		);
 	`)
 	if err != nil {
@@ -283,6 +321,94 @@ func seedUpstreamSite(t *testing.T, db *sql.DB, id string, name string, baseURL 
 	`, id, name, baseURL, baseURL, loginURL, source, confidence)
 	if err != nil {
 		t.Fatalf("seed upstream site: %v", err)
+	}
+}
+
+func countTable(t *testing.T, db *sql.DB, query string, args ...interface{}) int {
+	t.Helper()
+	var n int
+	if err := db.QueryRowContext(context.Background(), query, args...).Scan(&n); err != nil {
+		t.Fatalf("count query %q: %v", query, err)
+	}
+	return n
+}
+
+func TestDeleteUpstreamSiteCascadesRelatedRows(t *testing.T) {
+	svc, db := newPersistenceTestService(t, nil)
+	seedUpstreamSite(t, db, "site-1", "Relay", "https://relay.example", "", "", 0)
+	seedUpstreamSite(t, db, "site-2", "Other", "https://other.example", "", "", 0)
+
+	_, err := db.Exec(`
+		INSERT INTO channel_accounts (id, upstream_site_id, display_name) VALUES
+			('acc-1', 'site-1', 'A'),
+			('acc-2', 'site-1', 'B'),
+			('acc-keep', 'site-2', 'Keep');
+		INSERT INTO checkin_logs (id, account_id, upstream_site_id) VALUES
+			('log-1', 'acc-1', 'site-1'),
+			('log-keep', 'acc-keep', 'site-2');
+		INSERT INTO balance_snapshots (id, account_id, upstream_site_id) VALUES
+			('bal-1', 'acc-1', 'site-1'),
+			('bal-keep', 'acc-keep', 'site-2');
+		INSERT INTO channel_schedules (id, upstream_site_id) VALUES
+			('sch-1', 'site-1'),
+			('sch-keep', 'site-2');
+		INSERT INTO site_pricing_cache (id, site_id, site_name) VALUES
+			('price-1', 'site-1', 'Relay'),
+			('price-keep', 'site-2', 'Other');
+	`)
+	if err != nil {
+		t.Fatalf("seed related rows: %v", err)
+	}
+
+	result, err := svc.DeleteUpstreamSite(context.Background(), "site-1")
+	if err != nil {
+		t.Fatalf("DeleteUpstreamSite() error = %v", err)
+	}
+	if !result.Deleted || result.Accounts != 2 || result.CheckinLogs != 1 || result.BalanceSnapshots != 1 || result.Schedules != 1 || result.PricingCache != 1 {
+		t.Fatalf("unexpected cascade counts: %+v", result)
+	}
+
+	if countTable(t, db, `SELECT COUNT(1) FROM upstream_sites WHERE id='site-1'`) != 0 {
+		t.Fatal("site-1 still present")
+	}
+	if countTable(t, db, `SELECT COUNT(1) FROM channel_accounts WHERE upstream_site_id='site-1'`) != 0 {
+		t.Fatal("orphan accounts remain")
+	}
+	if countTable(t, db, `SELECT COUNT(1) FROM checkin_logs WHERE upstream_site_id='site-1'`) != 0 {
+		t.Fatal("orphan checkin logs remain")
+	}
+	if countTable(t, db, `SELECT COUNT(1) FROM balance_snapshots WHERE upstream_site_id='site-1'`) != 0 {
+		t.Fatal("orphan balance snapshots remain")
+	}
+	if countTable(t, db, `SELECT COUNT(1) FROM channel_schedules WHERE upstream_site_id='site-1'`) != 0 {
+		t.Fatal("orphan schedules remain")
+	}
+	if countTable(t, db, `SELECT COUNT(1) FROM site_pricing_cache WHERE site_id='site-1'`) != 0 {
+		t.Fatal("orphan pricing cache remain")
+	}
+
+	// 其他站点数据必须完整保留。
+	if countTable(t, db, `SELECT COUNT(1) FROM upstream_sites WHERE id='site-2'`) != 1 {
+		t.Fatal("site-2 was deleted")
+	}
+	if countTable(t, db, `SELECT COUNT(1) FROM channel_accounts WHERE id='acc-keep'`) != 1 {
+		t.Fatal("kept account missing")
+	}
+	if countTable(t, db, `SELECT COUNT(1) FROM checkin_logs WHERE id='log-keep'`) != 1 {
+		t.Fatal("kept log missing")
+	}
+}
+
+func TestDeleteUpstreamSiteRejectsMissingAndGlobal(t *testing.T) {
+	svc, _ := newPersistenceTestService(t, nil)
+	if _, err := svc.DeleteUpstreamSite(context.Background(), "missing"); err != sql.ErrNoRows {
+		t.Fatalf("missing site error = %v, want sql.ErrNoRows", err)
+	}
+	if _, err := svc.DeleteUpstreamSite(context.Background(), globalScheduleSiteID); err == nil {
+		t.Fatal("expected error deleting global schedule site")
+	}
+	if _, err := svc.DeleteUpstreamSite(context.Background(), "  "); err == nil {
+		t.Fatal("expected error for empty id")
 	}
 }
 

@@ -22,9 +22,9 @@ Read this first, then `CLAUDE.md` for architecture.
 
 **Still external / needs materials or real host:**
 
-- Authenticode / store signing materials  
-- Production RUM + multi-host API p95 after real install  
-- DB migration / site-delete semantics (confirm + backup first)
+- Authenticode / store signing materials — scaffold: `scripts/sign-release.ps1` + `docs/deploy/code-signing-readiness-2026-07-18.md` (**blocked without PFX**)
+- Production RUM + multi-host API p95 — plan: `docs/perf/production-rum-collection-plan-2026-07-18.md` (local sampler only)
+- Full schema FK migration / historical orphan cleanup — **deferred**; site **delete cascade is implemented in app** (`docs/sop/relaycheck-site-delete-cascade-2026-07-18.md`)
 
 **Do not without explicit confirm:** DB migration, delete `data/*`, site-delete semantics change, force-push, cloud deploy, real upstream checkin blasts.
 

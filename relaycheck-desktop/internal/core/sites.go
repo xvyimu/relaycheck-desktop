@@ -299,11 +299,17 @@ func (a *App) detectAndSaveSite(ctx context.Context, id string, name string, bas
 }
 
 func (a *App) deleteUpstreamSite(w http.ResponseWriter, r *http.Request, id string) {
-	if err := a.sitesService.DeleteUpstreamSite(r.Context(), id); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	result, err := a.sitesService.DeleteUpstreamSite(r.Context(), id)
+	if err == sql.ErrNoRows {
+		writeError(w, http.StatusNotFound, "上游站点不存在。")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
+	if err != nil {
+		writePublicError(w, http.StatusInternalServerError, "删除站点失败，请稍后重试。", err)
+		return
+	}
+	// 返回级联计数，便于前端确认未留下孤儿数据。
+	writeJSON(w, http.StatusOK, result)
 }
 
 func boolInt(value bool) int {

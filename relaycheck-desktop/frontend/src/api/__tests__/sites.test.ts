@@ -52,4 +52,22 @@ describe("sitesApi", () => {
       headers: { "content-type": "application/json" },
     });
   });
+
+  it("remove 使用 DELETE 且编码 ID", async () => {
+    const fetchMock = mockOk({
+      siteId: "site/a",
+      deleted: true,
+      accounts: 1,
+      checkinLogs: 0,
+      balanceSnapshots: 0,
+      schedules: 0,
+      pricingCache: 0,
+    });
+    await expect(sitesApi.remove("site/a b")).resolves.toMatchObject({ deleted: true, accounts: 1 });
+    expect(fetchMock).toHaveBeenCalledWith("/api/upstream-sites/site%2Fa%20b", {
+      method: "DELETE",
+      credentials: "same-origin",
+      headers: undefined,
+    });
+  });
 });

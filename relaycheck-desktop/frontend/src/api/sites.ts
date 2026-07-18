@@ -33,9 +33,26 @@ function bulkDetect(body: Record<string, unknown> = {}): Promise<unknown> {
   });
 }
 
+/** 删除站点响应：后端事务级联后的计数。 */
+export type DeleteSiteResult = {
+  siteId: string;
+  deleted: boolean;
+  accounts: number;
+  checkinLogs: number;
+  balanceSnapshots: number;
+  schedules: number;
+  pricingCache: number;
+};
+
+/** DELETE 站点并级联关联账号/日志/余额/排程/价格缓存。 */
+function remove(id: string): Promise<DeleteSiteResult> {
+  return api<DeleteSiteResult>(sitePath(id), { method: "DELETE" });
+}
+
 export const sitesApi = {
   list,
   get,
   detect,
   bulkDetect,
+  remove,
 } as const;

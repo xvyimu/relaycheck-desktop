@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -184,14 +185,93 @@ func (s *Service) DetectUpstreamSite(ctx context.Context, id string) (Detection,
 	return detection, nil
 }
 
-// DeleteUpstreamSite removes a site row and records an audit entry.
-func (s *Service) DeleteUpstreamSite(ctx context.Context, id string) error {
-	_, err := s.infra.DB().ExecContext(ctx, `DELETE FROM upstream_sites WHERE id = ?`, id)
-	if err != nil {
-		return err
+// DeleteSiteResult 描述站点删除事务影响的行数，便于 API 与测试断言。
+type DeleteSiteResult struct {
+	SiteID           string `json:"siteId"`
+	Deleted          bool   `json:"deleted"`
+	Accounts         int64  `json:"accounts"`
+	CheckinLogs      int64  `json:"checkinLogs"`
+	BalanceSnapshots int64  `json:"balanceSnapshots"`
+	Schedules        int64  `json:"schedules"`
+	PricingCache     int64  `json:"pricingCache"`
+}
+
+// DeleteUpstreamSite 在单事务内删除站点及其关联数据，避免孤儿账号/日志/余额/排程。
+// 说明：历史 schema 未给 accounts/logs/snapshots 声明 SQL 外键；应用层级联是 fail-closed 路径。
+// 不删除 imported_channels（渠道清单归属 NewAPI 实例，与站点行解耦）。
+func (s *Service) DeleteUpstreamSite(ctx context.Context, id string) (DeleteSiteResult, error) {
+	result := DeleteSiteResult{SiteID: id}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return result, fmt.Errorf("站点 ID 不能为空")
 	}
-	s.infra.Audit("upstream_site.deleted", "warning", "", "upstream_site", id, "上游站点已删除", nil)
-	return nil
+	if id == globalScheduleSiteID {
+		return result, fmt.Errorf("不能删除全局排程兼容站点")
+	}
+
+	tx, err := s.infra.DB().BeginTx(ctx, nil)
+	if err != nil {
+		return result, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(1) FROM upstream_sites WHERE id = ?`, id).Scan(&exists); err != nil {
+		return result, err
+	}
+	if exists == 0 {
+		return result, sql.ErrNoRows
+	}
+
+	// 顺序：先子表后站点，保证任意中断回滚后不留半删状态。
+	if result.CheckinLogs, err = execDeleteCount(ctx, tx, `DELETE FROM checkin_logs WHERE upstream_site_id = ?`, id); err != nil {
+		return result, err
+	}
+	if result.BalanceSnapshots, err = execDeleteCount(ctx, tx, `DELETE FROM balance_snapshots WHERE upstream_site_id = ?`, id); err != nil {
+		return result, err
+	}
+	if result.Accounts, err = execDeleteCount(ctx, tx, `DELETE FROM channel_accounts WHERE upstream_site_id = ?`, id); err != nil {
+		return result, err
+	}
+	if result.Schedules, err = execDeleteCount(ctx, tx, `DELETE FROM channel_schedules WHERE upstream_site_id = ?`, id); err != nil {
+		return result, err
+	}
+	if result.PricingCache, err = execDeleteCount(ctx, tx, `DELETE FROM site_pricing_cache WHERE site_id = ?`, id); err != nil {
+		return result, err
+	}
+	siteRes, err := tx.ExecContext(ctx, `DELETE FROM upstream_sites WHERE id = ?`, id)
+	if err != nil {
+		return result, err
+	}
+	siteN, _ := siteRes.RowsAffected()
+	if siteN == 0 {
+		return result, sql.ErrNoRows
+	}
+	if err := tx.Commit(); err != nil {
+		return result, err
+	}
+	result.Deleted = true
+	s.infra.Audit("upstream_site.deleted", "warning", "", "upstream_site", id, "上游站点已删除（级联账号/日志/余额/排程）", map[string]interface{}{
+		"accounts":         result.Accounts,
+		"checkinLogs":      result.CheckinLogs,
+		"balanceSnapshots": result.BalanceSnapshots,
+		"schedules":        result.Schedules,
+		"pricingCache":     result.PricingCache,
+	})
+	return result, nil
+}
+
+// execDeleteCount 执行 DELETE 并返回影响行数。
+func execDeleteCount(ctx context.Context, tx *sql.Tx, query string, args ...interface{}) (int64, error) {
+	res, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 // DetectAndSaveSite re-probes a site, persists the detection, and returns the

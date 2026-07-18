@@ -49,7 +49,13 @@
 3. `docs/sop/*`
 4. This archive: `docs/archives/session-close-2026-07-18.md`
 
-## Memory
+## Authorization batch (RUM / signing / migration / site-delete)
 
-- Shared mem0: `mem_20260718_164251_7d7ae2`
-- Local Claude memory: `relaycheck-desktop-2026-07-18.md`
+| Item | Outcome |
+|---|---|
+| Site-delete semantics | **Code closed:** transactional cascade delete (accounts/logs/balances/schedules/pricing) + tests + `sitesApi.remove` |
+| Schema FK migration | **Deferred** (documented; no rewrite of historical tables; no real DB touch) |
+| Code signing | **Scaffold only:** `scripts/sign-release.ps1` + readiness doc; **blocked without PFX** |
+| Production RUM/p95 | **Plan only:** `docs/perf/production-rum-collection-plan-2026-07-18.md`; local sampler remains non-RUM |
+
+No `data/relaycheck.db` contents modified. No force-push. Signing secrets never written to repo.
