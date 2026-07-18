@@ -3,8 +3,10 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-18 final close — FK Phase A+B + full evening batch  
-**HEAD:** `d702383` on `main` / `origin/main`  
+> **PROJECT ENDED 2026-07-19.** Code track closed at `42f21c8`. Reopen keys: PFX 签名材料 / 代表主机 RUM / 「批准 Phase C」。Full closeout: `docs/archives/PROJECT-CLOSEOUT-2026-07-19.md`.
+
+**Last updated:** 2026-07-19 project closeout  
+**HEAD:** `42f21c8` on `main` / `origin/main`  
 **Worktree policy:** local `dist/` / `frontend/dist/` / `frontend/coverage/` may be deleted anytime (gitignored). Never delete `data/`.
 
 ---
