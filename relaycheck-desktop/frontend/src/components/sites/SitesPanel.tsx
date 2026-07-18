@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { api } from "@/api/client";
+import { sitesApi } from "@/api/sites";
 import { AccountsPanel } from "@/components/accounts/AccountsPanel";
 import { SiteAccountMasterDetail } from "@/components/sites/SiteAccountMasterDetail";
 import { DialogShell } from "@/components/ui/dialog-shell";
@@ -123,11 +123,12 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate, dialogEpoch = 0 
     }
   }, [intent]);
 
+  /** 单站探测：契约归 sitesApi，成功后刷新 inventory。 */
   async function detect(site: UpstreamSite) {
     setBusyId(site.id);
     setMessage("");
     try {
-      await api(`/api/upstream-sites/${site.id}/detect`, { method: "POST" });
+      await sitesApi.detect(site.id);
       await onRefresh();
       setMessage(`${site.name} 探测完成。`);
     } catch (error) {
@@ -137,13 +138,14 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate, dialogEpoch = 0 
     }
   }
 
+  /** 打开详情抽屉；并发打开时只采纳最新 requestId。 */
   async function openDetail(site: UpstreamSite) {
     const requestId = detailRequestRef.current + 1;
     detailRequestRef.current = requestId;
     setDetailBusyId(site.id);
     setMessage("");
     try {
-      const nextDetail = await api<SiteDetail>(`/api/upstream-sites/${site.id}`);
+      const nextDetail = await sitesApi.get(site.id);
       if (detailRequestRef.current === requestId) {
         setDetail(nextDetail);
       }

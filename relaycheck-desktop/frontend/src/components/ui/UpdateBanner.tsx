@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "@/api/client";
+import { systemApi } from "@/api/system";
 import type { VersionCheckResult } from "@/types";
 import { Button } from "@/components/ui/button";
 import { safeExternalUrl } from "@/lib/safeExternalUrl";
@@ -7,10 +7,8 @@ import { safeExternalUrl } from "@/lib/safeExternalUrl";
 const DISMISS_KEY = "rc.updateBanner.dismissedVersion";
 
 /**
- * UpdateBanner polls /api/system/version-check on mount and, when a newer
- * version is available, renders a dismissible banner at the top of the
- * dashboard. Dismissing a version records it in localStorage so the banner
- * stays quiet until an even newer version is published.
+ * UpdateBanner 挂载时通过 systemApi 拉取版本检查；
+ * 有新版本时展示可关闭横幅。关闭记录进 localStorage。
  */
 export function UpdateBanner() {
   const [result, setResult] = useState<VersionCheckResult | null>(null);
@@ -21,7 +19,8 @@ export function UpdateBanner() {
 
   useEffect(() => {
     let active = true;
-    api<VersionCheckResult>("/api/system/version-check")
+    systemApi
+      .versionCheck()
       .then((data) => {
         if (active) setResult(data);
       })

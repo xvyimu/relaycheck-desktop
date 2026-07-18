@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "@/api/client";
+import { analyticsApi } from "@/api/analytics";
 import "@/styles/domains/analytics.css";
 import type { BalanceSnapshot, CheckinLog } from "@/types";
 
@@ -472,7 +472,8 @@ export function AnalyticsPanel() {
   const loadAnalytics = useCallback(async (days: RangeOption) => {
     setLoading(true);
     try {
-      const result = await api<AnalyticsData>(`/api/analytics?days=${days}`);
+      // 分析契约归 analyticsApi，组件不拼 days query。
+      const result = (await analyticsApi.getAnalytics(days)) as AnalyticsData;
       setData(result);
     } catch {
       // ignore
@@ -495,8 +496,8 @@ export function AnalyticsPanel() {
       setDrillLoading(true);
       try {
         const [snapshots, logs] = await Promise.all([
-          selectedDate ? api<BalanceSnapshot[]>("/api/balances/snapshots") : Promise.resolve([] as BalanceSnapshot[]),
-          selectedStatus ? api<CheckinLog[]>("/api/checkins/logs") : Promise.resolve([] as CheckinLog[]),
+          selectedDate ? analyticsApi.listBalanceSnapshots() : Promise.resolve([] as BalanceSnapshot[]),
+          selectedStatus ? analyticsApi.listCheckinLogs() : Promise.resolve([] as CheckinLog[]),
         ]);
         if (!cancelled) {
           if (selectedDate) setBalanceSnapshots(snapshots);

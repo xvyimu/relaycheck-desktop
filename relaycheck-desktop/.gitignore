@@ -56,3 +56,7 @@ frontend/verify-nav-output.txt
 
 # Historical planning-with-files sessions (archived under docs/archives/)
 .planning/
+
+# Local performance samples (regenerate via scripts/sample-local-perf.ps1)
+docs/perf/samples/*.json
+!docs/perf/samples/.gitkeep

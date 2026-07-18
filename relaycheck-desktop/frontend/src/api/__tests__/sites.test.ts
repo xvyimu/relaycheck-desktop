@@ -6,18 +6,50 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("sitesApi", () => {
-  it("list 使用只读 GET /api/upstream-sites", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ ok: true, data: [] }), {
+function mockOk(data: unknown = {}) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+    Promise.resolve(
+      new Response(JSON.stringify({ ok: true, data }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
-    );
+    ),
+  );
+}
+
+describe("sitesApi", () => {
+  it("list 使用只读 GET /api/upstream-sites", async () => {
+    const fetchMock = mockOk([]);
     await expect(sitesApi.list()).resolves.toEqual([]);
     expect(fetchMock).toHaveBeenCalledWith("/api/upstream-sites", {
       credentials: "same-origin",
       headers: undefined,
+    });
+  });
+
+  it("get/detect 对 ID 编码", async () => {
+    const fetchMock = mockOk({ site: { id: "s" }, detection: {}, accounts: [], balanceSnapshots: [], checkinLogs: [], suggestions: [] });
+    await sitesApi.get("site/a b");
+    await sitesApi.detect("site/a b");
+    expect(fetchMock).toHaveBeenCalledWith("/api/upstream-sites/site%2Fa%20b", {
+      credentials: "same-origin",
+      headers: undefined,
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/api/upstream-sites/site%2Fa%20b/detect", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: undefined,
+    });
+  });
+
+  it("bulkDetect 仅 POST 声明 JSON", async () => {
+    const fetchMock = mockOk({});
+    await sitesApi.bulkDetect({ limit: 10 });
+    expect(fetchMock).toHaveBeenCalledWith("/api/upstream-sites/bulk-detect", {
+      method: "POST",
+      body: JSON.stringify({ limit: 10 }),
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
     });
   });
 });

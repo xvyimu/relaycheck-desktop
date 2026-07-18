@@ -3,20 +3,26 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-18  
-**HEAD:** `a8f372d` on `main` / `origin/main`  
+**Last updated:** 2026-07-18 (sites/analytics adapters + local deploy/perf playbooks)  
+**HEAD:** see `git rev-parse --short HEAD` on `main` / `origin/main`  
 **Worktree policy:** local `dist/` / `frontend/dist/` / `frontend/coverage/` may be deleted anytime (gitignored). Never delete `data/`.
 
 ---
 
 ## TODO (next session)
 
-1. [ ] **SitesPanel / remaining bare API** — scan components still using raw `api("/api/...")` outside typed owners; converge one surface at a time.
-2. [ ] **LocalNewAPISyncPanel behavior tests** — mount list+exclude-rules, sync default body, draft token path, failure `role=alert`.
-3. [ ] **External measurement only** — RUM/startup waterfall and API p95 after real deployment; local smoke cannot prove production p95.
-4. [x] **Archive `.planning/**`** — 2026-07-18: tarball `docs/archives/planning-history-2026-07-18.tar.gz` + README; directory removed and gitignored.
+1. [x] **SitesPanel / remaining bare API (sites surface)** — `sitesApi.get/detect/bulkDetect`; SitesPanel wired; analytics + UpdateBanner also de-rawed.
+2. [x] **LocalNewAPISyncPanel tests** — mount list/exclude-rules + sync contract tests.
+3. [x] **Local deploy + local perf harness** — `docs/deploy/local-desktop-playbook-2026-07-18.md`, `docs/perf/README.md`, `scripts/sample-local-perf.ps1` (not production RUM).
+4. [x] **Archive `.planning/**`** — tarball under `docs/archives/`.
 
-**Do not without explicit confirm:** DB migration, delete `data/*`, site-delete semantics change, force-push, deploy, real upstream checkin blasts.
+**Still external / needs materials or real host:**
+
+- Authenticode / store signing materials  
+- Production RUM + multi-host API p95 after real install  
+- DB migration / site-delete semantics (confirm + backup first)
+
+**Do not without explicit confirm:** DB migration, delete `data/*`, site-delete semantics change, force-push, cloud deploy, real upstream checkin blasts.
 
 ---
 
@@ -43,7 +49,13 @@ Read this first, then `CLAUDE.md` for architecture.
 | channels | `frontend/src/api/channels.ts` |
 | local-newapi | `frontend/src/api/local-newapi.ts` |
 | notifications | `frontend/src/api/notifications.ts` |
-| system / scheduler / sites | `frontend/src/api/system.ts`, `scheduler.ts`, `sites.ts` |
+| system / scheduler / sites / analytics | `frontend/src/api/system.ts`, `scheduler.ts`, `sites.ts`, `analytics.ts` |
+
+### Local deploy & perf (desktop meaning of deploy)
+
+- Playbook: `docs/deploy/local-desktop-playbook-2026-07-18.md` (`verify-release` → `package-release` → `verify-package`)
+- Local perf harness: `docs/perf/README.md` + `scripts/sample-local-perf.ps1` (writes gitignored JSON under `docs/perf/samples/`)
+- Production RUM/p95 still requires a representative installed host; local samples **do not** prove those targets.
 
 ### 2026-07-17 and earlier
 
