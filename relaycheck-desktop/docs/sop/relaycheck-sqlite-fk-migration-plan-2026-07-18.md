@@ -1,7 +1,7 @@
 # SQLite Full-Table Foreign Keys — Design Plan
 
 - **Date:** 2026-07-18
-- **Status:** **Design only.** Not implemented. Not applied to `data/relaycheck.db`.
+- **Status:** **Phase A+B implemented** in `internal/core/db_fk.go` (2026-07-18). Auto-runs once on migrate via `ensureSiteAndAccountForeignKeys`. Design history retained below.
 - **Scope:** RelayCheck Desktop local SQLite (`internal/core/db.go` migrate path)
 - **Related:**  
   - App cascade delete (live): `docs/sop/relaycheck-site-delete-cascade-2026-07-18.md`  
@@ -379,4 +379,15 @@ python -c "import sqlite3,os;c=sqlite3.connect(os.path.abspath('data/relaycheck.
 
 | Date | Note |
 |---|---|
-| 2026-07-18 | Initial design from live schema + post site-orphan cleanup integrity sample; **not implemented** |
+| 2026-07-18 | Initial design from live schema + post site-orphan cleanup integrity sample |
+| 2026-07-18 | **Implemented Phase A+B:** table rebuild + orphan scrub + account delete cascade; tests in `db_fk_test.go`; local host migrated (`schema.fk_phase=2`, logs 515→487 after account-orphan scrub) |
+
+## 15. Implementation notes (as shipped)
+
+- Entry: `migrate()` → `ensureSiteAndAccountForeignKeys` after schedules nullable migrate, before performance indexes / FTS ensure.
+- Idempotency: `system_settings.schema.fk_phase = "2"` and/or `PRAGMA foreign_key_list` fast path.
+- Scrub before rewrite: site orphans + `checkin_logs`/`balance_snapshots` missing parent account (**deletes debris**).
+- Account HTTP delete: transactional cascade logs + balances + `invalidateReadCache`.
+- App site delete unchanged (still explicit child deletes; compatible with CASCADE).
+- Fresh CREATE TABLE in `migrate()` includes the same FKs for new installs.
+- Backup before first open of upgraded binary recommended: `data/backups/pre-fk-phase-ab-*`.

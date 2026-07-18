@@ -837,13 +837,62 @@ func statusFromKey(fingerprint string) string {
 }
 
 func (a *App) deleteAccount(w http.ResponseWriter, r *http.Request, id string) {
-	_, err := a.db.ExecContext(r.Context(), `DELETE FROM channel_accounts WHERE id=?`, id)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	ctx := r.Context()
+	id = strings.TrimSpace(id)
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "账号 ID 不能为空。")
 		return
 	}
-	a.audit("account.deleted", "warning", "", "account", id, "账号已删除", nil)
-	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
+	// 应用层级联：与 FK ON DELETE CASCADE 对齐，并在无 FK 的旧库上仍不留孤儿日志/余额。
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		writePublicError(w, http.StatusInternalServerError, "删除账号失败，请稍后重试。", err)
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(1) FROM channel_accounts WHERE id=?`, id).Scan(&exists); err != nil {
+		writePublicError(w, http.StatusInternalServerError, "删除账号失败，请稍后重试。", err)
+		return
+	}
+	if exists == 0 {
+		writeError(w, http.StatusNotFound, "账号不存在。")
+		return
+	}
+	var checkinLogs, balances int64
+	if res, err := tx.ExecContext(ctx, `DELETE FROM checkin_logs WHERE account_id=?`, id); err != nil {
+		writePublicError(w, http.StatusInternalServerError, "删除账号失败，请稍后重试。", err)
+		return
+	} else if checkinLogs, err = res.RowsAffected(); err != nil {
+		writePublicError(w, http.StatusInternalServerError, "删除账号失败，请稍后重试。", err)
+		return
+	}
+	if res, err := tx.ExecContext(ctx, `DELETE FROM balance_snapshots WHERE account_id=?`, id); err != nil {
+		writePublicError(w, http.StatusInternalServerError, "删除账号失败，请稍后重试。", err)
+		return
+	} else if balances, err = res.RowsAffected(); err != nil {
+		writePublicError(w, http.StatusInternalServerError, "删除账号失败，请稍后重试。", err)
+		return
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM channel_accounts WHERE id=?`, id); err != nil {
+		writePublicError(w, http.StatusInternalServerError, "删除账号失败，请稍后重试。", err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		writePublicError(w, http.StatusInternalServerError, "删除账号失败，请稍后重试。", err)
+		return
+	}
+	a.invalidateReadCache()
+	a.audit("account.deleted", "warning", "", "account", id, "账号已删除（级联签到日志/余额）", map[string]interface{}{
+		"checkinLogs":      checkinLogs,
+		"balanceSnapshots": balances,
+	})
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"deleted":          true,
+		"checkinLogs":      checkinLogs,
+		"balanceSnapshots": balances,
+	})
 }
 
 // handleDeleteUnsupportedCheckinAccounts 将只读预览与一次性确认拆成显式、fail-closed 的 HTTP 契约。

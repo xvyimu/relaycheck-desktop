@@ -100,7 +100,8 @@ CREATE TABLE IF NOT EXISTS channel_accounts (
 	last_checkin_at TEXT,
 	last_checkin_status TEXT,
 	created_at TEXT NOT NULL,
-	updated_at TEXT NOT NULL
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (upstream_site_id) REFERENCES upstream_sites(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_channel_accounts_site ON channel_accounts(upstream_site_id);
 
@@ -114,7 +115,9 @@ CREATE TABLE IF NOT EXISTS checkin_logs (
 	message TEXT,
 	raw_response_masked TEXT,
 	started_at TEXT NOT NULL,
-	finished_at TEXT NOT NULL
+	finished_at TEXT NOT NULL,
+	FOREIGN KEY (account_id) REFERENCES channel_accounts(id) ON DELETE CASCADE,
+	FOREIGN KEY (upstream_site_id) REFERENCES upstream_sites(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_checkin_logs_account ON checkin_logs(account_id);
 CREATE INDEX IF NOT EXISTS idx_checkin_logs_started ON checkin_logs(started_at);
@@ -129,7 +132,9 @@ CREATE TABLE IF NOT EXISTS balance_snapshots (
 	total_quota REAL,
 	unit TEXT NOT NULL DEFAULT 'unknown',
 	raw_response_masked TEXT,
-	created_at TEXT NOT NULL
+	created_at TEXT NOT NULL,
+	FOREIGN KEY (account_id) REFERENCES channel_accounts(id) ON DELETE CASCADE,
+	FOREIGN KEY (upstream_site_id) REFERENCES upstream_sites(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_balance_snapshots_account ON balance_snapshots(account_id);
 CREATE INDEX IF NOT EXISTS idx_balance_snapshots_created ON balance_snapshots(created_at);
@@ -211,7 +216,8 @@ CREATE TABLE IF NOT EXISTS site_pricing_cache (
 	last_synced_at TEXT NOT NULL,
 	created_at TEXT NOT NULL,
 	updated_at TEXT NOT NULL,
-	UNIQUE(site_id, source_path)
+	UNIQUE(site_id, source_path),
+	FOREIGN KEY (site_id) REFERENCES upstream_sites(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_site_pricing_cache_site ON site_pricing_cache(site_id);
 CREATE INDEX IF NOT EXISTS idx_site_pricing_cache_synced ON site_pricing_cache(last_synced_at);
@@ -263,6 +269,11 @@ CREATE INDEX IF NOT EXISTS idx_site_pricing_cache_synced ON site_pricing_cache(l
 		}
 	}
 	if err := a.ensureChannelSchedulesNullableSiteID(ctx); err != nil {
+		return err
+	}
+	// Phase A+B FK rebuild (idempotent). Runs after schedules nullable migrate
+	// and before FTS ensure so accounts rewrite can drop/recreate search index.
+	if err := a.ensureSiteAndAccountForeignKeys(ctx); err != nil {
 		return err
 	}
 	if err := a.ensurePerformanceIndexes(ctx); err != nil {

@@ -3,7 +3,7 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-18 (SQLite full-table FK migration **design** only)  
+**Last updated:** 2026-07-18 (SQLite FK Phase A+B implemented + local migrate)  
 **HEAD:** see `git rev-parse --short HEAD` on `main` / `origin/main`
 **Worktree policy:** local `dist/` / `frontend/dist/` / `frontend/coverage/` may be deleted anytime (gitignored). Never delete `data/`.
 
@@ -24,9 +24,9 @@ Read this first, then `CLAUDE.md` for architecture.
 |---|---|---|
 | Authenticode | **Hard block** — no PFX on disk, no Code Signing EKU in stores | Operator places Code Signing PFX + sets `RELAYCHECK_SIGN_PFX` / `_PASSWORD`, then `scripts/sign-release.ps1` |
 | Multi-host / large-DB RUM | Local API p95 + process cold-start done | Larger inventory + multi-machine + UI first-interactive |
-| Full SQLite FK table rebuild | **Design shipped** — not implemented | Explicit scope: `批准 FK Phase A 实现` / `A+B` / or keep app-only cascade. Plan: `docs/sop/relaycheck-sqlite-fk-migration-plan-2026-07-18.md` |
+| Full SQLite FK table rebuild | **Phase A+B live** (`schema.fk_phase=2`) | Phase C (channel weak FKs) still deferred. Plan: `docs/sop/relaycheck-sqlite-fk-migration-plan-2026-07-18.md` |
 
-**Do not without explicit confirm:** full-table FK migration **implementation**, delete `data/*`, force-push, cloud deploy, real upstream checkin blasts, minting self-signed “production” certs, account-orphan log deletion (28 local rows block Phase B).
+**Do not without explicit confirm:** Phase C FK, delete `data/*`, force-push, cloud deploy, real upstream checkin blasts, minting self-signed “production” certs.
 
 ---
 
@@ -142,8 +142,7 @@ go test -mod=vendor -count=1 ./internal/core -timeout 120s
 
 ## Open product risks
 
-- Full-table SQLite FK rebuild — **plan ready**, implementation gated (`docs/sop/relaycheck-sqlite-fk-migration-plan-2026-07-18.md`); app-level site cascade is live  
-- Local **account-level** log orphans (sample: 28 `checkin_logs` missing account) block Phase B  
+- SQLite FK Phase C (channel/instance weak links) still deferred  
 - Full backup restore service rebind matrix  
 - Proxy-mode DNS rebinding  
 - Real upstream checkin blasts / Authenticode / multi-host RUM / UI first-interactive  
