@@ -49,3 +49,7 @@ Thumbs.db
 
 # Session artifacts
 *.jsonl
+
+# Local browser verify outputs (smoke canaries; do not commit)
+frontend/verify-canary.txt
+frontend/verify-nav-output.txt
