@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { accountActionUrl, accountApi, buildAccountsPageUrl } from "../accounts";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("account API contract", () => {
   it("builds collection, summary, search and page routes centrally", () => {
@@ -21,5 +25,25 @@ describe("account API contract", () => {
   it("builds item and bulk routes", () => {
     expect(accountApi.item("account/a")).toBe("/api/accounts/account%2Fa");
     expect(accountApi.bulk("bulk-password-login")).toBe("/api/accounts/bulk-password-login");
+  });
+
+  it("page/postAction/remove 走中央 request helper", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ ok: true, data: { items: [] } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    await accountApi.page({ limit: 10, status: "all" });
+    await accountApi.postAction("id/1", "checkin", {});
+    await accountApi.remove("id/1");
+    expect(fetchMock).toHaveBeenCalledWith("/api/accounts/page?limit=10", expect.objectContaining({}));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/accounts/id%2F1/checkin",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith("/api/accounts/id%2F1", expect.objectContaining({ method: "DELETE" }));
   });
 });

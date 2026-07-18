@@ -27,6 +27,8 @@ describe("systemApi", () => {
     await systemApi.auditLog();
     await systemApi.listExports();
     await systemApi.versionCheck();
+    await systemApi.health();
+    await systemApi.status();
 
     expect(fetchMock).toHaveBeenCalledWith("/api/system/settings", {
       credentials: "same-origin",
@@ -49,6 +51,14 @@ describe("systemApi", () => {
       headers: undefined,
     });
     expect(fetchMock).toHaveBeenCalledWith("/api/system/version-check", {
+      credentials: "same-origin",
+      headers: undefined,
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/api/health", {
+      credentials: "same-origin",
+      headers: undefined,
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/api/system/status", {
       credentials: "same-origin",
       headers: undefined,
     });

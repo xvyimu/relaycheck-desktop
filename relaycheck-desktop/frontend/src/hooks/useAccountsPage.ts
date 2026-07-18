@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { buildAccountsPageUrl } from "@/api/accounts";
-import { api } from "@/api/client";
+import { accountApi, buildAccountsPageUrl } from "@/api/accounts";
 import type { AccountPage } from "@/types";
 
 export { buildAccountsPageUrl } from "@/api/accounts";
@@ -63,8 +62,8 @@ export function useAccountsPage(options: UseAccountsPageOptions = {}): UseAccoun
       setLoading(true);
       setError("");
       try {
-        const result = await api<AccountPage>(
-          buildAccountsPageUrl({ limit, query, status, upstreamSiteId, cursor: nextCursor }),
+        const result = await accountApi.page<AccountPage>(
+          { limit, query, status, upstreamSiteId, cursor: nextCursor },
           { signal: controller.signal },
         );
         if (controller.signal.aborted || requestId !== requestIdRef.current) return;

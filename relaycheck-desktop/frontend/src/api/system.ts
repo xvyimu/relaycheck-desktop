@@ -35,6 +35,16 @@ function listSettings(): Promise<SystemSetting[]> {
   return api<SystemSetting[]>("/api/system/settings");
 }
 
+/** 系统健康探针（未强制 session 的公开路径）。 */
+function health(): Promise<{ status?: string }> {
+  return api<{ status?: string }>("/api/health");
+}
+
+/** 系统状态概览。 */
+function status(): Promise<import("@/types").StatusPayload> {
+  return api<import("@/types").StatusPayload>("/api/system/status");
+}
+
 /** 批量保存设置；body 仅含 settings 数组。 */
 function saveSettings(settings: SystemSettingWriteItem[]): Promise<PersistSettingsResult> {
   return api<PersistSettingsResult>("/api/system/settings", {
@@ -120,6 +130,8 @@ function importDatabase(password: string, fileName: string): Promise<unknown> {
 
 export const systemApi = {
   listSettings,
+  health,
+  status,
   saveSettings,
   listBackups,
   createBackup,

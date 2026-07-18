@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { api } from "@/api/client";
+import { systemApi } from "@/api/system";
 import { useApi } from "@/hooks/useApi";
 import type { StatusPayload } from "@/types";
 
@@ -8,13 +8,14 @@ export function useSystemOverview() {
   const [startupVersion, setStartupVersion] = useState("");
   const [healthLoading, setHealthLoading] = useState(true);
   const [healthLoaded, setHealthLoaded] = useState(false);
+  // useApi 仍用 path 常量；状态 owner 与 systemApi.status 对齐。
   const status = useApi<StatusPayload | null>("/api/system/status", null);
   const { refresh: refreshStatus } = status;
 
   const refreshHealth = useCallback(async () => {
     setHealthLoading(true);
     try {
-      const health = await api<{ status?: string }>("/api/health").catch(() => null);
+      const health = await systemApi.health().catch(() => null);
       if (health?.status) {
         setStartupVersion(health.status);
       }

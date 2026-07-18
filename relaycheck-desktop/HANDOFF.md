@@ -3,7 +3,7 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-18 (sites/analytics adapters + local deploy/perf playbooks)  
+**Last updated:** 2026-07-18 (session close archive + accounts/system request helpers)  
 **HEAD:** see `git rev-parse --short HEAD` on `main` / `origin/main`  
 **Worktree policy:** local `dist/` / `frontend/dist/` / `frontend/coverage/` may be deleted anytime (gitignored). Never delete `data/`.
 
@@ -11,10 +11,14 @@ Read this first, then `CLAUDE.md` for architecture.
 
 ## TODO (next session)
 
-1. [x] **SitesPanel / remaining bare API (sites surface)** — `sitesApi.get/detect/bulkDetect`; SitesPanel wired; analytics + UpdateBanner also de-rawed.
-2. [x] **LocalNewAPISyncPanel tests** — mount list/exclude-rules + sync contract tests.
-3. [x] **Local deploy + local perf harness** — `docs/deploy/local-desktop-playbook-2026-07-18.md`, `docs/perf/README.md`, `scripts/sample-local-perf.ps1` (not production RUM).
-4. [x] **Archive `.planning/**`** — tarball under `docs/archives/`.
+1. [x] Sites/analytics typed APIs + LocalNewAPISyncPanel tests + local deploy/perf docs  
+2. [x] Archive `.planning/**`  
+3. [x] Session close archive (`docs/archives/session-close-2026-07-18.md`) + memory  
+
+**Optional residual code (non-blocking):**
+
+- AccountCard / AccountForm / AccountInsights / BulkRelogin still use `api()` + `accountApi` URL builders; `accountApi.page/postAction/remove` helpers exist for incremental migration.
+- `useApi` path-string consumers (system status) can later take constants from `systemApi`.
 
 **Still external / needs materials or real host:**
 

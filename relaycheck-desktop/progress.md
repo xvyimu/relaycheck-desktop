@@ -11,6 +11,7 @@
 | handoff | 同步 a8f372d | HANDOFF rewritten UTF-8 |
 | commit | docs housekeep only | c81f423 docs(housekeep)... |
 | archive | .planning → docs/archives tarball | tar.gz 31KB; 20 sessions; git rm + ignore |
+| closeout | accounts/system helpers + session archive | FE 395 tests; docs/archives/session-close-2026-07-18.md |
 ## Errors
 | 错误 | 处理 |
 |---|---|
