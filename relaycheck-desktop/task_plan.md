@@ -39,8 +39,8 @@
 - 更新 Last updated、TODO、已完成节到 a8f372d 四提交链
 
 ### Phase 4 — 收尾
-- 状态：`in_progress`
-- progress 勾选；docs-only commit
+- 状态：`complete`
+- progress 勾选；docs-only commit `c81f423`
 
 ## Dependency graph
 Phase1 → Phase2 → Phase3 → Phase4

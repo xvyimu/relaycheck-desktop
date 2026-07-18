@@ -9,7 +9,7 @@
 | docs | housekeep 详细文档 + task_plan/findings | in progress |
 | clean | 删 dist frontend/dist frontend/coverage | GONE; DATA_OK; ~28MB freed |
 | handoff | 同步 a8f372d | HANDOFF rewritten UTF-8 |
-| commit | docs housekeep only | pending |
+| commit | docs housekeep only | c81f423 docs(housekeep)... |
 
 ## Errors
 | 错误 | 处理 |
