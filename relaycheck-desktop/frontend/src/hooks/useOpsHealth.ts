@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 
+import { dashboardApi } from "@/api/dashboard";
 import { useApi } from "@/hooks/useApi";
 import type { DashboardOpsOverview, NotificationPage } from "@/types";
 
@@ -12,7 +13,7 @@ const emptyNotificationPage: NotificationPage = {
 };
 
 export function useOpsHealth() {
-  const overview = useApi<DashboardOpsOverview | null>("/api/dashboard/ops", null);
+  const overview = useApi<DashboardOpsOverview | null>(dashboardApi.opsPath, null);
   const { refresh: refreshOverview } = overview;
 
   const refresh = useCallback(async () => {

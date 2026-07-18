@@ -100,4 +100,4 @@ Writes gitignored JSON under `docs/perf/samples/`.
 | firstHealth (`/api/health`) | 1388 |
 | systemStatusAfterHealth | 1411 |
 
-**Not measured:** desktop shell first paint / first interactive (needs UI instrumentation or manual stopwatch on Wails window).
+**Not measured previously:** desktop shell first paint. **Now instrumented:** `frontend/src/lib/firstInteractive.ts` marks first exit from initial loading (`performance.mark` + `localStorage.relaycheck_first_interactive_ms` + console `[perf] first-interactive`), local-only, no third-party. Operator reads value from DevTools console or localStorage after cold start.

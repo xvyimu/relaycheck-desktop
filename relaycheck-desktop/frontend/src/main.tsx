@@ -10,6 +10,7 @@ import { useModelUsageOverview } from "@/hooks/useModelUsageOverview";
 import { useOpsHealth } from "@/hooks/useOpsHealth";
 import { useSystemOverview } from "@/hooks/useSystemOverview";
 import { appIsInitialLoading, refreshAppData } from "@/lib/appData";
+import { markFirstInteractive } from "@/lib/firstInteractive";
 import { hasEvictableTabs, IDLE_TAB_TTL_MS, pruneIdleTabs } from "@/lib/idle-tabs";
 import { initTheme } from "@/lib/theme";
 import type { NavigationIntent, TabKey } from "@/types";
@@ -131,6 +132,11 @@ function App() {
 
   const loading = appIsInitialLoading(system, inventory, ops);
   const error = system.error || inventory.error || ops.error || modelUsage.error;
+
+  // UI first-interactive：首次脱离启动 loading 即记一次（本地 mark，不外发）。
+  useEffect(() => {
+    if (!loading) markFirstInteractive();
+  }, [loading]);
 
   if (loading) {
     return (

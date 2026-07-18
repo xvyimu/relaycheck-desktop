@@ -13,17 +13,14 @@ Read this first, then `CLAUDE.md` for architecture.
 
 **Code track for this product loop is closed.** Only external materials / optional residual polish remain.
 
-**Optional residual code (non-blocking):**
-
-- `useApi` path-string consumers can later take constants from `systemApi`.
-- Desktop **UI** first-interactive timing (process spawn→health is done via `scripts/sample-cold-start.ps1`).
+**Optional residual code:** **done this pass** — `useApi` consumers now take `systemApi.statusPath` / `dashboardApi.*Path`; UI first-interactive instrumented (`lib/firstInteractive.ts`, local mark + localStorage). Remaining polish: none mandatory.
 
 **Still external / needs materials:**
 
 | Item | Status | Unlock |
 |---|---|---|
 | Authenticode | **Hard block** — no PFX / no Code Signing EKU | Operator sets `RELAYCHECK_SIGN_PFX` + password, then `scripts/sign-release.ps1` |
-| Multi-host / large-DB RUM | Local API p95 + process cold-start done | Larger inventory + multi-machine + UI first-interactive |
+| Multi-host / large-DB RUM | Local p95 + cold-start + **UI first-interactive mark shipped** | Representative extra hosts + larger data volume（外部材料） |
 | FK Phase C | Deferred | Explicit product confirm (channel/instance weak FKs SET NULL) |
 
 **Do not without explicit confirm:** Phase C FK, delete `data/*`, force-push, cloud deploy, real upstream checkin blasts, minting self-signed “production” certs.

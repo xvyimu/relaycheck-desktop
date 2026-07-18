@@ -35,6 +35,9 @@ function listSettings(): Promise<SystemSetting[]> {
   return api<SystemSetting[]>("/api/system/settings");
 }
 
+/** 系统状态 path 常量：useApi 消费者与 status() 保持同一 owner。 */
+export const SYSTEM_STATUS_PATH = "/api/system/status";
+
 /** 系统健康探针（未强制 session 的公开路径）。 */
 function health(): Promise<{ status?: string }> {
   return api<{ status?: string }>("/api/health");
@@ -42,7 +45,7 @@ function health(): Promise<{ status?: string }> {
 
 /** 系统状态概览。 */
 function status(): Promise<import("@/types").StatusPayload> {
-  return api<import("@/types").StatusPayload>("/api/system/status");
+  return api<import("@/types").StatusPayload>(SYSTEM_STATUS_PATH);
 }
 
 /** 批量保存设置；body 仅含 settings 数组。 */
@@ -129,6 +132,7 @@ function importDatabase(password: string, fileName: string): Promise<unknown> {
 }
 
 export const systemApi = {
+  statusPath: SYSTEM_STATUS_PATH,
   listSettings,
   health,
   status,

@@ -1,11 +1,12 @@
 import { useCallback } from "react";
 
+import { dashboardApi } from "@/api/dashboard";
 import { useApi } from "@/hooks/useApi";
 import type { DashboardModelUsageOverview } from "@/types";
 
 export function useModelUsageOverview(options: { enabled?: boolean } = {}) {
   const enabled = options.enabled ?? true;
-  const overview = useApi<DashboardModelUsageOverview | null>("/api/dashboard/model-usage", null, { enabled });
+  const overview = useApi<DashboardModelUsageOverview | null>(dashboardApi.modelUsagePath, null, { enabled });
   const { refresh: refreshOverview } = overview;
 
   const refresh = useCallback(async () => {

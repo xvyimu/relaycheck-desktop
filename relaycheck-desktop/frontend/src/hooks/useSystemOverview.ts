@@ -8,8 +8,8 @@ export function useSystemOverview() {
   const [startupVersion, setStartupVersion] = useState("");
   const [healthLoading, setHealthLoading] = useState(true);
   const [healthLoaded, setHealthLoaded] = useState(false);
-  // useApi 仍用 path 常量；状态 owner 与 systemApi.status 对齐。
-  const status = useApi<StatusPayload | null>("/api/system/status", null);
+  // 状态 path 常量与 systemApi.status 同一 owner（api/system.ts）。
+  const status = useApi<StatusPayload | null>(systemApi.statusPath, null);
   const { refresh: refreshStatus } = status;
 
   const refreshHealth = useCallback(async () => {

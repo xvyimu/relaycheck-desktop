@@ -1,10 +1,11 @@
 import { useCallback } from "react";
 
+import { dashboardApi } from "@/api/dashboard";
 import { useApi } from "@/hooks/useApi";
 import type { DashboardInventoryOverview } from "@/types";
 
 export function useInventoryData() {
-  const overview = useApi<DashboardInventoryOverview | null>("/api/dashboard/inventory", null);
+  const overview = useApi<DashboardInventoryOverview | null>(dashboardApi.inventoryPath, null);
   const { refresh: refreshOverview } = overview;
 
   const refresh = useCallback(async () => {
