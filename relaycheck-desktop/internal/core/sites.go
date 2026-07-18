@@ -22,8 +22,17 @@ func (a *App) handleUpstreamSites(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) listUpstreamSites(w http.ResponseWriter, r *http.Request) {
-	items, err := cachedRead(a, "upstream-sites-list", shortReadCacheTTL, func() ([]UpstreamSite, error) {
-		siteItems, err := a.sitesService.ListUpstreamSites(r.Context())
+	items, err := a.loadUpstreamSites(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *App) loadUpstreamSites(ctx context.Context) ([]UpstreamSite, error) {
+	return cachedRead(a, "upstream-sites-list", shortReadCacheTTL, func() ([]UpstreamSite, error) {
+		siteItems, err := a.sitesService.ListUpstreamSites(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -56,11 +65,6 @@ func (a *App) listUpstreamSites(w http.ResponseWriter, r *http.Request) {
 		}
 		return items, nil
 	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, items)
 }
 
 // normalizeOfficialProviderSite forces official-provider sites to a canonical
@@ -207,7 +211,10 @@ func (a *App) handleBulkDetectUpstreamSites(w http.ResponseWriter, r *http.Reque
 		Limit               int  `json:"limit"`
 		OnlyUnknownOrOpenAI bool `json:"onlyUnknownOrOpenAI"`
 	}
-	_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
+	}
 	input.Limit = clampBatchLimit(input.Limit, 10)
 	query := `
 		SELECT id, name, base_url

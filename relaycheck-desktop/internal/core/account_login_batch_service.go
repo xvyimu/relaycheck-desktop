@@ -113,7 +113,7 @@ func (s *AccountLoginBatchService) RetryPasswordLogin(ctx context.Context, id st
 	if auth == nil {
 		loaded, err := s.loadAuth(ctx, id)
 		if err != nil {
-			return bulkPasswordLoginResult{AccountID: id, Status: "failed", Message: err.Error()}
+			return bulkPasswordLoginResult{AccountID: id, Status: "failed", Message: publicAccountFailure("password_login_load_auth", id, "加载账号授权失败。", err)}
 		}
 		auth = &loaded
 	}
@@ -135,7 +135,7 @@ func (s *AccountLoginBatchService) RetryPasswordLogin(ctx context.Context, id st
 	auth.AuthUserID = ""
 	if err := s.passwordLogin(ctx, auth); err != nil {
 		result.Status = "expired"
-		result.Message = err.Error()
+		result.Message = publicAccountFailure("password_login", id, "密码登录失败，请检查账号凭据或改用网页登录。", err)
 		if _, execErr := s.db.ExecContext(ctx, `UPDATE channel_accounts SET login_status='expired', last_validated_at=?, updated_at=? WHERE id=?`, now(), now(), id); execErr != nil {
 			log.Printf("[accounts] password login status update to expired failed for account %s: %v", id, execErr)
 		}

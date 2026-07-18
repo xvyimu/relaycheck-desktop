@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -54,6 +55,17 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	}
 }
 
+// writePublicError records request context without persisting a potentially
+// sensitive upstream error, while preserving a stable client-facing contract.
+func writePublicError(w http.ResponseWriter, status int, publicMessage string, err error) {
+	requestID := strings.TrimSpace(w.Header().Get("x-request-id"))
+	if requestID == "" {
+		requestID = "unavailable"
+	}
+	log.Printf("[http] request error requestId=%s status=%d causeType=%T", requestID, status, err)
+	writeError(w, status, publicMessage)
+}
+
 func errorClassForStatus(status int) string {
 	switch status {
 	case http.StatusBadRequest:
@@ -83,9 +95,40 @@ func errorClassForStatus(status int) string {
 const defaultJSONBodyLimit = 8 << 20 // 8 MiB
 
 func decodeJSON(r *http.Request, out interface{}) error {
+	return decodeJSONBody(r, out, false)
+}
+
+// decodeOptionalJSON keeps the established empty-body defaults for bulk
+// endpoints, but never turns malformed non-empty JSON into a zero-value
+// request that could trigger an unintended write or outbound operation.
+func decodeOptionalJSON(r *http.Request, out interface{}) error {
+	return decodeJSONBody(r, out, true)
+}
+
+func decodeJSONBody(r *http.Request, out interface{}, allowEmpty bool) error {
+	if r.Body == nil {
+		if allowEmpty {
+			return nil
+		}
+		return io.EOF
+	}
 	defer r.Body.Close()
 	limited := http.MaxBytesReader(nil, r.Body, defaultJSONBodyLimit)
-	return json.NewDecoder(limited).Decode(out)
+	decoder := json.NewDecoder(limited)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(out); err != nil {
+		if allowEmpty && errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+	}
+	var extra struct{}
+	if err := decoder.Decode(&extra); errors.Is(err, io.EOF) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	return errors.New("multiple JSON values")
 }
 
 func method(w http.ResponseWriter, r *http.Request, expected string) bool {
@@ -156,7 +199,10 @@ func (a *App) SecureLocalHandler(next http.Handler) http.Handler {
 		started := time.Now()
 		requestID := requestIDFromHeader(r.Header.Get("x-request-id"))
 		w.Header().Set("x-request-id", requestID)
-		r = r.WithContext(context.WithValue(r.Context(), requestIDContextKey{}, requestID))
+		ctx := context.WithValue(r.Context(), requestIDContextKey{}, requestID)
+		fields := correlationFromRequest(r)
+		fields.RequestID = requestID
+		r = r.WithContext(withCorrelation(ctx, fields))
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		defer func() {
 			logHTTPRequest(r, requestID, recorder.status, time.Since(started))
@@ -221,13 +267,8 @@ func logHTTPRequest(r *http.Request, requestID string, status int, duration time
 		"durationMs":  duration.Milliseconds(),
 		"remoteAddr":  safeRemoteAddr(r.RemoteAddr),
 	}
-	data, err := json.Marshal(entry)
-	if err != nil {
-		return
-	}
-	accessLogMu.Lock()
-	defer accessLogMu.Unlock()
-	_, _ = accessLogWriter.Write(append(data, '\n'))
+	addCorrelationToEntry(entry, correlationFromContext(r.Context()))
+	writeStructuredLog(entry)
 }
 
 func safeRemoteAddr(value string) string {
@@ -243,7 +284,7 @@ func setSecurityHeaders(w http.ResponseWriter) {
 	header.Set("x-content-type-options", "nosniff")
 	header.Set("x-frame-options", "DENY")
 	header.Set("referrer-policy", "no-referrer")
-	header.Set("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'")
+	header.Set("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'none'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'")
 }
 
 func (a *App) allowedHost(rawHost string) bool {

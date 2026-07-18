@@ -15,8 +15,8 @@ var (
 )
 
 const (
-	lockFileExclusiveLock    = 2 // LOCKFILE_EXCLUSIVE_LOCK
-	lockFileFailImmediately  = 1 // LOCKFILE_FAIL_IMMEDIATELY
+	lockFileExclusiveLock   = 2 // LOCKFILE_EXCLUSIVE_LOCK
+	lockFileFailImmediately = 1 // LOCKFILE_FAIL_IMMEDIATELY
 )
 
 // Acquire opens (or creates) the file at path and tries to acquire an
@@ -36,7 +36,7 @@ func Acquire(path string) (*os.File, error) {
 	var overlapped windows.Overlapped
 	err = procLockFileEx.Find()
 	if err != nil {
-		// On very old Windows (unlikely with Go 1.24): fall back to a
+		// On very old Windows (unlikely with Go 1.25): fall back to a
 		// no-op; the lock is advisory not mandatory. Print a warning.
 		return f, nil
 	}

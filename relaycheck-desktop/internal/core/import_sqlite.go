@@ -26,7 +26,10 @@ func (a *App) handleImportFromSQLite(w http.ResponseWriter, r *http.Request) {
 
 	result, err := a.importChannelsFromSQLite(r.Context(), input.DatabasePath, input.ImportKeys, input.InstanceName, input.BaseURL, !input.SkipCreateSites, input.DetectAfterImport)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeImportFailure(w, err, importFailureMessages{
+			PathRejected:  "SQLite 数据库路径不在允许的扫描目录内。",
+			InvalidFormat: "SQLite 数据库格式或结构无效。",
+		})
 		return
 	}
 	a.audit("import.sqlite", "info", "", "local_newapi_instance", stringFromResult(result, "instanceId"), "SQLite 渠道导入完成。", map[string]interface{}{

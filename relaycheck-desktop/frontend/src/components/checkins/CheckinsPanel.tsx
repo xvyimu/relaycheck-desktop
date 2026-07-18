@@ -1,7 +1,9 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { checkinApi, type CheckinDryRunPreview } from "@/api/checkins";
+import { CheckinDryRunDialog } from "@/components/checkins/CheckinDryRunDialog";
 import { formatTime } from "@/lib/format";
-import type { CheckinLog, CheckinStatus, NavigationIntent } from "@/types";
+import type { CheckinLog, CheckinStatus, NavigationIntent, TabKey } from "@/types";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
 import { Button } from "@/components/ui/button";
@@ -12,6 +14,7 @@ type CheckinsPanelProps = {
   checkins: CheckinStatus | null;
   onRefresh: () => Promise<void>;
   intent?: NavigationIntent | null;
+  onNavigate: (tab: TabKey, intent?: Omit<NavigationIntent, "target">) => void;
 };
 
 function formatCountdown(seconds?: number) {
@@ -33,10 +36,51 @@ function MetricTile({ label, value }: { label: string; value: number | string })
   );
 }
 
-function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) {
+function CheckinsPanelBase({ checkins, onRefresh, intent, onNavigate }: CheckinsPanelProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [preview, setPreview] = useState<CheckinDryRunPreview | null>(null);
+  const [previewError, setPreviewError] = useState("");
+  const [startPending, setStartPending] = useState(false);
+  const handledPreviewIntent = useRef<NavigationIntent | null>(null);
   const task = useTaskProgress();
+
+  const requestPreview = useCallback(async () => {
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreview(null);
+    setPreviewError("");
+    try {
+      setPreview(await checkinApi.previewAllDue());
+    } catch (error) {
+      setPreviewError(error instanceof Error ? error.message : "签到预览失败，请稍后重试。");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, []);
+
+  const closePreview = useCallback(() => {
+    if (startPending) return;
+    setPreviewOpen(false);
+    setPreview(null);
+    setPreviewError("");
+  }, [startPending]);
+
+  const confirmPreview = useCallback(async () => {
+    if (!preview?.previewId || preview.willRun === 0 || startPending) return;
+    setStartPending(true);
+    setPreviewError("");
+    const started = await task.startTask("checkin", { previewId: preview.previewId });
+    setStartPending(false);
+    if (started) {
+      setPreviewOpen(false);
+      setPreview(null);
+      return;
+    }
+    setPreviewError("签到任务未能启动，预览可能已失效，请重新预览后重试。");
+  }, [preview, startPending, task]);
 
   // 任务完成后刷新数据
   useEffect(() => {
@@ -54,6 +98,12 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
     if (intent.checkinStatus === "problem") setStatusFilter("failed");
     if (typeof intent.query === "string") setQuery(intent.query);
   }, [intent]);
+
+  useEffect(() => {
+    if (intent?.checkinPreview !== "open" || handledPreviewIntent.current === intent) return;
+    handledPreviewIntent.current = intent;
+    void requestPreview();
+  }, [intent, requestPreview]);
 
   const progress = useMemo(() => {
     const total = Math.max(checkins?.totalAccounts || 0, checkins?.processedAccounts || 0, 1);
@@ -171,15 +221,14 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
                 {progress.processed}/{progress.total}
               </strong>
             </div>
-            <div
+            <progress
               aria-valuemax={progress.total}
               aria-valuemin={0}
               aria-valuenow={progress.processed}
               className="checkin-progress-track"
-              role="progressbar"
-            >
-              <span style={{ width: `${progress.percent}%` }} />
-            </div>
+              max={progress.total || 1}
+              value={progress.processed}
+            />
           </div>
 
           <dl className="kv checkin-kv">
@@ -201,11 +250,15 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
 
           <button
             className="wide"
-            disabled={task.loading || running || task.progress?.status === "running"}
-            onClick={() => void task.startTask("checkin")}
+            disabled={previewLoading || task.loading || running || task.progress?.status === "running"}
+            onClick={() => void requestPreview()}
             type="button"
           >
-            {task.loading || task.progress?.status === "running" ? "运行中…" : "执行全部签到"}
+            {previewLoading
+              ? "正在预览…"
+              : task.loading || task.progress?.status === "running"
+                ? "运行中…"
+                : "执行全部签到"}
           </button>
 
           <TaskProgressView
@@ -299,6 +352,21 @@ function CheckinsPanelBase({ checkins, onRefresh, intent }: CheckinsPanelProps) 
           {schedule?.message ? <div className="note">{schedule.message}</div> : null}
         </article>
       </div>
+
+      <CheckinDryRunDialog
+        open={previewOpen}
+        preview={preview}
+        loading={previewLoading}
+        starting={startPending}
+        error={previewError}
+        onClose={closePreview}
+        onRetry={() => void requestPreview()}
+        onConfirm={() => void confirmPreview()}
+        onFixAccounts={() => {
+          closePreview();
+          onNavigate("sites", { accountsView: "all" });
+        }}
+      />
     </section>
   );
 }

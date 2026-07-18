@@ -33,10 +33,10 @@ func (s *Service) ImportChannelsFromAdminAPIWithOptions(ctx context.Context, raw
 		ON CONFLICT(base_url) DO UPDATE SET name=excluded.name, status=excluded.status, last_scanned_at=excluded.last_scanned_at, updated_at=excluded.updated_at
 	`, instanceID, instanceName, baseURL, s.infra.Now(), s.infra.Now(), s.infra.Now())
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportStorage, err)
 	}
 	if err := s.infra.DB().QueryRowContext(ctx, `SELECT id FROM local_newapi_instances WHERE base_url=?`, baseURL).Scan(&instanceID); err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportStorage, err)
 	}
 
 	fetched := 0
@@ -118,7 +118,7 @@ func (s *Service) ImportChannelsFromAdminAPIWithOptions(ctx context.Context, raw
 func (s *Service) fetchAdminAPIChannels(ctx context.Context, baseURL string, accessToken string, userID string, page int, pageSize int) ([]map[string]interface{}, error) {
 	endpoint, err := url.Parse(strings.TrimRight(baseURL, "/") + "/api/channel/")
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 	query := endpoint.Query()
 	query.Set("p", fmt.Sprint(page))
@@ -128,30 +128,35 @@ func (s *Service) fetchAdminAPIChannels(ctx context.Context, baseURL string, acc
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 	req.Header.Set("authorization", "Bearer "+accessToken)
 	req.Header.Set("New-Api-User", userID)
 	req.Header.Set("accept", "application/json")
 	resp, err := s.infra.DoHTTP(req)
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportUpstreamUnavailable, err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, wrapImportError(ErrImportUpstreamAuth, fmt.Errorf("HTTP %d", resp.StatusCode))
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("读取 NewAPI 渠道失败：HTTP %d，%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, wrapImportError(ErrImportUpstreamUnavailable, fmt.Errorf("HTTP %d", resp.StatusCode))
 	}
 
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 	data, _ := payload["data"].(map[string]interface{})
 	rawItems, ok := data["items"].([]interface{})
 	if !ok {
 		if direct, ok := payload["data"].([]interface{}); ok {
 			rawItems = direct
+		} else {
+			return nil, wrapImportError(ErrImportInvalidFormat, errorsText("NewAPI 响应缺少渠道列表"))
 		}
 	}
 	items := []map[string]interface{}{}
@@ -215,7 +220,7 @@ func (s *Service) importChannelRecordOutcome(ctx context.Context, instanceID str
 		var err error
 		keyEncrypted, err = s.infra.EncryptText(keyValue)
 		if err != nil {
-			return out, err
+			return out, wrapImportError(ErrImportStorage, err)
 		}
 		keyMasked = maskSecret(keyValue)
 	}
@@ -240,13 +245,13 @@ func (s *Service) importChannelRecordOutcome(ctx context.Context, instanceID str
 			updated_at=excluded.updated_at
 	`, channelID, instanceID, sourceID, name, channelBaseURL, status, kind, keyEncrypted, keyMasked, rawJSON, s.infra.Now(), s.infra.Now())
 	if err != nil {
-		return out, err
+		return out, wrapImportError(ErrImportStorage, err)
 	}
 	if err := s.infra.DB().QueryRowContext(ctx, `
 		SELECT id FROM imported_channels
 		WHERE local_instance_id=? AND source_channel_id=?
 	`, instanceID, sourceID).Scan(&channelID); err != nil {
-		return out, err
+		return out, wrapImportError(ErrImportStorage, err)
 	}
 	out.ChannelID = channelID
 
@@ -255,7 +260,7 @@ func (s *Service) importChannelRecordOutcome(ctx context.Context, instanceID str
 		if detectAfterImport {
 			nextDetection, detectErr := s.infra.DetectUpstreamForImport(ctx, channelBaseURL)
 			if detectErr != nil {
-				return out, detectErr
+				return out, wrapImportError(ErrImportUpstreamUnavailable, detectErr)
 			}
 			detection = &nextDetection
 			out.DidDetect = true
@@ -265,12 +270,12 @@ func (s *Service) importChannelRecordOutcome(ctx context.Context, instanceID str
 				WHERE id=?
 			`, nextDetection.BaseURL, nextDetection.Kind, boolInt(nextDetection.SupportsCheckin), boolInt(nextDetection.SupportsBalance), boolInt(nextDetection.SupportsModels), boolInt(nextDetection.SupportsPricing), mustJSON(nextDetection), s.infra.Now(), s.infra.Now(), channelID)
 			if err != nil {
-				return out, err
+				return out, wrapImportError(ErrImportStorage, err)
 			}
 		}
 		_, wasCreated, err := s.infra.EnsureChannelSiteForImport(ctx, channelID, name, channelBaseURL, kind, detection)
 		if err != nil {
-			return out, err
+			return out, wrapImportError(ErrImportStorage, err)
 		}
 		out.Created = wasCreated
 		out.Merged = !wasCreated

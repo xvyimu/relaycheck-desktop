@@ -84,11 +84,11 @@ func (a *App) handleUpdateSystemSettings(w http.ResponseWriter, r *http.Request)
 			writeError(w, http.StatusBadRequest, "设置 Key 和 JSON 内容不能为空。")
 			return
 		}
-				if !isAllowedSystemSettingKey(key) {
+		if !isAllowedSystemSettingKey(key) {
 			writeError(w, http.StatusBadRequest, "unknown settings key: "+key)
 			return
 		}
-if !json.Valid([]byte(valueJSON)) {
+		if !json.Valid([]byte(valueJSON)) {
 			writeError(w, http.StatusBadRequest, "设置 "+key+" 不是有效 JSON。")
 			return
 		}
@@ -364,6 +364,7 @@ func (a *App) rollbackRestore(dbPath string, currentPath string, currentMoved bo
 	return cause
 }
 
+// reopenDatabase 在恢复数据库后重建连接，并重绑所有已登记的长生命周期持有者。
 func (a *App) reopenDatabase() error {
 	db, err := openAppDB(a.databasePath())
 	if err != nil {
@@ -376,6 +377,10 @@ func (a *App) reopenDatabase() error {
 	}
 	if a.schedulerRepo != nil {
 		a.schedulerRepo.db = db
+	}
+	if a.accountCleanup != nil {
+		// 恢复后的清理服务必须切换到新 DB，并丢弃绑定旧数据集的 previewId。
+		a.accountCleanup.RebindDB(db)
 	}
 	if a.notificationHub != nil {
 		a.notificationHub.SetDB(db)

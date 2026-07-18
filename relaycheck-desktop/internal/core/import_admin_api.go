@@ -31,13 +31,17 @@ func (a *App) handleImportFromAdminAPI(w http.ResponseWriter, r *http.Request) {
 	input.PageSize = clampInt(input.PageSize, 10, 100, 100)
 	result, err := a.importChannelsFromAdminAPI(r.Context(), input.BaseURL, input.AccessToken, input.UserID, input.InstanceName, input.ImportKeys, !input.SkipCreateSites, input.DetectAfterImport, input.PageSize)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeImportFailure(w, err, importFailureMessages{
+			InvalidFormat:       "NewAPI 返回的数据格式无效。",
+			UpstreamAuth:        "NewAPI 认证失败，请检查访问令牌和权限。",
+			UpstreamUnavailable: "暂时无法读取 NewAPI 渠道，请稍后重试。",
+		})
 		return
 	}
 	if input.SaveAccessToken {
 		if instanceID, ok := result["instanceId"].(string); ok {
 			if err := a.updateLocalNewAPISyncToken(r.Context(), instanceID, input.AccessToken, true, false); err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
+				writePublicError(w, http.StatusInternalServerError, "服务暂时不可用，请稍后重试。", err)
 				return
 			}
 			result["syncTokenSaved"] = true

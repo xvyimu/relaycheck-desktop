@@ -10,6 +10,7 @@ import (
 func TestAccountSessionServiceLoginWithPasswordSavesTokenAndUserID(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
+	app.allowLocalOutbound = true
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/user/login" {

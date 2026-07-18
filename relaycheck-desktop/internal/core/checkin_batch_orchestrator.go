@@ -94,14 +94,20 @@ func (o *CheckinBatchOrchestrator) runWithFilter(ctx context.Context, mode strin
 }
 
 func (o *CheckinBatchOrchestrator) LoadDueAccounts(ctx context.Context, siteID string, limit int) ([]checkinRunAccount, error) {
+	return o.loadDueAccountsAt(ctx, siteID, limit, time.Now())
+}
+
+func (o *CheckinBatchOrchestrator) loadDueAccountsAt(ctx context.Context, siteID string, limit int, currentTime time.Time) ([]checkinRunAccount, error) {
+	dayStart, dayEnd := cstDayBounds(currentTime)
 	query := `
 		SELECT a.id, a.display_name, s.id, s.name
 		FROM channel_accounts a
 		JOIN upstream_sites s ON s.id = a.upstream_site_id
 		WHERE (COALESCE(a.last_checkin_status,'') NOT IN ('success','already_checked')
-		   OR COALESCE(substr(a.last_checkin_at, 1, 10),'') <> ?)
+		   OR COALESCE(a.last_checkin_at,'') < ?
+		   OR COALESCE(a.last_checkin_at,'') >= ?)
 	`
-	args := []interface{}{todayCST()}
+	args := []interface{}{dayStart, dayEnd}
 	if siteID != "" {
 		query += ` AND a.upstream_site_id = ?`
 		args = append(args, siteID)

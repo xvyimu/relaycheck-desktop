@@ -5,15 +5,14 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 )
 
 func (a *App) handleActionCenter(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	center, err := cachedRead(a, "action-center", overviewReadCacheTTL, func() (ActionCenter, error) {
-		return a.buildActionCenter(r)
-	})
+	center, err := a.loadActionCenter(r)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -21,31 +20,37 @@ func (a *App) handleActionCenter(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, center)
 }
 
-func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
-	items := []ActionItem{}
-	setupItems, err := a.buildSetupActionItems(r)
-	if err != nil {
-		return ActionCenter{}, err
-	}
-	items = append(items, setupItems...)
-	type actionQuery struct {
-		id                string
-		priority          int
-		level             string
-		category          string
-		title             string
-		description       string
-		impact            string
-		target            string
-		filter            string
-		action            string
-		recommendedAction string
-		countSQL          string
-		sampleSQL         string
-		sampleEntityType  string // empty = label-only; site|account|channel = id+label
-		args              []interface{}
-	}
-	queries := []actionQuery{
+func (a *App) loadActionCenter(r *http.Request) (ActionCenter, error) {
+	return cachedRead(a, "action-center", overviewReadCacheTTL, func() (ActionCenter, error) {
+		return a.buildActionCenter(r)
+	})
+}
+
+type actionQuery struct {
+	id                string
+	priority          int
+	level             string
+	category          string
+	title             string
+	description       string
+	impact            string
+	target            string
+	filter            string
+	action            string
+	recommendedAction string
+	countSQL          string
+	sampleSQL         string
+	sampleEntityType  string // empty = label-only; site|account|channel = id+label
+	args              []interface{}
+}
+
+func actionCenterQueries() []actionQuery {
+	return actionCenterQueriesAt(time.Now())
+}
+
+func actionCenterQueriesAt(currentTime time.Time) []actionQuery {
+	dayStart, dayEnd := cstDayBounds(currentTime)
+	return []actionQuery{
 		{
 			id:                "auth-required-accounts",
 			priority:          100,
@@ -88,8 +93,9 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 			filter:            "problem",
 			action:            "进入签到页筛选异常记录，先处理 auth_expired，再确认 unsupported 是否为站点未开启。",
 			recommendedAction: "按状态分组复查失败记录，授权问题修复后重新签到。",
-			countSQL:          `SELECT COUNT(*) FROM checkin_logs WHERE status NOT IN ('success','already_checked') AND substr(started_at,1,10)=substr(datetime('now','+8 hours'),1,10)`,
-			sampleSQL:         `SELECT a.display_name || ' · ' || s.name || ' · ' || l.status FROM checkin_logs l JOIN channel_accounts a ON a.id=l.account_id JOIN upstream_sites s ON s.id=l.upstream_site_id WHERE l.status NOT IN ('success','already_checked') AND substr(l.started_at,1,10)=substr(datetime('now','+8 hours'),1,10) ORDER BY l.started_at DESC LIMIT 4`,
+			countSQL:          `SELECT COUNT(*) FROM checkin_logs WHERE status NOT IN ('success','already_checked') AND started_at >= ? AND started_at < ?`,
+			sampleSQL:         `SELECT a.display_name || ' · ' || s.name || ' · ' || l.status FROM checkin_logs l JOIN channel_accounts a ON a.id=l.account_id JOIN upstream_sites s ON s.id=l.upstream_site_id WHERE l.status NOT IN ('success','already_checked') AND l.started_at >= ? AND l.started_at < ? ORDER BY l.started_at DESC LIMIT 4`,
+			args:              []interface{}{dayStart, dayEnd},
 		},
 		{
 			id:                "cookie-expiring",
@@ -200,8 +206,8 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 				    )
 				  )
 				ORDER BY s.updated_at DESC LIMIT 4`,
-			sampleEntityType:  "site",
-			args: []interface{}{globalScheduleSiteID},
+			sampleEntityType: "site",
+			args:             []interface{}{globalScheduleSiteID},
 		},
 		{
 			id:                "missing-channels",
@@ -250,6 +256,18 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 			sampleSQL:         `SELECT title || ' · ' || content FROM app_notifications WHERE read=0 ORDER BY created_at DESC LIMIT 4`,
 		},
 	}
+}
+
+func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
+	started := time.Now()
+	defer func() { logSlowOperation(r.Context(), "sql", "action-center", started, nil, nil) }()
+	items := []ActionItem{}
+	setupItems, err := a.buildSetupActionItems(r)
+	if err != nil {
+		return ActionCenter{}, err
+	}
+	items = append(items, setupItems...)
+	queries := actionCenterQueries()
 
 	countSQL := make([]string, len(queries))
 	countArgs := make([][]interface{}, len(queries))
@@ -266,10 +284,6 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 		if count <= 0 {
 			continue
 		}
-		samples, err := a.queryActionSamples(r, query.sampleSQL, query.args, query.sampleEntityType)
-		if err != nil {
-			return ActionCenter{}, err
-		}
 		items = append(items, ActionItem{
 			ID:                query.id,
 			Priority:          query.priority,
@@ -283,7 +297,6 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 			Filter:            query.filter,
 			Action:            query.action,
 			RecommendedAction: query.recommendedAction,
-			Samples:           samples,
 		})
 	}
 	sort.Slice(items, func(i, j int) bool {
@@ -295,6 +308,32 @@ func (a *App) buildActionCenter(r *http.Request) (ActionCenter, error) {
 		Overall:     actionCenterLevel(items),
 		Items:       items,
 	}, nil
+}
+
+func (a *App) handleActionCenterSamples(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodGet) {
+		return
+	}
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "操作项 ID 不能为空。")
+		return
+	}
+	for _, query := range actionCenterQueries() {
+		if query.id != id {
+			continue
+		}
+		samples, err := cachedRead(a, "action-center-samples:"+id, shortReadCacheTTL, func() ([]ActionSample, error) {
+			return a.queryActionSamples(r, query.sampleSQL, query.args, query.sampleEntityType)
+		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "加载操作样本失败。")
+			return
+		}
+		writeJSON(w, http.StatusOK, samples)
+		return
+	}
+	writeError(w, http.StatusNotFound, "操作项不存在。")
 }
 
 func (a *App) buildSetupActionItems(r *http.Request) ([]ActionItem, error) {
@@ -435,7 +474,6 @@ func (a *App) queryActionCountsBatched(r *http.Request, countSQL []string, args 
 	}
 	return counts, nil
 }
-
 
 func (a *App) queryActionSamples(r *http.Request, query string, args []interface{}, entityType string) ([]ActionSample, error) {
 	rows, err := a.db.QueryContext(r.Context(), query, args...)

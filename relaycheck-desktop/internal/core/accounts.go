@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -167,7 +168,7 @@ type browserLoginOpenResult struct {
 	LoginURLConfidence float64 `json:"loginUrlConfidence,omitempty"`
 	LoginURLReason     string  `json:"loginUrlReason,omitempty"`
 	DebugPort          int     `json:"debugPort,omitempty"`
-	ProfilePath        string  `json:"profilePath,omitempty"`
+	ProfilePath        string  `json:"-"`
 }
 
 type browserLoginSaveResult struct {
@@ -187,7 +188,10 @@ func (a *App) handleBulkPasswordLogin(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Limit int `json:"limit"`
 	}
-	_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
+	}
 	result, err := a.accountLoginBatch.PasswordLogin(r.Context(), input.Limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -208,7 +212,10 @@ func (a *App) handleBulkOpenBrowserLogin(w http.ResponseWriter, r *http.Request)
 		Limit int      `json:"limit"`
 		IDs   []string `json:"ids"`
 	}
-	_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
+	}
 	result, err := a.accountLoginBatch.OpenBrowser(r.Context(), input.Limit, input.IDs)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -224,7 +231,10 @@ func (a *App) handleBulkFinishBrowserLogin(w http.ResponseWriter, r *http.Reques
 	var input struct {
 		IDs []string `json:"ids"`
 	}
-	_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
+	}
 	result, err := a.accountLoginBatch.FinishBrowser(r.Context(), input.IDs)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -619,7 +629,10 @@ func (a *App) handleBulkTestAPIKeys(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Limit int `json:"limit"`
 	}
-	_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
+	}
 	input.Limit = clampBatchLimit(input.Limit, 10)
 	rows, err := a.db.QueryContext(r.Context(), `
 		SELECT id FROM channel_accounts
@@ -833,23 +846,63 @@ func (a *App) deleteAccount(w http.ResponseWriter, r *http.Request, id string) {
 	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
 }
 
+// handleDeleteUnsupportedCheckinAccounts 将只读预览与一次性确认拆成显式、fail-closed 的 HTTP 契约。
 func (a *App) handleDeleteUnsupportedCheckinAccounts(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodPost) {
 		return
 	}
 	var input struct {
-		Limit                  int   `json:"limit"`
-		DryRun                 bool  `json:"dryRun"`
-		IncludeLastUnsupported *bool `json:"includeLastUnsupported"`
+		Limit                  *int   `json:"limit"`
+		DryRun                 *bool  `json:"dryRun"`
+		IncludeLastUnsupported *bool  `json:"includeLastUnsupported"`
+		PreviewID              string `json:"previewId"`
 	}
-	_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
+	}
+	previewID := strings.TrimSpace(input.PreviewID)
+	if previewID == "" && (input.DryRun == nil || !*input.DryRun) {
+		writeError(w, http.StatusBadRequest, "请先生成清理预览。")
+		return
+	}
+	if previewID != "" && input.DryRun != nil && *input.DryRun {
+		writeError(w, http.StatusBadRequest, "清理预览参数冲突。")
+		return
+	}
+	if previewID != "" && (input.Limit != nil || input.IncludeLastUnsupported != nil) {
+		writeError(w, http.StatusBadRequest, "确认清理时只能提交预览 ID。")
+		return
+	}
+	limit := 0
+	if input.Limit != nil {
+		limit = *input.Limit
+	}
 	includeLastUnsupported := true
 	if input.IncludeLastUnsupported != nil {
 		includeLastUnsupported = *input.IncludeLastUnsupported
 	}
-	result, err := a.deleteUnsupportedCheckinAccounts(r.Context(), input.Limit, includeLastUnsupported, input.DryRun)
+	var (
+		result unsupportedCheckinCleanupResult
+		err    error
+	)
+	if previewID == "" {
+		// 预览路径只读取候选并签发短期 token，不执行任何数据库删除。
+		result, err = a.previewUnsupportedCheckinAccounts(r.Context(), limit, includeLastUnsupported)
+	} else {
+		// 确认路径只消费服务端冻结的候选，忽略客户端重新选择账号的可能。
+		result, err = a.confirmUnsupportedCheckinAccounts(r.Context(), previewID)
+	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, errAccountCleanupPreviewUnavailable) || errors.Is(err, errAccountCleanupPreviewStale) {
+			writeError(w, http.StatusConflict, "清理预览已过期、已使用或候选状态已变化，请重新预览。")
+			return
+		}
+		if errors.Is(err, errAccountCleanupPreviewCapacity) {
+			writeError(w, http.StatusTooManyRequests, "待确认的清理预览过多，请稍后重试。")
+			return
+		}
+		writePublicError(w, http.StatusInternalServerError, "账号清理失败，请重新预览后重试。", err)
 		return
 	}
 	if !result.DryRun && result.Deleted > 0 {
@@ -859,16 +912,28 @@ func (a *App) handleDeleteUnsupportedCheckinAccounts(w http.ResponseWriter, r *h
 			"deleted":                result.Deleted,
 			"limit":                  result.Limit,
 			"hasMore":                result.HasMore,
-			"includeLastUnsupported": includeLastUnsupported,
+			"includeLastUnsupported": result.IncludeLastUnsupported,
 		})
 	}
 	writeJSON(w, http.StatusOK, result)
 }
 
+// previewUnsupportedCheckinAccounts 生成只读清理预览并冻结候选。
+func (a *App) previewUnsupportedCheckinAccounts(ctx context.Context, limit int, includeLastUnsupported bool) (unsupportedCheckinCleanupResult, error) {
+	return a.accountCleanup.PreviewUnsupportedCheckinAccounts(ctx, limit, includeLastUnsupported)
+}
+
+// confirmUnsupportedCheckinAccounts 消费一次性预览并执行同源删除。
+func (a *App) confirmUnsupportedCheckinAccounts(ctx context.Context, previewID string) (unsupportedCheckinCleanupResult, error) {
+	return a.accountCleanup.ConfirmUnsupportedCheckinAccounts(ctx, previewID)
+}
+
+// deleteUnsupportedCheckinAccounts 保留内部兼容入口，并在单次调用中安全完成预览与确认。
 func (a *App) deleteUnsupportedCheckinAccounts(ctx context.Context, limit int, includeLastUnsupported bool, dryRun bool) (unsupportedCheckinCleanupResult, error) {
 	return a.accountCleanup.DeleteUnsupportedCheckinAccounts(ctx, limit, includeLastUnsupported, dryRun)
 }
 
+// loadUnsupportedCheckinAccounts 读取当前清理候选，不执行写操作。
 func (a *App) loadUnsupportedCheckinAccounts(ctx context.Context, limit int, includeLastUnsupported bool) ([]unsupportedCheckinAccountItem, bool, error) {
 	return a.accountCleanup.LoadUnsupportedCheckinAccounts(ctx, limit, includeLastUnsupported)
 }

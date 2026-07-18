@@ -30,7 +30,10 @@ func (a *App) previewLocalNewAPIInstanceSync(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var input localNewAPISyncSourceInput
-	_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
+	}
 	normalizeLocalNewAPISyncSourceInput(&input)
 
 	instance, err := a.getLocalNewAPIInstance(r.Context(), id)
@@ -62,7 +65,10 @@ func (a *App) markMissingLocalNewAPIInstance(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var input localNewAPISyncSourceInput
-	_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
+	}
 	normalizeLocalNewAPISyncSourceInput(&input)
 
 	instance, err := a.getLocalNewAPIInstance(r.Context(), id)

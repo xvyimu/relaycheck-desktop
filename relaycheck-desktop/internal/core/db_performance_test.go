@@ -1,6 +1,9 @@
 package core
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestMigrateCreatesPerformanceIndexes(t *testing.T) {
 	app := newTestApp(t)
@@ -39,6 +42,37 @@ func TestMigrateCreatesPerformanceIndexes(t *testing.T) {
 			}
 		}
 	}
+
+	for index, want := range map[string][]string{
+		"idx_checkin_logs_account_started_id":      {"account_id", "started_at", "id"},
+		"idx_balance_snapshots_account_created_id": {"account_id", "created_at", "id"},
+	} {
+		if got := loadIndexColumns(t, app, index); !reflect.DeepEqual(got, want) {
+			t.Fatalf("index %s columns = %v, want %v", index, got, want)
+		}
+	}
+}
+
+func loadIndexColumns(t *testing.T, app *App, index string) []string {
+	t.Helper()
+	rows, err := app.db.Query("PRAGMA index_info(" + index + ")")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	columns := []string{}
+	for rows.Next() {
+		var seq, cid int
+		var name string
+		if err := rows.Scan(&seq, &cid, &name); err != nil {
+			t.Fatal(err)
+		}
+		columns = append(columns, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return columns
 }
 
 func loadIndexNames(t *testing.T, app *App, table string) map[string]bool {

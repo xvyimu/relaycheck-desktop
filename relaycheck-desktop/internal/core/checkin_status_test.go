@@ -207,6 +207,22 @@ func TestClassifyCheckinResponse_401ReturnsAuthExpired(t *testing.T) {
 	}
 }
 
+func TestClassifyCheckinResponseDoesNotExposeSensitiveUpstreamMessage(t *testing.T) {
+	result := classifyCheckinResponse(http.StatusBadGateway, `{"error":"open C:\\secret\\relaycheck.db: token=TOP_SECRET; SELECT * FROM accounts"}`)
+
+	if result.Status != "failed" {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	if result.Message != "签到接口返回 HTTP 502。" {
+		t.Fatalf("unexpected public message: %q", result.Message)
+	}
+	for _, forbidden := range []string{"C:\\secret", "relaycheck.db", "TOP_SECRET", "SELECT"} {
+		if strings.Contains(result.Message, forbidden) {
+			t.Fatalf("checkin message leaked %q: %q", forbidden, result.Message)
+		}
+	}
+}
+
 func TestClassifyCheckinResponse_403ReturnsAuthExpired(t *testing.T) {
 	result := classifyCheckinResponse(http.StatusForbidden, `not allowed`)
 	if result.Status != "auth_expired" {

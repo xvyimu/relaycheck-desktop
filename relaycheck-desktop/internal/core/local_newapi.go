@@ -81,7 +81,10 @@ func (a *App) syncLocalNewAPIInstance(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 	var input localNewAPISyncRunInput
-	_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
+	}
 	result, err := a.syncLocalNewAPIInstanceData(r.Context(), id, input, true)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())

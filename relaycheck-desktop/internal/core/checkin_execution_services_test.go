@@ -65,6 +65,29 @@ func TestCheckinExecutorRunRetriesTemporaryFailures(t *testing.T) {
 	}
 }
 
+func TestCanAttemptCheckinAcceptsEveryExecutorAuthenticationPath(t *testing.T) {
+	tests := []struct {
+		name string
+		auth accountAuthContext
+		want bool
+	}{
+		{name: "unsupported", auth: accountAuthContext{SupportsCheckin: false, Cookie: "session=ready"}, want: false},
+		{name: "cookie", auth: accountAuthContext{SupportsCheckin: true, Cookie: "session=ready"}, want: true},
+		{name: "access token", auth: accountAuthContext{SupportsCheckin: true, AccessToken: "access"}, want: true},
+		{name: "api key", auth: accountAuthContext{SupportsCheckin: true, APIKey: "key"}, want: true},
+		{name: "password login", auth: accountAuthContext{SupportsCheckin: true, LoginName: "operator", Password: "saved"}, want: true},
+		{name: "password without login name", auth: accountAuthContext{SupportsCheckin: true, Password: "saved"}, want: false},
+		{name: "missing", auth: accountAuthContext{SupportsCheckin: true}, want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := canAttemptCheckin(test.auth); got != test.want {
+				t.Fatalf("canAttemptCheckin() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestBalanceRefresherRunSavesBalance(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/dashboard/billing/subscription" {

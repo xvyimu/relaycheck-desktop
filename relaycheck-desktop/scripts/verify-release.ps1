@@ -2,7 +2,9 @@
 param(
   [string]$ProxyUrl = $env:RELAYCHECK_PROXY,
   [switch]$SkipGoVulnCheck,
-  [switch]$SkipBrowserSmoke
+  [switch]$SkipBrowserSmoke,
+  [ValidateRange(1024, 65535)]
+  [int]$BrowserPort = 5173
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,8 +23,9 @@ $oldNoOpen = $env:RELAYCHECK_NO_OPEN
 $oldPort = $env:RELAYCHECK_PORT
 $oldHttpProxy = $env:HTTP_PROXY
 $oldHttpsProxy = $env:HTTPS_PROXY
+$oldSmokeBaseURL = $env:RELAYCHECK_SMOKE_BASE_URL
 $ownsPort3001 = $false
-$ownsPort5173 = $false
+$ownsBrowserPort = $false
 
 function Write-Step {
   param([string]$Name)
@@ -260,13 +263,16 @@ try {
 
   if (-not $SkipBrowserSmoke) {
     Write-Step "Browser smoke"
-    Assert-PortFree 5173
-    $ownsPort5173 = $true
-    $vite = Start-TrackedProcess "vite dev server" "cmd.exe" @("/c", "npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", "5173") $FrontendDir
+    Assert-PortFree $BrowserPort
+    $ownsBrowserPort = $true
+    $smokeBaseURL = "http://127.0.0.1:$BrowserPort"
+    $env:RELAYCHECK_SMOKE_BASE_URL = $smokeBaseURL
+    $vite = Start-TrackedProcess "vite dev server" "cmd.exe" @("/c", "npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", "$BrowserPort") $FrontendDir
     $null = $vite
-    $null = Wait-HttpOk "http://127.0.0.1:5173" 30
+    $null = Wait-HttpOk $smokeBaseURL 30
     Invoke-Checked "Scheduler layout smoke" $FrontendDir "npm" @("run", "smoke:schedules")
     Invoke-Checked "Navigation intent smoke" $FrontendDir "npm" @("run", "smoke")
+    Invoke-Checked "Layout alpha smoke" $FrontendDir "npm" @("run", "smoke:layout")
   } else {
     Write-Host "Skipping browser smoke by request."
   }
@@ -277,8 +283,8 @@ try {
   Write-Host "Release verification passed."
 } finally {
   Stop-TrackedProcesses
-  if ($ownsPort5173) {
-    Stop-OwnedPortListeners 5173
+  if ($ownsBrowserPort) {
+    Stop-OwnedPortListeners $BrowserPort
   }
   if ($ownsPort3001) {
     Stop-OwnedPortListeners 3001
@@ -287,6 +293,7 @@ try {
   $env:RELAYCHECK_PORT = $oldPort
   $env:HTTP_PROXY = $oldHttpProxy
   $env:HTTPS_PROXY = $oldHttpsProxy
+  $env:RELAYCHECK_SMOKE_BASE_URL = $oldSmokeBaseURL
   Remove-WorkspaceItem $RuntimeRoot
   Remove-WorkspaceDirectoryIfEmpty (Join-Path $RepoRoot ".tmp")
   Remove-WorkspaceItem (Join-Path $FrontendDir "verify-canary.txt")

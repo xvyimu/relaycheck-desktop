@@ -16,11 +16,11 @@ func (s *Service) PreviewChromePasswordImport(ctx context.Context, csvContent st
 	}
 	sites, err := s.loadPasswordSites(ctx)
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportStorage, err)
 	}
 	matches, err := s.matchChromePasswordRows(ctx, rows, sites)
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportStorage, err)
 	}
 	return map[string]interface{}{
 		"totalRows":       len(rows),
@@ -40,11 +40,11 @@ func (s *Service) ImportChromePasswords(ctx context.Context, csvContent string) 
 	}
 	sites, err := s.loadPasswordSites(ctx)
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportStorage, err)
 	}
 	matches, err := s.matchChromePasswordRows(ctx, rows, sites)
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportStorage, err)
 	}
 
 	imported := 0
@@ -67,7 +67,7 @@ func (s *Service) ImportChromePasswords(ctx context.Context, csvContent string) 
 		}
 		encryptedPassword, err := s.infra.EncryptText(row.Password)
 		if err != nil {
-			return nil, err
+			return nil, wrapImportError(ErrImportStorage, err)
 		}
 		email := ""
 		username := row.Username
@@ -87,7 +87,7 @@ func (s *Service) ImportChromePasswords(ctx context.Context, csvContent string) 
 			VALUES (?, ?, ?, ?, ?, 'email_password', ?, 'unknown', ?, ?)
 		`, s.infra.NewID(), match.SiteID, displayName, email, username, encryptedPassword, s.infra.Now(), s.infra.Now())
 		if err != nil {
-			return nil, err
+			return nil, wrapImportError(ErrImportStorage, err)
 		}
 		imported++
 	}
@@ -104,16 +104,16 @@ func (s *Service) ImportChromePasswords(ctx context.Context, csvContent string) 
 // parseChromePasswordCSV parses a Chrome-exported password CSV into rows.
 func parseChromePasswordCSV(csvContent string) ([]chromePasswordRow, error) {
 	if len(csvContent) > 8*1024*1024 {
-		return nil, fmt.Errorf("CSV 文件太大，请分批导入")
+		return nil, wrapImportError(ErrImportInvalidFormat, errorsText("CSV 文件太大，请分批导入"))
 	}
 	reader := csv.NewReader(strings.NewReader(strings.TrimPrefix(csvContent, "\ufeff")))
 	reader.FieldsPerRecord = -1
 	records, err := reader.ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("CSV 解析失败：%w", err)
+		return nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 	if len(records) < 2 {
-		return nil, fmt.Errorf("CSV 没有可导入的密码记录")
+		return nil, wrapImportError(ErrImportInvalidFormat, errorsText("CSV 没有可导入的密码记录"))
 	}
 	header := map[string]int{}
 	for index, name := range records[0] {
@@ -124,7 +124,7 @@ func parseChromePasswordCSV(csvContent string) ([]chromePasswordRow, error) {
 	passwordIndex, okPassword := header["password"]
 	nameIndex, hasName := header["name"]
 	if !okURL || !okUsername || !okPassword {
-		return nil, fmt.Errorf("CSV 缺少必要列：url、username、password")
+		return nil, wrapImportError(ErrImportInvalidFormat, errorsText("CSV 缺少必要列：url、username、password"))
 	}
 
 	rows := []chromePasswordRow{}
@@ -142,7 +142,7 @@ func parseChromePasswordCSV(csvContent string) ([]chromePasswordRow, error) {
 		}
 		rows = append(rows, row)
 		if len(rows) >= 5000 {
-			return nil, fmt.Errorf("CSV 记录超过 5000 条，请分批导入")
+			return nil, wrapImportError(ErrImportInvalidFormat, errorsText("CSV 记录超过 5000 条，请分批导入"))
 		}
 	}
 	return rows, nil

@@ -61,8 +61,9 @@ func (a *App) handleChannelModelsSync(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Limit int `json:"limit"`
 	}
-	if r.ContentLength != 0 {
-		_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
 	}
 	input.Limit = clampBatchLimit(input.Limit, 10)
 	records, err := a.loadChannelModelSyncRecords(r.Context(), input.Limit)

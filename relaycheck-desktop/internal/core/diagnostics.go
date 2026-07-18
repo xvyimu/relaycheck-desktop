@@ -5,13 +5,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func (a *App) handleSystemDiagnostics(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	diagnostics, err := a.systemDiagnostics(r)
+	diagnostics, err := a.loadSystemDiagnostics(r)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -19,7 +20,17 @@ func (a *App) handleSystemDiagnostics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, diagnostics)
 }
 
+func (a *App) loadSystemDiagnostics(r *http.Request) (SystemDiagnostics, error) {
+	return cachedRead(a, "system-diagnostics", shortReadCacheTTL, func() (SystemDiagnostics, error) {
+		return a.systemDiagnostics(r)
+	})
+}
+
 func (a *App) systemDiagnostics(r *http.Request) (SystemDiagnostics, error) {
+	return a.systemDiagnosticsAt(r, time.Now())
+}
+
+func (a *App) systemDiagnosticsAt(r *http.Request, currentTime time.Time) (SystemDiagnostics, error) {
 	items := []DiagnosticItem{}
 
 	dbPath := filepath.Join(a.dataDir, "relaycheck.db")
@@ -78,6 +89,7 @@ func (a *App) systemDiagnostics(r *http.Request) (SystemDiagnostics, error) {
 	}
 
 	counts := map[string]int{}
+	dayStart, dayEnd := cstDayBounds(currentTime)
 	queries := map[string]string{
 		"localInstances":      `SELECT COUNT(*) FROM local_newapi_instances`,
 		"channels":            `SELECT COUNT(*) FROM imported_channels`,
@@ -87,7 +99,6 @@ func (a *App) systemDiagnostics(r *http.Request) (SystemDiagnostics, error) {
 		"unreachableSites":    `SELECT COUNT(*) FROM upstream_sites WHERE health_status='unreachable'`,
 		"accounts":            `SELECT COUNT(*) FROM channel_accounts`,
 		"invalidAccounts":     `SELECT COUNT(*) FROM channel_accounts WHERE login_status IN ('expired','manual_required','captcha_required','two_factor_required')`,
-		"failedCheckinsToday": `SELECT COUNT(*) FROM checkin_logs WHERE status NOT IN ('success','already_checked') AND substr(started_at,1,10)=substr(datetime('now','+8 hours'),1,10)`,
 		"unreadNotifications": `SELECT COUNT(*) FROM app_notifications WHERE read=0`,
 		"cookieExpiringSoon":  `SELECT COUNT(*) FROM channel_accounts WHERE cookie_expiry_at != '' AND cookie_expiry_at != '' AND datetime(cookie_expiry_at) BETWEEN datetime('now') AND datetime('now','+7 days')`,
 	}
@@ -98,6 +109,14 @@ func (a *App) systemDiagnostics(r *http.Request) (SystemDiagnostics, error) {
 		}
 		counts[key] = count
 	}
+	var failedCheckinsToday int
+	if err := a.db.QueryRowContext(r.Context(), `
+		SELECT COUNT(*) FROM checkin_logs
+		WHERE status NOT IN ('success','already_checked') AND started_at >= ? AND started_at < ?
+	`, dayStart, dayEnd).Scan(&failedCheckinsToday); err != nil {
+		return SystemDiagnostics{}, err
+	}
+	counts["failedCheckinsToday"] = failedCheckinsToday
 
 	items = append(items, countBasedDiagnostic("local-instances", counts["localInstances"] > 0, "已记录本地 NewAPI 实例", "尚未记录 NewAPI 实例", counts["localInstances"], "去本机扫描页添加或导入 NewAPI 后台。", []string{
 		"打开本机扫描页，先扫 3000/3001/8080/9999/3010 等常见端口。",

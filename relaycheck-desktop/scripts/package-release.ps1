@@ -136,6 +136,29 @@ function New-ChecksumEntry {
   }
 }
 
+function Get-ToolVersion {
+  param([string]$FilePath)
+
+  $value = & $FilePath --version
+  if ($LASTEXITCODE -ne 0) {
+    throw "$FilePath --version failed with exit code $LASTEXITCODE"
+  }
+  return ([string]$value).Trim()
+}
+
+function Assert-VersionMatch {
+  param(
+    [string]$ToolName,
+    [string]$Actual,
+    [string]$Expected
+  )
+
+  if ($Actual -ne $Expected) {
+    throw "$ToolName version $Actual does not match the declared release version $Expected."
+  }
+  Write-Host "$ToolName version: $Actual"
+}
+
 Write-Host "RelayCheck release packaging"
 Write-Host "Repo: $RepoRoot"
 
@@ -148,6 +171,47 @@ if ($isDirty -and -not $AllowDirty) {
 $productVersion = Get-ProductVersion
 $commit = Get-GitValue @("rev-parse", "--short=12", "HEAD")
 $commitFull = Get-GitValue @("rev-parse", "HEAD")
+$goToolchain = (& go version).Trim()
+if ($LASTEXITCODE -ne 0) { throw "go version failed with exit code $LASTEXITCODE" }
+$nodeToolchain = Get-ToolVersion "node"
+$npmToolchain = Get-ToolVersion "npm"
+$frontendPackage = Get-Content -LiteralPath (Join-Path $FrontendDir "package.json") -Raw | ConvertFrom-Json
+$goVersionFile = (Get-Content -LiteralPath (Join-Path $RepoRoot ".go-version") -Raw).Trim()
+$nodeVersionFile = (Get-Content -LiteralPath (Join-Path $FrontendDir ".node-version") -Raw).Trim()
+$packageManager = [string]$frontendPackage.packageManager
+
+$goVersionMatch = [regex]::Match($goToolchain, '^go version go(\d+\.\d+\.\d+)(?:\s|$)')
+if (-not $goVersionMatch.Success) {
+  throw "Unable to parse Go toolchain version: $goToolchain"
+}
+$nodeVersionMatch = [regex]::Match($nodeToolchain, '^v(\d+\.\d+\.\d+)$')
+if (-not $nodeVersionMatch.Success) {
+  throw "Unable to parse Node.js toolchain version: $nodeToolchain"
+}
+$packageManagerMatch = [regex]::Match($packageManager, '^npm@(\d+\.\d+\.\d+)$')
+if (-not $packageManagerMatch.Success) {
+  throw "Unable to parse packageManager declaration: $packageManager"
+}
+
+Assert-VersionMatch "Go" $goVersionMatch.Groups[1].Value $goVersionFile
+Assert-VersionMatch "Node.js" $nodeVersionMatch.Groups[1].Value $nodeVersionFile
+Assert-VersionMatch "npm" $npmToolchain $packageManagerMatch.Groups[1].Value
+
+$sourceMetadataFiles = @(
+  (Join-Path $RepoRoot ".go-version"),
+  (Join-Path $RepoRoot "go.mod"),
+  (Join-Path $RepoRoot "go.sum"),
+  (Join-Path $RepoRoot "vendor\modules.txt"),
+  (Join-Path $FrontendDir ".node-version"),
+  (Join-Path $FrontendDir "package.json"),
+  (Join-Path $FrontendDir "package-lock.json")
+)
+$sourceInputs = foreach ($sourceFile in $sourceMetadataFiles) {
+  if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
+    throw "Release source metadata file missing: $sourceFile"
+  }
+  New-ChecksumEntry $sourceFile $RepoRoot
+}
 
 if (-not $SkipBuild) {
   Invoke-Checked "Frontend build" $FrontendDir "npm" @("run", "build")
@@ -216,6 +280,15 @@ $manifest = [ordered]@{
   operatorMonitor  = "scripts/operator-monitor.ps1"
   packageVerifier  = "scripts/verify-package.ps1"
   launchReadiness  = "docs/LAUNCH_READINESS.md"
+  toolchain        = [ordered]@{
+    go             = $goToolchain
+    node           = $nodeToolchain
+    npm            = $npmToolchain
+    goVersionFile  = $goVersionFile
+    nodeVersionFile = $nodeVersionFile
+    packageManager = $packageManager
+  }
+  sourceInputs     = $sourceInputs
   files            = $checksums
 }
 

@@ -56,6 +56,21 @@ func TestLoadBalanceRefreshAccountIDsSelectsMissingSupportedAccounts(t *testing.
 	}
 }
 
+func TestBulkBalanceFailureDoesNotExposeInternalCause(t *testing.T) {
+	app := newTestApp(t)
+	if err := app.db.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
+
+	item := app.refreshBalanceForBulk(context.Background(), "account-secret", nil)
+	if item.Message != "余额刷新失败，请稍后重试。" {
+		t.Fatalf("unexpected public balance error: %q", item.Message)
+	}
+	if strings.Contains(item.Message, "database is closed") || strings.Contains(item.Message, "account-secret") {
+		t.Fatalf("balance result leaked internal context: %q", item.Message)
+	}
+}
+
 func TestLoginWithPasswordReportsEveryCandidatePath(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()

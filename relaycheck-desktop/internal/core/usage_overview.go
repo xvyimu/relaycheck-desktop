@@ -3,8 +3,11 @@ package core
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -14,6 +17,7 @@ type usageOverview struct {
 	SiteCount         int                `json:"siteCount"`
 	LowBalanceCount   int                `json:"lowBalanceCount"`
 	DecliningCount    int                `json:"decliningCount"`
+	Truncated         bool               `json:"truncated"`
 	EstimatedDailyUse map[string]float64 `json:"estimatedDailyUse"`
 	Sites             []usageSiteItem    `json:"sites"`
 	Accounts          []usageAccountItem `json:"accounts"`
@@ -55,12 +59,34 @@ type usageSnapshotRow struct {
 	CreatedAt   string
 }
 
+type usageOverviewOptions struct {
+	SiteID string
+	Limit  int
+}
+
+func parseUsageOverviewOptions(r *http.Request) (usageOverviewOptions, error) {
+	options := usageOverviewOptions{
+		SiteID: strings.TrimSpace(r.URL.Query().Get("siteId")),
+		Limit:  clampListLimit(queryInt(r, "limit", 80), 80, 200),
+	}
+	if len(options.SiteID) > 200 {
+		return options, errors.New("站点筛选值不能超过 200 个字符。")
+	}
+	return options, nil
+}
+
 func (a *App) handleUsageOverview(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	overview, err := cachedRead(a, "usage-overview", overviewReadCacheTTL, func() (usageOverview, error) {
-		return a.buildUsageOverview(r.Context())
+	options, err := parseUsageOverviewOptions(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	cacheKey := fmt.Sprintf("usage-overview:%s:%d", options.SiteID, options.Limit)
+	overview, err := cachedRead(a, cacheKey, overviewReadCacheTTL, func() (usageOverview, error) {
+		return a.buildUsageOverviewWithOptions(r.Context(), options)
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -70,15 +96,31 @@ func (a *App) handleUsageOverview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) buildUsageOverview(ctx context.Context) (usageOverview, error) {
-	// Two newest snapshots per account (window) so trend/daily-use stay correct
-	// when the global snapshot table grows past a hard LIMIT.
+	return a.buildUsageOverviewWithOptions(ctx, usageOverviewOptions{Limit: 80})
+}
+
+func (a *App) buildUsageOverviewWithOptions(ctx context.Context, options usageOverviewOptions) (usageOverview, error) {
+	started := time.Now()
+	defer func() { logSlowOperation(ctx, "sql", "usage-overview", started, nil, nil) }()
+	if options.Limit <= 0 {
+		options.Limit = 80
+	}
+	// Limit target accounts before ranking snapshots so history growth does not
+	// increase the window query's working set without bound.
 	rows, err := a.db.QueryContext(ctx, `
-		SELECT account_id, display_name, upstream_site_id, site_name, balance, unit, created_at
-		FROM (
+		WITH target_accounts AS (
+			SELECT a.id, a.display_name, a.upstream_site_id, s.name AS site_name
+			FROM channel_accounts a
+			JOIN upstream_sites s ON s.id = a.upstream_site_id
+			WHERE (? = '' OR a.upstream_site_id = ?)
+			  AND EXISTS (SELECT 1 FROM balance_snapshots b WHERE b.account_id = a.id)
+			ORDER BY a.updated_at DESC, a.id DESC
+			LIMIT ?
+		), ranked_snapshots AS (
 			SELECT b.account_id AS account_id,
-			       a.display_name AS display_name,
+			       ta.display_name AS display_name,
 			       b.upstream_site_id AS upstream_site_id,
-			       s.name AS site_name,
+			       ta.site_name AS site_name,
 			       b.balance AS balance,
 			       b.unit AS unit,
 			       b.created_at AS created_at,
@@ -86,13 +128,14 @@ func (a *App) buildUsageOverview(ctx context.Context) (usageOverview, error) {
 					PARTITION BY b.account_id
 					ORDER BY b.created_at DESC, b.id DESC
 			       ) AS rn
-			FROM balance_snapshots b
-			JOIN channel_accounts a ON a.id = b.account_id
-			JOIN upstream_sites s ON s.id = b.upstream_site_id
+			FROM target_accounts ta
+			JOIN balance_snapshots b ON b.account_id = ta.id
 		)
+		SELECT account_id, display_name, upstream_site_id, site_name, balance, unit, created_at
+		FROM ranked_snapshots
 		WHERE rn <= 2
 		ORDER BY account_id ASC, created_at DESC
-	`)
+	`, options.SiteID, options.SiteID, options.Limit+1)
 	if err != nil {
 		return usageOverview{}, err
 	}
@@ -116,7 +159,7 @@ func (a *App) buildUsageOverview(ctx context.Context) (usageOverview, error) {
 		Sites:             []usageSiteItem{},
 		Accounts:          []usageAccountItem{},
 	}
-	sites := map[string]*usageSiteItem{}
+	accountItems := make([]usageAccountItem, 0, len(byAccount))
 	for _, snapshots := range byAccount {
 		if len(snapshots) == 0 {
 			continue
@@ -146,6 +189,26 @@ func (a *App) buildUsageOverview(ctx context.Context) (usageOverview, error) {
 				}
 			}
 		}
+		accountItems = append(accountItems, item)
+	}
+	sort.SliceStable(accountItems, func(i, j int) bool {
+		left := accountItems[i]
+		right := accountItems[j]
+		if left.LowBalance != right.LowBalance {
+			return left.LowBalance
+		}
+		if left.Trend != right.Trend {
+			return left.Trend == "down"
+		}
+		return left.AccountName < right.AccountName
+	})
+	if len(accountItems) > options.Limit {
+		overview.Truncated = true
+		accountItems = accountItems[:options.Limit]
+	}
+	overview.Accounts = accountItems
+	sites := map[string]*usageSiteItem{}
+	for _, item := range overview.Accounts {
 		site := sites[item.SiteID]
 		if site == nil {
 			site = &usageSiteItem{
@@ -172,24 +235,12 @@ func (a *App) buildUsageOverview(ctx context.Context) (usageOverview, error) {
 			site.EstimatedDailyUse[item.Unit] += *item.EstimatedDailyUse
 			overview.EstimatedDailyUse[item.Unit] += *item.EstimatedDailyUse
 		}
-		overview.Accounts = append(overview.Accounts, item)
 	}
 	for _, site := range sites {
 		overview.Sites = append(overview.Sites, *site)
 	}
 	overview.AccountCount = len(overview.Accounts)
 	overview.SiteCount = len(overview.Sites)
-	sort.SliceStable(overview.Accounts, func(i, j int) bool {
-		left := overview.Accounts[i]
-		right := overview.Accounts[j]
-		if left.LowBalance != right.LowBalance {
-			return left.LowBalance
-		}
-		if left.Trend != right.Trend {
-			return left.Trend == "down"
-		}
-		return left.AccountName < right.AccountName
-	})
 	sort.SliceStable(overview.Sites, func(i, j int) bool {
 		left := overview.Sites[i]
 		right := overview.Sites[j]
@@ -198,7 +249,6 @@ func (a *App) buildUsageOverview(ctx context.Context) (usageOverview, error) {
 		}
 		return left.SiteName < right.SiteName
 	})
-	overview.Accounts = limitUsageAccountItems(overview.Accounts, 80)
 	overview.Sites = limitUsageSiteItems(overview.Sites, 40)
 	return overview, nil
 }

@@ -53,11 +53,11 @@ func main() {
 	// /api/health. Default off preserves the trusted-single-user flow.
 	if os.Getenv("RELAYCHECK_REQUIRE_TOKEN") == "1" {
 		if token := core.NewSessionToken(); token != "" {
-			app.SetLocalToken(token)
 			tokenPath := filepath.Join(app.DataDir(), "session-token.txt")
-			if err := os.WriteFile(tokenPath, []byte(token), 0o600); err != nil {
-				log.Printf("[token] failed to persist session token: %v", err)
+			if err := core.WriteSessionTokenFile(tokenPath, token); err != nil {
+				log.Printf("[token] secure token persistence failed; enforcement NOT enabled: %v", err)
 			} else {
+				app.SetLocalToken(token)
 				log.Printf("[token] session-token enforcement enabled; token file: %s", tokenPath)
 			}
 		} else {

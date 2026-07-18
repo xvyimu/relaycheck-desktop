@@ -2,11 +2,91 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestDryRunAllDueUsesServerPlanAndDoesNotExposeCredentials(t *testing.T) {
+	app := newTestApp(t)
+	insertCheckinPlanFixture(t, app, checkinPlanFixture{
+		id: "dry-run-ready", name: "Ready account", supportsCheckin: 1,
+		cookie: "session=TOP_SECRET_COOKIE", apiKey: "TOP_SECRET_API_KEY", updatedAt: "2026-07-18T02:00:00Z",
+	})
+	insertCheckinPlanFixture(t, app, checkinPlanFixture{
+		id: "dry-run-missing", name: "Missing account", supportsCheckin: 1, updatedAt: "2026-07-18T01:00:00Z",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tasks/dry-run", strings.NewReader(`{"type":"checkin","scope":{"kind":"all_due"}}`))
+	rec := httptest.NewRecorder()
+	app.handleDryRun(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	preview := decodeDryRunResponse(t, rec)
+	if preview.TotalAccounts != 2 || preview.WillRun != 1 || preview.Skipped != 1 || preview.PreviewID == "" {
+		t.Fatalf("unexpected all_due preview: %#v", preview)
+	}
+	for _, secret := range []string{"TOP_SECRET_COOKIE", "TOP_SECRET_API_KEY", "session="} {
+		if strings.Contains(rec.Body.String(), secret) {
+			t.Fatalf("dry-run response exposed %q: %s", secret, rec.Body.String())
+		}
+	}
+}
+
+func TestDryRunAllDueRequiresScopeAndRejectsThe201stAccountWith409(t *testing.T) {
+	t.Run("scope required", func(t *testing.T) {
+		app := newTestApp(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks/dry-run", strings.NewReader(`{"type":"checkin"}`))
+		rec := httptest.NewRecorder()
+		app.handleDryRun(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("missing scope status = %d, want 400: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("over limit", func(t *testing.T) {
+		app := newTestApp(t)
+		siteID := "dry-run-over-limit-site"
+		stamp := "2026-07-18T01:00:00Z"
+		if _, err := app.db.Exec(`
+			INSERT INTO upstream_sites (id, name, base_url, kind, health_status, supports_checkin, created_at, updated_at)
+			VALUES (?, 'Over limit', 'https://dry-run-over-limit.example', 'newapi', 'healthy', 1, ?, ?)
+		`, siteID, stamp, stamp); err != nil {
+			t.Fatal(err)
+		}
+		tx, err := app.db.Begin()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i <= maxDryRunAccounts; i++ {
+			id := fmt.Sprintf("dry-run-over-%03d", i)
+			if _, err := tx.Exec(`
+				INSERT INTO channel_accounts (id, upstream_site_id, display_name, auth_type, login_status, created_at, updated_at)
+				VALUES (?, ?, ?, 'api_key', 'valid', ?, ?)
+			`, id, siteID, id, stamp, stamp); err != nil {
+				_ = tx.Rollback()
+				t.Fatal(err)
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks/dry-run", strings.NewReader(`{"type":"checkin","scope":{"kind":"all_due"}}`))
+		rec := httptest.NewRecorder()
+		app.handleDryRun(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("over-limit status = %d, want 409: %s", rec.Code, rec.Body.String())
+		}
+		if app.checkinPlanStore.count() != 0 {
+			t.Fatal("over-limit handler stored a partial preview")
+		}
+	})
+}
 
 // insertDryRunAccount 插入一条测试账号 + 关联站点，用于 dry-run 预览测试。
 func insertDryRunAccount(t *testing.T, app *App, id, name, siteName, loginStatus, authType string, supportsCheckin int) {
@@ -50,7 +130,7 @@ func TestDryRunRejectsExceedingAccountLimit(t *testing.T) {
 	for i := range accountIDs {
 		accountIDs[i] = newID()
 	}
-	body := `{"type":"checkin","accountIds":["` + strings.Join(accountIDs, `","`) + `"]}`
+	body := `{"type":"test","accountIds":["` + strings.Join(accountIDs, `","`) + `"]}`
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/dry-run", strings.NewReader(body))
 	req.Header.Set("content-type", "application/json")
@@ -104,8 +184,8 @@ func TestDryRunRejectsWrongMethod(t *testing.T) {
 	}
 }
 
-// TestDryRunClassifiesCheckinActions 验证：checkin 类型的 dry-run 正确分类账号为
-// will_run / skip_unsupported / skip_expired / skip_no_cookie。
+// TestDryRunClassifiesCheckinActions verifies that all_due uses decrypted
+// authentication facts instead of login_status/auth_type heuristics.
 func TestDryRunClassifiesCheckinActions(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
@@ -121,8 +201,15 @@ func TestDryRunClassifiesCheckinActions(t *testing.T) {
 	// skip_no_cookie 分支要求 authType=cookie 且 loginStatus 既非 expired 也非 logged_out，
 	// 但又不是 valid——用 "pending" 模拟 cookie 未保存的状态。
 	insertDryRunAccount(t, app, idNoCookie, "No Cookie Account", "Cookie Site", "pending", "cookie", 1)
+	apiKeyEncrypted, err := app.encryptText("saved-api-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.db.Exec(`UPDATE channel_accounts SET api_key_encrypted=? WHERE id=?`, apiKeyEncrypted, idOK); err != nil {
+		t.Fatal(err)
+	}
 
-	body := `{"type":"checkin","accountIds":["` + strings.Join([]string{idOK, idUnsupported, idExpired, idNoCookie}, `","`) + `"]}`
+	body := `{"type":"checkin","scope":{"kind":"all_due"}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/dry-run", strings.NewReader(body))
 	req.Header.Set("content-type", "application/json")
 	rec := httptest.NewRecorder()
@@ -161,15 +248,16 @@ func TestDryRunClassifiesCheckinActions(t *testing.T) {
 	if item := findItem(idUnsupported); item == nil || item.Action != "skip_unsupported" {
 		t.Fatalf("expected idUnsupported skip_unsupported, got %+v", item)
 	}
-	if item := findItem(idExpired); item == nil || item.Action != "skip_expired" {
-		t.Fatalf("expected idExpired skip_expired, got %+v", item)
+	if item := findItem(idExpired); item == nil || item.Action != "skip_missing_credentials" {
+		t.Fatalf("expected idExpired skip_missing_credentials, got %+v", item)
 	}
-	if item := findItem(idNoCookie); item == nil || item.Action != "skip_no_cookie" {
-		t.Fatalf("expected idNoCookie skip_no_cookie, got %+v", item)
+	if item := findItem(idNoCookie); item == nil || item.Action != "skip_missing_credentials" {
+		t.Fatalf("expected idNoCookie skip_missing_credentials, got %+v", item)
 	}
 }
 
-// TestDryRunSkipsNotFoundAccounts 验证：请求中存在但数据库中不存在的账号 ID 被标记为 skip_not_found。
+// TestDryRunSkipsNotFoundAccounts verifies caller-supplied IDs cannot expand
+// the server-owned all_due selection.
 func TestDryRunSkipsNotFoundAccounts(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
@@ -177,8 +265,15 @@ func TestDryRunSkipsNotFoundAccounts(t *testing.T) {
 	idReal := "acc-real"
 	idGhost := "acc-ghost"
 	insertDryRunAccount(t, app, idReal, "Real Account", "Real Site", "valid", "api_key", 1)
+	apiKeyEncrypted, err := app.encryptText("saved-api-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.db.Exec(`UPDATE channel_accounts SET api_key_encrypted=? WHERE id=?`, apiKeyEncrypted, idReal); err != nil {
+		t.Fatal(err)
+	}
 
-	body := `{"type":"checkin","accountIds":["` + idReal + `","` + idGhost + `"]}`
+	body := `{"type":"checkin","scope":{"kind":"all_due"},"accountIds":["` + idReal + `","` + idGhost + `"]}`
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/dry-run", strings.NewReader(body))
 	req.Header.Set("content-type", "application/json")
 	rec := httptest.NewRecorder()
@@ -189,14 +284,14 @@ func TestDryRunSkipsNotFoundAccounts(t *testing.T) {
 	}
 	preview := decodeDryRunResponse(t, rec)
 
-	if preview.TotalAccounts != 2 {
-		t.Fatalf("expected total=2, got %d", preview.TotalAccounts)
+	if preview.TotalAccounts != 1 {
+		t.Fatalf("expected server-owned total=1, got %d", preview.TotalAccounts)
 	}
 	if preview.WillRun != 1 {
 		t.Fatalf("expected willRun=1, got %d", preview.WillRun)
 	}
-	if preview.Skipped != 1 {
-		t.Fatalf("expected skipped=1, got %d", preview.Skipped)
+	if preview.Skipped != 0 {
+		t.Fatalf("expected skipped=0, got %d", preview.Skipped)
 	}
 
 	var ghost *DryRunPreviewItem
@@ -205,14 +300,8 @@ func TestDryRunSkipsNotFoundAccounts(t *testing.T) {
 			ghost = &preview.Items[i]
 		}
 	}
-	if ghost == nil {
-		t.Fatal("expected ghost account in items")
-	}
-	if ghost.Action != "skip_not_found" {
-		t.Fatalf("expected skip_not_found, got %q", ghost.Action)
-	}
-	if ghost.AccountName != "未知" {
-		t.Fatalf("expected 未知, got %q", ghost.AccountName)
+	if ghost != nil {
+		t.Fatalf("caller-supplied ghost account expanded all_due selection: %#v", ghost)
 	}
 }
 
@@ -246,16 +335,23 @@ func TestDryRunHandlesUnknownType(t *testing.T) {
 	}
 }
 
-// TestDryRunCheckinSkipsLoggedOutStatus verifies that loginStatus "logged_out"
-// hits the same skip_expired branch as "expired" in the checkin path.
+// TestDryRunCheckinSkipsLoggedOutStatus verifies loginStatus alone does not
+// suppress an account that has a usable local authentication path.
 func TestDryRunCheckinSkipsLoggedOutStatus(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
 
 	id := "acc-logged-out"
 	insertDryRunAccount(t, app, id, "Logged Out Account", "LoggedOut Site", "logged_out", "api_key", 1)
+	apiKeyEncrypted, err := app.encryptText("saved-api-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.db.Exec(`UPDATE channel_accounts SET api_key_encrypted=? WHERE id=?`, apiKeyEncrypted, id); err != nil {
+		t.Fatal(err)
+	}
 
-	body := `{"type":"checkin","accountIds":["` + id + `"]}`
+	body := `{"type":"checkin","scope":{"kind":"all_due"}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/dry-run", strings.NewReader(body))
 	req.Header.Set("content-type", "application/json")
 	rec := httptest.NewRecorder()
@@ -269,11 +365,11 @@ func TestDryRunCheckinSkipsLoggedOutStatus(t *testing.T) {
 	if len(preview.Items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(preview.Items))
 	}
-	if preview.Items[0].Action != "skip_expired" {
-		t.Fatalf("expected skip_expired for logged_out, got %q", preview.Items[0].Action)
+	if preview.Items[0].Action != "will_run" {
+		t.Fatalf("expected will_run for logged_out with API key, got %q", preview.Items[0].Action)
 	}
-	if preview.Skipped != 1 || preview.WillRun != 0 {
-		t.Fatalf("expected skipped=1 willRun=0, got skipped=%d willRun=%d", preview.Skipped, preview.WillRun)
+	if preview.Skipped != 0 || preview.WillRun != 1 {
+		t.Fatalf("expected skipped=0 willRun=1, got skipped=%d willRun=%d", preview.Skipped, preview.WillRun)
 	}
 }
 
@@ -309,8 +405,8 @@ func TestDryRunTestAndIdentifyTypesAlwaysWillRun(t *testing.T) {
 	}
 }
 
-// TestDryRunPreservesRequestOrder 验证：preview.items 的顺序与请求中 accountIds 顺序一致，
-// 而非数据库返回顺序。
+// TestDryRunPreservesRequestOrder verifies all_due preserves the due selector's
+// updated_at ordering; caller accountIds do not define execution order.
 func TestDryRunPreservesRequestOrder(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
@@ -321,8 +417,21 @@ func TestDryRunPreservesRequestOrder(t *testing.T) {
 	insertDryRunAccount(t, app, idA, "A", "Site A", "valid", "api_key", 1)
 	insertDryRunAccount(t, app, idB, "B", "Site B", "valid", "api_key", 1)
 	insertDryRunAccount(t, app, idC, "C", "Site C", "valid", "api_key", 1)
+	apiKeyEncrypted, err := app.encryptText("saved-api-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, updatedAt := range map[string]string{
+		idA: "2026-07-18T02:00:00Z",
+		idB: "2026-07-18T01:00:00Z",
+		idC: "2026-07-18T03:00:00Z",
+	} {
+		if _, err := app.db.Exec(`UPDATE channel_accounts SET api_key_encrypted=?, updated_at=? WHERE id=?`, apiKeyEncrypted, updatedAt, id); err != nil {
+			t.Fatal(err)
+		}
+	}
 
-	body := `{"type":"checkin","accountIds":["` + idC + `","` + idA + `","` + idB + `"]}`
+	body := `{"type":"checkin","scope":{"kind":"all_due"},"accountIds":["` + idB + `","` + idA + `","` + idC + `"]}`
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/dry-run", strings.NewReader(body))
 	req.Header.Set("content-type", "application/json")
 	rec := httptest.NewRecorder()

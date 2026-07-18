@@ -11,8 +11,8 @@ type CheckinTaskService struct {
 	rootCtx          context.Context
 	taskRunner       *TaskRunner
 	accountAuth      *AccountAuthRepository
-	checkinBatch     *CheckinBatchOrchestrator
 	checkinExecutor  *CheckinExecutor
+	checkinRun       *CheckinRunStore
 	balanceRefresher *BalanceRefresher
 	scheduleConfig   func(context.Context) checkinScheduleConfig
 }
@@ -23,39 +23,41 @@ func NewCheckinTaskService(app *App) *CheckinTaskService {
 		rootCtx:          app.rootCtx,
 		taskRunner:       app.taskRunner,
 		accountAuth:      app.accountAuth,
-		checkinBatch:     app.checkinBatch,
 		checkinExecutor:  app.checkinExecutor,
+		checkinRun:       app.checkinRun,
 		balanceRefresher: app.balanceRefresher,
 		scheduleConfig:   app.loadCheckinScheduleConfig,
 	}
 }
 
-func (s *CheckinTaskService) StartCheckin(taskID string) {
+func (s *CheckinTaskService) StartCheckin(taskID string, accounts []checkinRunAccount) error {
+	if !s.checkinRun.begin("manual.task", len(accounts)) {
+		return errCheckinRunBusy
+	}
+	task, taskCtx := s.taskRunner.start(taskID, TaskCheckin, len(accounts))
 	go func() {
-		ctx := s.rootContext()
-		accounts, err := s.checkinBatch.LoadDueAccounts(ctx, "", 0)
-		if err != nil {
-			task, _ := s.taskRunner.start(taskID, TaskCheckin, 0)
-			task.finish(err)
-			return
-		}
-		total := len(accounts)
-		task, taskCtx := s.taskRunner.start(taskID, TaskCheckin, total)
-
-		if total == 0 {
+		defer s.checkinRun.finish()
+		if len(accounts) == 0 {
 			task.finish(nil)
 			return
 		}
 
-		siteLimiter := newCheckinSiteLimiter(s.scheduleConfig(ctx))
+		siteLimiter := newCheckinSiteLimiter(s.scheduleConfig(taskCtx))
 		accountIDs := checkinRunAccountIDs(accounts)
-		auths, _ := s.accountAuth.LoadBatch(ctx, accountIDs)
+		auths, err := s.accountAuth.LoadBatch(taskCtx, accountIDs)
+		if err != nil {
+			auths = map[string]accountAuthContext{}
+		}
 		for _, account := range accounts {
 			if taskCtx.Err() != nil {
 				task.finish(taskCtx.Err())
 				return
 			}
-			_ = siteLimiter.wait(taskCtx, account.UpstreamSiteID)
+			if err := siteLimiter.wait(taskCtx, account.UpstreamSiteID); err != nil {
+				task.finish(err)
+				return
+			}
+			s.checkinRun.updateCurrent(account.ID, account.AccountName, account.SiteName, "正在签到...")
 			var auth *accountAuthContext
 			if loaded, ok := auths[account.ID]; ok {
 				auth = &loaded
@@ -64,15 +66,17 @@ func (s *CheckinTaskService) StartCheckin(taskID string) {
 			item := ItemResult{ID: account.ID, Name: account.AccountName}
 			if err != nil {
 				item.Status = "failed"
-				item.Message = err.Error()
+				item.Message = publicOperationFailure("checkin", "task-run", account.ID, "签到失败，请稍后重试。", err)
 			} else {
 				item.Status = result.Status
 				item.Message = result.Message
 			}
+			s.checkinRun.recordResult(item.Status, item.Message)
 			task.update(item)
 		}
 		task.finish(nil)
 	}()
+	return nil
 }
 
 func (s *CheckinTaskService) StartRefreshBalances(taskID string, params map[string]interface{}) {
@@ -163,7 +167,7 @@ func (s *CheckinTaskService) refreshBalanceForTask(ctx context.Context, id strin
 	}
 	result, err := s.balanceRefresher.Run(ctx, id, auth)
 	if err != nil {
-		item.Message = err.Error()
+		item.Message = publicOperationFailure("balance", "task-refresh", id, "余额刷新失败，请稍后重试。", err)
 		return item
 	}
 	item.Status = "success"

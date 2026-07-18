@@ -1,19 +1,30 @@
 name: ci
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  schedule:
+    - cron: "17 18 * * *"
+  workflow_dispatch:
 
 jobs:
   go:
     runs-on: windows-latest
+    timeout-minutes: 25
     env:
       GOTOOLCHAIN: local
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: .go-version
       - name: Go vet
@@ -31,22 +42,49 @@ jobs:
           Write-Host "internal/core coverage: $corePct%"
           if ($corePct -lt 55.0) { throw "core coverage $corePct% < 55%" }
       - name: Go vulnerability scan
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.5.0 ./ ./internal/...
+        shell: pwsh
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@v1.5.0 ./ ./internal/... 2>&1 | Tee-Object -FilePath govulncheck.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Record Go toolchain
+        shell: pwsh
+        run: |
+          go version | Set-Content -Encoding UTF8 go-toolchain.txt
+          go env GOTOOLCHAIN GOOS GOARCH | Add-Content -Encoding UTF8 go-toolchain.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: go-quality-artifacts
+          path: |
+            core-cover.out
+            govulncheck.txt
+            go-toolchain.txt
+          if-no-files-found: warn
+          retention-days: 14
 
   frontend:
     runs-on: windows-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: frontend/.node-version
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install
         run: npm ci
+      - name: Verify frontend toolchain
+        shell: pwsh
+        run: |
+          $nodeVersion = node --version
+          $npmVersion = npm --version
+          "node=$nodeVersion`nnpm=$npmVersion" | Set-Content -Encoding UTF8 frontend-toolchain.txt
+          if ($nodeVersion -ne "v22.23.1") { throw "unexpected Node version: $nodeVersion" }
+          if ($npmVersion -ne "10.9.8") { throw "unexpected npm version: $npmVersion" }
       - name: Format
         run: npm run format:check
       - name: Lint
@@ -59,11 +97,48 @@ jobs:
         run: npm run build
       - name: Bundle budget
         run: npm run budget:check
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+      - name: Incremental browser smoke
+        shell: pwsh
+        run: .\scripts\run-incremental-smoke.ps1
       - name: Dependency audit
-        run: npm audit --audit-level=moderate
-      - uses: actions/upload-artifact@v4
+        shell: pwsh
+        run: |
+          npm audit --audit-level=moderate --json | Tee-Object -FilePath npm-audit.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: frontend-coverage
-          path: frontend/coverage/coverage-summary.json
+          name: frontend-quality-artifacts
+          path: |
+            frontend/coverage/
+            frontend/dist/bundle-budget.json
+            frontend/npm-audit.json
+            frontend/frontend-toolchain.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+  large-dataset-benchmark:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: .go-version
+      - name: Run large dataset handler benchmarks
+        shell: pwsh
+        run: |
+          go test -mod=vendor -run '^$' -bench '^BenchmarkLargeDatasetHandlers$' -benchmem -count=5 ./internal/core 2>&1 | Tee-Object -FilePath large-dataset-benchmark.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: large-dataset-benchmark
+          path: large-dataset-benchmark.txt
           if-no-files-found: error
+          retention-days: 30

@@ -19,7 +19,9 @@ func (a *App) handleLegacyConfigImport(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := a.accountsService.ImportLegacyConfig(r.Context(), input.ConfigContent, input.FileName)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeImportFailure(w, err, importFailureMessages{
+			InvalidFormat: "旧配置格式或结构无效，请检查 JSON 内容。",
+		})
 		return
 	}
 	a.audit("import.legacy_config", "info", "", "upstream_site", stringFromResult(result, "siteId"), "旧配置导入完成。", map[string]interface{}{

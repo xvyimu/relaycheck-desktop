@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -84,12 +85,17 @@ type runningTask struct {
 type TaskRunner struct {
 	tasks          map[string]*runningTask
 	mu             sync.RWMutex
+	pendingContext map[string]correlationFields
 	sseSubscribers atomic.Int64
 	rootCtx        context.Context
 }
 
 func newTaskRunner() *TaskRunner {
-	return &TaskRunner{tasks: map[string]*runningTask{}, rootCtx: context.Background()}
+	return &TaskRunner{
+		tasks:          map[string]*runningTask{},
+		pendingContext: map[string]correlationFields{},
+		rootCtx:        context.Background(),
+	}
 }
 
 // setRootCtx links the TaskRunner's per-task cancellation contexts to the
@@ -102,10 +108,13 @@ func (tr *TaskRunner) setRootCtx(ctx context.Context) {
 }
 
 func (tr *TaskRunner) start(id string, taskType TaskType, total int) (*runningTask, context.Context) {
-	tr.mu.RLock()
+	tr.mu.Lock()
 	root := tr.rootCtx
-	tr.mu.RUnlock()
-	ctx, cancel := context.WithCancel(root)
+	fields := tr.pendingContext[id]
+	delete(tr.pendingContext, id)
+	tr.mu.Unlock()
+	fields.TaskID = id
+	ctx, cancel := context.WithCancel(withCorrelation(root, fields))
 	task := &runningTask{
 		progress: TaskProgress{
 			ID:        id,
@@ -139,6 +148,19 @@ func (tr *TaskRunner) start(id string, taskType TaskType, total int) (*runningTa
 	return task, ctx
 }
 
+func (tr *TaskRunner) setPendingCorrelation(id string, fields correlationFields) {
+	fields.TaskID = id
+	tr.mu.Lock()
+	tr.pendingContext[id] = fields
+	tr.mu.Unlock()
+}
+
+func (tr *TaskRunner) clearPendingCorrelation(id string) {
+	tr.mu.Lock()
+	delete(tr.pendingContext, id)
+	tr.mu.Unlock()
+}
+
 func (tr *TaskRunner) get(id string) *runningTask {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
@@ -168,7 +190,14 @@ func (t *runningTask) finish(err error) {
 	t.mu.Lock()
 	if err != nil {
 		t.progress.Status = TaskStatusCancelled
-		t.progress.Error = err.Error()
+		switch {
+		case errors.Is(err, context.Canceled):
+			t.progress.Error = publicOperationFailure("tasks", "cancel", t.progress.ID, "任务已取消。", err)
+		case errors.Is(err, context.DeadlineExceeded):
+			t.progress.Error = publicOperationFailure("tasks", "timeout", t.progress.ID, "任务执行超时。", err)
+		default:
+			t.progress.Error = publicOperationFailure("tasks", "finish", t.progress.ID, "任务执行失败，请稍后重试。", err)
+		}
 	} else {
 		t.progress.Status = TaskStatusDone
 	}
@@ -233,10 +262,24 @@ func (a *App) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 
 	taskType := TaskType(input.Type)
 	taskID := newID()
+	a.taskRunner.setPendingCorrelation(taskID, correlationFromContext(r.Context()))
 
 	switch taskType {
 	case TaskCheckin:
-		a.startCheckinTask(taskID, input.Params)
+		if err := a.startCheckinTask(taskID, input.Params); err != nil {
+			a.taskRunner.clearPendingCorrelation(taskID)
+			switch {
+			case errors.Is(err, errCheckinPreviewRequired):
+				writeError(w, http.StatusBadRequest, "缺少签到预览 ID，请重新预览。")
+			case errors.Is(err, errCheckinPreviewUnavailable):
+				writeError(w, http.StatusConflict, "签到预览已过期或已使用，请重新预览。")
+			case errors.Is(err, errCheckinRunBusy):
+				writeError(w, http.StatusConflict, "已有签到任务正在运行，请等待完成后重新预览。")
+			default:
+				writePublicError(w, http.StatusInternalServerError, "签到任务启动失败，请稍后重试。", err)
+			}
+			return
+		}
 	case TaskTestKeys:
 		a.startTestKeysTask(taskID, input.Params)
 	case TaskRefreshBalances:
@@ -246,6 +289,7 @@ func (a *App) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 	case TaskChannelHealthProbe:
 		a.startChannelHealthProbeTask(taskID, input.Params)
 	default:
+		a.taskRunner.clearPendingCorrelation(taskID)
 		writeError(w, http.StatusBadRequest, "未知的任务类型。")
 		return
 	}
@@ -350,8 +394,19 @@ func writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, payload interfac
 
 // --- Task handlers ---
 
-func (a *App) startCheckinTask(taskID string, _ map[string]interface{}) {
-	a.checkinTasks.StartCheckin(taskID)
+var errCheckinPreviewRequired = errors.New("checkin preview id required")
+
+func (a *App) startCheckinTask(taskID string, params map[string]interface{}) error {
+	previewID, _ := params["previewId"].(string)
+	previewID = strings.TrimSpace(previewID)
+	if previewID == "" {
+		return errCheckinPreviewRequired
+	}
+	plan, err := a.checkinPlans.Claim(previewID)
+	if err != nil {
+		return err
+	}
+	return a.checkinTasks.StartCheckin(taskID, plan.RunAccounts)
 }
 
 func (a *App) startTestKeysTask(taskID string, params map[string]interface{}) {

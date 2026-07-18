@@ -43,7 +43,7 @@ func (s *BrowserLoginService) Open(ctx context.Context, id string, auth *account
 	if auth == nil {
 		loaded, err := s.loadAuth(ctx, id)
 		if err != nil {
-			return browserLoginOpenResult{Status: "failed", Message: err.Error()}
+			return browserLoginOpenResult{Status: "failed", Message: publicAccountFailure("browser_open_load_auth", id, "加载账号授权失败。", err)}
 		}
 		auth = &loaded
 	}
@@ -93,20 +93,20 @@ func (s *BrowserLoginService) Open(ctx context.Context, id string, auth *account
 	}
 	if err := os.MkdirAll(profilePath, 0o700); err != nil {
 		result.Status = "failed"
-		result.Message = err.Error()
+		result.Message = publicAccountFailure("browser_open_create_profile", id, "创建浏览器授权目录失败。", err)
 		return result
 	}
 
 	port, err := freeDebugPort(usedPorts)
 	if err != nil {
 		result.Status = "failed"
-		result.Message = err.Error()
+		result.Message = publicAccountFailure("browser_open_allocate_port", id, "无法分配浏览器调试端口。", err)
 		return result
 	}
 	chromePath, err := findChrome()
 	if err != nil {
 		result.Status = "failed"
-		result.Message = err.Error()
+		result.Message = publicAccountFailure("browser_open_find_chrome", id, "未找到可用的 Chrome 浏览器。", err)
 		return result
 	}
 
@@ -126,7 +126,7 @@ func (s *BrowserLoginService) Open(ctx context.Context, id string, auth *account
 	}
 	if err := cmd.Start(); err != nil {
 		result.Status = "failed"
-		result.Message = err.Error()
+		result.Message = publicAccountFailure("browser_open_start_chrome", id, "启动 Chrome 失败。", err)
 		return result
 	}
 
@@ -161,7 +161,7 @@ func (s *BrowserLoginService) Save(ctx context.Context, id string, auth *account
 	if auth == nil {
 		loaded, err := s.loadAuth(ctx, id)
 		if err != nil {
-			return browserLoginSaveResult{Status: "failed", Message: err.Error()}
+			return browserLoginSaveResult{Status: "failed", Message: publicAccountFailure("browser_save_load_auth", id, "加载账号授权失败。", err)}
 		}
 		auth = &loaded
 	}
@@ -177,7 +177,7 @@ func (s *BrowserLoginService) Save(ctx context.Context, id string, auth *account
 	cookies, userAgent, err := readChromeSession(session.Port)
 	if err != nil {
 		result.Status = "failed"
-		result.Message = err.Error()
+		result.Message = publicAccountFailure("browser_save_read_session", id, "读取浏览器授权失败，请确认登录已完成。", err)
 		return result
 	}
 	if len(cookies) == 0 {
@@ -190,7 +190,7 @@ func (s *BrowserLoginService) Save(ctx context.Context, id string, auth *account
 	encryptedCookie, err := s.encrypt(cookieHeader)
 	if err != nil {
 		result.Status = "failed"
-		result.Message = err.Error()
+		result.Message = publicAccountFailure("browser_save_encrypt", id, "保存浏览器授权失败，请重试。", err)
 		return result
 	}
 	_, err = s.db.ExecContext(ctx, `
@@ -200,7 +200,7 @@ func (s *BrowserLoginService) Save(ctx context.Context, id string, auth *account
 	`, encryptedCookie, userAgent, now(), now(), estimateCookieExpiry(), now(), id)
 	if err != nil {
 		result.Status = "failed"
-		result.Message = err.Error()
+		result.Message = publicAccountFailure("browser_save_database", id, "保存浏览器授权失败，请重试。", err)
 		return result
 	}
 

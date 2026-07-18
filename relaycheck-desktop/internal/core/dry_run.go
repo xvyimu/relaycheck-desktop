@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,13 +15,17 @@ const maxDryRunAccounts = 200
 
 // DryRunPreview shows what would happen if a batch operation is executed.
 // POST /api/tasks/dry-run
-// Body: {"type": "checkin|test|identify", "accountIds": ["id1","id2"]}
+// Checkin body: {"type":"checkin","scope":{"kind":"all_due"}}
+// Test/identify compatibility body: {"type":"test|identify","accountIds":["id1"]}
 type DryRunPreview struct {
-	Type          string               `json:"type"`
-	TotalAccounts int                  `json:"totalAccounts"`
-	WillRun       int                  `json:"willRun"`
-	Skipped       int                  `json:"skipped"`
-	Items         []DryRunPreviewItem  `json:"items"`
+	Type          string              `json:"type"`
+	PreviewID     string              `json:"previewId,omitempty"`
+	ExpiresAt     string              `json:"expiresAt,omitempty"`
+	MaxAccounts   int                 `json:"maxAccounts"`
+	TotalAccounts int                 `json:"totalAccounts"`
+	WillRun       int                 `json:"willRun"`
+	Skipped       int                 `json:"skipped"`
+	Items         []DryRunPreviewItem `json:"items"`
 }
 
 type DryRunPreviewItem struct {
@@ -39,12 +44,40 @@ func (a *App) handleDryRun(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Type       string   `json:"type"`
 		AccountIDs []string `json:"accountIds"`
+		Scope      struct {
+			Kind string `json:"kind"`
+		} `json:"scope"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "请求体解析失败")
 		return
 	}
-	if body.Type == "" || len(body.AccountIDs) == 0 {
+	body.Type = strings.TrimSpace(body.Type)
+	if body.Type == "" {
+		writeError(w, http.StatusBadRequest, "缺少任务类型")
+		return
+	}
+	if body.Type == string(TaskCheckin) {
+		if strings.TrimSpace(body.Scope.Kind) != "all_due" {
+			writeError(w, http.StatusBadRequest, "签到预览需要 all_due 范围")
+			return
+		}
+		preview, err := a.checkinPlans.BuildAllDue(r.Context())
+		switch {
+		case errors.Is(err, errCheckinPreviewLimit):
+			writeError(w, http.StatusConflict, fmt.Sprintf("单次预览最多支持 %d 个账号，请先缩小待签到范围。", maxDryRunAccounts))
+			return
+		case errors.Is(err, errCheckinPreviewCapacity):
+			writeError(w, http.StatusTooManyRequests, "待确认的签到预览过多，请稍后重试。")
+			return
+		case err != nil:
+			writePublicError(w, http.StatusInternalServerError, "签到预览生成失败，请稍后重试。", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, preview)
+		return
+	}
+	if len(body.AccountIDs) == 0 {
 		writeError(w, http.StatusBadRequest, "缺少类型或账号 ID")
 		return
 	}
@@ -56,6 +89,7 @@ func (a *App) handleDryRun(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	preview := DryRunPreview{
 		Type:          body.Type,
+		MaxAccounts:   maxDryRunAccounts,
 		TotalAccounts: len(body.AccountIDs),
 		Items:         []DryRunPreviewItem{},
 	}
@@ -84,10 +118,10 @@ func (a *App) handleDryRun(w http.ResponseWriter, r *http.Request) {
 
 	// Build a map of found accounts
 	type accountInfo struct {
-		AccountName    string
-		SiteName       string
-		LoginStatus    string
-		AuthType       string
+		AccountName     string
+		SiteName        string
+		LoginStatus     string
+		AuthType        string
 		SupportsCheckin int
 	}
 	found := make(map[string]accountInfo, len(body.AccountIDs))
@@ -98,10 +132,10 @@ func (a *App) handleDryRun(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		found[id] = accountInfo{
-			AccountName:    accountName,
-			SiteName:       siteName,
-			LoginStatus:    loginStatus,
-			AuthType:       authType,
+			AccountName:     accountName,
+			SiteName:        siteName,
+			LoginStatus:     loginStatus,
+			AuthType:        authType,
 			SupportsCheckin: supportsCheckin,
 		}
 	}
@@ -130,24 +164,6 @@ func (a *App) handleDryRun(w http.ResponseWriter, r *http.Request) {
 		item.SiteName = info.SiteName
 
 		switch body.Type {
-		case "checkin":
-			if info.SupportsCheckin == 0 {
-				item.Action = "skip_unsupported"
-				item.Reason = "站点不支持签到"
-				preview.Skipped++
-			} else if info.LoginStatus == "expired" || info.LoginStatus == "logged_out" {
-				item.Action = "skip_expired"
-				item.Reason = "登录已过期，需重新登录"
-				preview.Skipped++
-			} else if info.AuthType == "cookie" && info.LoginStatus != "valid" {
-				item.Action = "skip_no_cookie"
-				item.Reason = "Cookie 未保存或已失效"
-				preview.Skipped++
-			} else {
-				item.Action = "will_run"
-				item.Reason = "将执行签到"
-				preview.WillRun++
-			}
 		case "test":
 			item.Action = "will_run"
 			item.Reason = "将测试 API Key"

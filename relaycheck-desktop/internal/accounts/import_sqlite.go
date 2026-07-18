@@ -24,13 +24,13 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 	}
 	source, err := sql.Open("sqlite", "file:"+filepath.ToSlash(cleanPath)+"?mode=ro")
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 	defer source.Close()
 
 	var tableName string
 	if err := source.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name='channels'`).Scan(&tableName); err != nil {
-		return nil, fmt.Errorf("未找到 channels 表")
+		return nil, wrapImportError(ErrImportInvalidFormat, errorsText("未找到 channels 表"))
 	}
 
 	instanceID := s.infra.NewID()
@@ -46,21 +46,21 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 		ON CONFLICT(base_url) DO UPDATE SET name=excluded.name, database_path=excluded.database_path, last_scanned_at=excluded.last_scanned_at, updated_at=excluded.updated_at
 	`, instanceID, instanceName, baseURL, cleanPath, s.infra.Now(), s.infra.Now(), s.infra.Now())
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportStorage, err)
 	}
 	if err := s.infra.DB().QueryRowContext(ctx, `SELECT id FROM local_newapi_instances WHERE base_url=?`, baseURL).Scan(&instanceID); err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportStorage, err)
 	}
 
 	rows, err := source.QueryContext(ctx, `SELECT * FROM channels`)
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 	defer rows.Close()
 
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 
 	fetched := 0
@@ -79,7 +79,7 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 			dest[i] = &values[i]
 		}
 		if err := rows.Scan(dest...); err != nil {
-			return nil, err
+			return nil, wrapImportError(ErrImportInvalidFormat, err)
 		}
 
 		record := map[string]interface{}{}
@@ -121,7 +121,7 @@ func (s *Service) ImportChannelsFromSQLiteWithOptions(ctx context.Context, dbPat
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 
 	if notify {
@@ -153,24 +153,24 @@ func readSQLiteChannelRecords(ctx context.Context, dbPath string) (string, []map
 	}
 	source, err := sql.Open("sqlite", "file:"+filepath.ToSlash(cleanPath)+"?mode=ro")
 	if err != nil {
-		return "", nil, err
+		return "", nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 	defer source.Close()
 
 	var tableName string
 	if err := source.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name='channels'`).Scan(&tableName); err != nil {
-		return "", nil, fmt.Errorf("未找到 channels 表")
+		return "", nil, wrapImportError(ErrImportInvalidFormat, errorsText("未找到 channels 表"))
 	}
 
 	rows, err := source.QueryContext(ctx, `SELECT * FROM channels`)
 	if err != nil {
-		return "", nil, err
+		return "", nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 	defer rows.Close()
 
 	columns, err := rows.Columns()
 	if err != nil {
-		return "", nil, err
+		return "", nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 
 	records := []map[string]interface{}{}
@@ -181,7 +181,7 @@ func readSQLiteChannelRecords(ctx context.Context, dbPath string) (string, []map
 			dest[i] = &values[i]
 		}
 		if err := rows.Scan(dest...); err != nil {
-			return "", nil, err
+			return "", nil, wrapImportError(ErrImportInvalidFormat, err)
 		}
 		record := map[string]interface{}{}
 		for i, col := range columns {
@@ -189,7 +189,10 @@ func readSQLiteChannelRecords(ctx context.Context, dbPath string) (string, []map
 		}
 		records = append(records, record)
 	}
-	return cleanPath, records, rows.Err()
+	if err := rows.Err(); err != nil {
+		return "", nil, wrapImportError(ErrImportInvalidFormat, err)
+	}
+	return cleanPath, records, nil
 }
 
 // probeSQLiteHasChannels reports whether the SQLite DB at dbPath has a
@@ -226,14 +229,14 @@ var defaultNewAPISearchDirs = []string{
 func resolveAllowedSQLiteImportPath(dbPath string) (string, error) {
 	cleanPath, err := filepath.Abs(strings.TrimSpace(dbPath))
 	if err != nil {
-		return "", err
+		return "", wrapImportError(ErrSQLitePathRejected, err)
 	}
 	if resolved, err := filepath.EvalSymlinks(cleanPath); err == nil {
 		cleanPath = resolved
 	}
 	// If the file does not exist yet, still check the parent allowlist using Abs path.
 	if !pathUnderAllowedSQLiteRoots(cleanPath) {
-		return "", fmt.Errorf("SQLite 路径不在允许的扫描根目录内，拒绝导入：%s", cleanPath)
+		return "", wrapImportError(ErrSQLitePathRejected, errorsText("SQLite 路径不在允许的扫描根目录内"))
 	}
 	return cleanPath, nil
 }

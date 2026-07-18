@@ -236,7 +236,7 @@ func (a *App) tickCheckinScheduler(ctx context.Context, currentTime time.Time) {
 	errMessage := ""
 	if err != nil {
 		status = "failed"
-		errMessage = err.Error()
+		errMessage = publicOperationFailure("scheduler", "checkin", schedulerJobCheckin, "自动签到执行失败，请稍后重试。", err)
 		summary = "自动签到失败：" + errMessage
 		a.notify("scheduled_checkin_failed", "warning", "自动签到失败", errMessage, "scheduler", schedulerJobCheckin)
 	}
@@ -362,7 +362,7 @@ func (a *App) tickChannelHealthScheduler(ctx context.Context, currentTime time.T
 	summary := result.Summary()
 	if err != nil {
 		status = "failed"
-		errMessage = err.Error()
+		errMessage = publicOperationFailure("scheduler", "channel-health", schedulerJobChannelHealth, "渠道健康探测失败，请稍后重试。", err)
 		summary = "渠道健康探测失败：" + errMessage
 		a.notify("scheduled_channel_health_probe_failed", "warning", "渠道健康探测失败", errMessage, "scheduler", schedulerJobChannelHealth)
 	} else if result.Failed > 0 || result.Warning > 0 {
@@ -384,7 +384,8 @@ func (a *App) runScheduledLocalNewAPISync(ctx context.Context) scheduledSyncResu
 	result := scheduledSyncResult{TotalInstances: len(instances)}
 	if err != nil {
 		result.FailedInstances = 1
-		result.Messages = append(result.Messages, err.Error())
+		message := publicOperationFailure("scheduler", "load-sync-instances", schedulerJobSync, "读取同步实例失败，请稍后重试。", err)
+		result.Messages = append(result.Messages, message)
 		return result
 	}
 	input := localNewAPISyncRunInput{
@@ -397,7 +398,8 @@ func (a *App) runScheduledLocalNewAPISync(ctx context.Context) scheduledSyncResu
 	for _, instance := range instances {
 		if ctx.Err() != nil {
 			result.FailedInstances++
-			result.Messages = append(result.Messages, ctx.Err().Error())
+			message := publicOperationFailure("scheduler", "sync-cancelled", schedulerJobSync, "定时同步已取消。", ctx.Err())
+			result.Messages = append(result.Messages, message)
 			break
 		}
 		if strings.TrimSpace(instance.DatabasePath) == "" && (!isHTTPURL(instance.BaseURL) || !instance.HasSyncToken) {
@@ -412,7 +414,8 @@ func (a *App) runScheduledLocalNewAPISync(ctx context.Context) scheduledSyncResu
 		syncResult, err := a.syncLocalNewAPIInstanceData(ctx, instance.ID, input, false)
 		if err != nil {
 			result.FailedInstances++
-			result.Messages = append(result.Messages, instance.Name+"："+err.Error())
+			message := publicOperationFailure("scheduler", "sync-instance", instance.ID, "同步失败，请稍后重试。", err)
+			result.Messages = append(result.Messages, instance.Name+"："+message)
 			continue
 		}
 		result.ProcessedInstances++
@@ -424,7 +427,8 @@ func (a *App) runScheduledLocalNewAPISync(ctx context.Context) scheduledSyncResu
 		missingResult, err := a.reconcileMissingLocalNewAPIInstance(ctx, instance, sourceInput, false)
 		if err != nil {
 			result.FailedInstances++
-			result.Messages = append(result.Messages, instance.Name+" 标记源端移除失败："+err.Error())
+			message := publicOperationFailure("scheduler", "reconcile-missing", instance.ID, "标记源端移除失败，请稍后重试。", err)
+			result.Messages = append(result.Messages, instance.Name+"："+message)
 			continue
 		}
 		result.MissingChannels += intFromResult(missingResult, "missingCount")

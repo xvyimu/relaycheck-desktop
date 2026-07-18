@@ -90,6 +90,23 @@ type ActionCenter struct {
 	Items       []ActionItem `json:"items"`
 }
 
+// DashboardOpsOverview combines the operational reads required by the first
+// dashboard render, reducing browser round-trips while preserving standalone endpoints.
+type DashboardOpsOverview struct {
+	Checkins      CheckinStatus     `json:"checkins"`
+	Notifications NotificationPage  `json:"notifications"`
+	Diagnostics   SystemDiagnostics `json:"diagnostics"`
+	ActionCenter  ActionCenter      `json:"actionCenter"`
+}
+
+// DashboardInventoryOverview combines the inventory reads required by the
+// first dashboard render. Standalone list endpoints remain available.
+type DashboardInventoryOverview struct {
+	Channels       []ImportedChannel `json:"channels"`
+	Sites          []UpstreamSite    `json:"sites"`
+	AccountSummary AccountSummary    `json:"accountSummary"`
+}
+
 // ActionSample is a clickable sample row under an ActionItem.
 // When EntityType/EntityID are set, the UI can deep-link (e.g. site -> master-detail).
 type ActionSample struct {
@@ -384,7 +401,7 @@ type ChannelAccount struct {
 	Email                string   `json:"email,omitempty"`
 	Username             string   `json:"username,omitempty"`
 	AuthType             string   `json:"authType"`
-	BrowserProfilePath   string   `json:"browserProfilePath,omitempty"`
+	BrowserProfilePath   string   `json:"-"`
 	LoginStatus          string   `json:"loginStatus"`
 	APIKeyFingerprint    string   `json:"apiKeyFingerprint,omitempty"`
 	APIKeyStatus         string   `json:"apiKeyStatus,omitempty"` // "valid" | "invalid" | "untested" | "rate_limited"
@@ -474,6 +491,17 @@ type AccountSearchIndexItem struct {
 	UpstreamSiteName    string `json:"upstreamSiteName"`
 	UpstreamSiteBaseURL string `json:"upstreamSiteBaseUrl"`
 	SearchText          string `json:"searchText"`
+}
+
+type AccountSiteSearchItem struct {
+	UpstreamSiteID      string `json:"upstreamSiteId"`
+	UpstreamSiteName    string `json:"upstreamSiteName"`
+	UpstreamSiteBaseURL string `json:"upstreamSiteBaseUrl"`
+}
+
+type AccountSiteSearchResult struct {
+	Items     []AccountSiteSearchItem `json:"items"`
+	Truncated bool                    `json:"truncated"`
 }
 
 type NotificationPage struct {

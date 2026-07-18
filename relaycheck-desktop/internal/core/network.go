@@ -127,7 +127,27 @@ func (a *App) doHTTP(req *http.Request) (*http.Response, error) {
 	return a.doHTTPWithTimeout(req, defaultHTTPTimeout)
 }
 
-func (a *App) doHTTPWithTimeout(req *http.Request, timeout time.Duration) (*http.Response, error) {
+func (a *App) doHTTPWithTimeout(req *http.Request, timeout time.Duration) (response *http.Response, requestErr error) {
+	started := time.Now()
+	requestContext := context.Background()
+	if req != nil {
+		requestContext = req.Context()
+		fields := correlationFromContext(requestContext)
+		if fields.RequestID != "" && req.Header.Get("x-request-id") == "" {
+			req.Header.Set("x-request-id", fields.RequestID)
+		}
+	}
+	defer func() {
+		extra := map[string]interface{}{}
+		if req != nil && req.URL != nil {
+			extra["host"] = strings.ToLower(req.URL.Hostname())
+			extra["method"] = req.Method
+		}
+		if response != nil {
+			extra["status"] = response.StatusCode
+		}
+		logSlowOperation(requestContext, "outbound_http", "request", started, requestErr, extra)
+	}()
 	if timeout <= 0 {
 		timeout = defaultHTTPTimeout
 	}
@@ -142,13 +162,17 @@ func (a *App) doHTTPWithTimeout(req *http.Request, timeout time.Duration) (*http
 	if a != nil {
 		cfg = a.currentNetworkProxyConfig()
 	}
-	// Preflight SSRF validation (hostname/IP policy).
+	// Preflight SSRF validation (hostname/IP policy) and retain the allowed
+	// addresses so DialContext connects to the same IP set that was checked.
+	var initial resolvedOutboundURL
 	if req != nil && req.URL != nil && strings.TrimSpace(req.URL.Host) != "" {
-		if _, err := resolveOutboundHTTPURL(req.Context(), req.URL.String(), policy); err != nil {
+		resolved, err := resolveOutboundHTTPURL(req.Context(), req.URL.String(), policy)
+		if err != nil {
 			return nil, err
 		}
+		initial = resolved
 	}
-	client := newNetworkHTTPClient(timeout, cfg, policy)
+	client := newNetworkHTTPClient(timeout, cfg, policy, initial)
 	return client.Do(req)
 }
 
@@ -159,11 +183,24 @@ func (a *App) DoHTTPWithTimeout(req *http.Request, timeout time.Duration) (*http
 	return a.doHTTPWithTimeout(req, timeout)
 }
 
-func newNetworkHTTPClient(timeout time.Duration, config NetworkProxyConfig, policy outboundURLPolicy) *http.Client {
+func newNetworkHTTPClient(timeout time.Duration, config NetworkProxyConfig, policy outboundURLPolicy, initial resolvedOutboundURL) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = proxyURLForRequest(config)
 	var pinMu sync.Mutex
 	pinned := map[string][]net.IP{}
+	pinResolved := func(resolved resolvedOutboundURL) {
+		if resolved.URL == nil || len(resolved.IPs) == 0 {
+			return
+		}
+		host := strings.ToLower(strings.TrimSpace(resolved.URL.Hostname()))
+		if host == "" {
+			return
+		}
+		pinMu.Lock()
+		pinned[host] = append([]net.IP(nil), resolved.IPs...)
+		pinMu.Unlock()
+	}
+	pinResolved(initial)
 	baseDialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
 	baseDial := transport.DialContext
 	if baseDial == nil {
@@ -206,14 +243,7 @@ func newNetworkHTTPClient(timeout time.Duration, config NetworkProxyConfig, poli
 			if err != nil {
 				return fmt.Errorf("redirect target rejected: %w", err)
 			}
-			host := strings.ToLower(strings.TrimSpace(resolved.URL.Hostname()))
-			// Only pin when policy forbids local targets; allow-local loopback
-			// hosts keep default dial behavior for NewAPI-on-localhost.
-			if !policy.AllowLocal && len(resolved.IPs) > 0 {
-				pinMu.Lock()
-				pinned[host] = append([]net.IP(nil), resolved.IPs...)
-				pinMu.Unlock()
-			}
+			pinResolved(resolved)
 			return nil
 		},
 	}
@@ -275,14 +305,17 @@ func (a *App) handleSystemProxyTest(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		TargetURL string `json:"targetUrl"`
 	}
-	_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
+	}
 	targetURL := strings.TrimSpace(input.TargetURL)
 	if targetURL == "" {
 		targetURL = "https://www.gstatic.com/generate_204"
 	}
 	parsed, err := validateOutboundHTTPURL(r.Context(), targetURL, outboundURLPolicy{})
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "测试地址不安全："+err.Error())
+		writePublicError(w, http.StatusBadRequest, "测试地址不安全，请检查 URL。", err)
 		return
 	}
 	targetURL = parsed.String()
@@ -292,16 +325,17 @@ func (a *App) handleSystemProxyTest(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writePublicError(w, http.StatusBadRequest, "测试地址无效，请检查 URL。", err)
 		return
 	}
 	req.Header.Set("user-agent", "RelayCheck-Desktop/0.1")
 	resp, err := a.doHTTPWithTimeout(req, 8*time.Second)
 	latencyMs := time.Since(started).Milliseconds()
 	if err != nil {
+		message := publicOperationFailure("network", "proxy-test", "", "网络连接测试失败，请检查代理或目标地址。", err)
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"ok":        false,
-			"message":   err.Error(),
+			"message":   message,
 			"latencyMs": latencyMs,
 			"proxy":     a.networkProxyStatus(),
 			"targetUrl": targetURL,

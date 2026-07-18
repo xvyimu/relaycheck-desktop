@@ -9,6 +9,53 @@ import (
 	"testing"
 )
 
+func TestAccountsPageCursorCompositeIndexExistsAndIsUsed(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	rows, err := app.db.Query(`PRAGMA index_info(idx_channel_accounts_updated_id)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	columns := []string{}
+	for rows.Next() {
+		var seq, cid int
+		var name string
+		if err := rows.Scan(&seq, &cid, &name); err != nil {
+			t.Fatal(err)
+		}
+		columns = append(columns, name)
+	}
+	if len(columns) != 2 || columns[0] != "updated_at" || columns[1] != "id" {
+		t.Fatalf("cursor index columns = %v, want [updated_at id]", columns)
+	}
+
+	planRows, err := app.db.Query(`EXPLAIN QUERY PLAN
+		SELECT a.id
+		FROM channel_accounts a
+		ORDER BY a.updated_at DESC, a.id DESC
+		LIMIT 51`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer planRows.Close()
+	usedCompositeIndex := false
+	for planRows.Next() {
+		var id, parent, notUsed int
+		var detail string
+		if err := planRows.Scan(&id, &parent, &notUsed, &detail); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(detail, "idx_channel_accounts_updated_id") {
+			usedCompositeIndex = true
+		}
+	}
+	if !usedCompositeIndex {
+		t.Fatal("accounts page query plan did not use idx_channel_accounts_updated_id")
+	}
+}
+
 func TestAccountsPageUsesStableCursorAndServerTotals(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
@@ -149,6 +196,105 @@ func TestAccountSummaryAndSearchIndexUseCompactServerData(t *testing.T) {
 		if !strings.Contains(index[0].SearchText, expected) {
 			t.Fatalf("search index missing %q: %#v", expected, index[0])
 		}
+	}
+}
+
+func TestAccountSiteSearchReturnsStableMatchesAndTruncation(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	siteA := newID()
+	siteB := newID()
+	if _, err := app.db.Exec(`
+		INSERT INTO upstream_sites (id, name, base_url, kind, health_status, created_at, updated_at)
+		VALUES
+		  (?, 'Site A', 'https://site-a.example', 'newapi', 'healthy', ?, ?),
+		  (?, 'Site B', 'https://site-b.example', 'newapi', 'healthy', ?, ?)
+	`, siteA, now(), now(), siteB, now(), now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.db.Exec(`
+		INSERT INTO channel_accounts (id, upstream_site_id, display_name, email, auth_type, login_status, created_at, updated_at)
+		VALUES
+		  (?, ?, 'Needle Alpha', 'alpha@example.com', 'cookie', 'valid', ?, ?),
+		  (?, ?, 'Needle Beta', 'beta@example.com', 'cookie', 'valid', ?, ?)
+	`, newID(), siteA, now(), now(), newID(), siteB, now(), now()); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/accounts/search-sites?query=needle&limit=1", nil)
+	rec := httptest.NewRecorder()
+	app.handleAccountSiteSearch(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Items []struct {
+				UpstreamSiteID string `json:"upstreamSiteId"`
+			} `json:"items"`
+			Truncated bool `json:"truncated"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Data.Items) != 1 || response.Data.Items[0].UpstreamSiteID != siteA {
+		t.Fatalf("unexpected search result: %#v", response.Data)
+	}
+	if !response.Data.Truncated {
+		t.Fatal("expected truncated=true when matching sites exceed limit")
+	}
+	if strings.Contains(rec.Body.String(), "alpha@example.com") {
+		t.Fatalf("search response should not expose account search text: %s", rec.Body.String())
+	}
+}
+
+func TestAccountSearchFTSStaysInSync(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	var tableSQL string
+	if err := app.db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name='account_search_fts'`).Scan(&tableSQL); err != nil {
+		t.Fatalf("account search FTS table missing: %v", err)
+	}
+	if !strings.Contains(strings.ToLower(tableSQL), "virtual table") || !strings.Contains(strings.ToLower(tableSQL), "fts5") {
+		t.Fatalf("account_search_fts is not an FTS5 virtual table: %s", tableSQL)
+	}
+
+	siteID := newID()
+	accountID := newID()
+	if _, err := app.db.Exec(`
+		INSERT INTO upstream_sites (id, name, base_url, kind, health_status, created_at, updated_at)
+		VALUES (?, 'FTS Site', 'https://fts.example', 'newapi', 'healthy', ?, ?)
+	`, siteID, now(), now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.db.Exec(`
+		INSERT INTO channel_accounts (id, upstream_site_id, display_name, email, auth_type, login_status, created_at, updated_at)
+		VALUES (?, ?, 'Prefix Needle', 'needle@example.com', 'cookie', 'valid', ?, ?)
+	`, accountID, siteID, now(), now()); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := requestAccountsPage(t, app, "/api/accounts/page?query=need"); len(got.Items) != 1 || got.Items[0].ID != accountID {
+		t.Fatalf("inserted account was not found through FTS: %#v", got.Items)
+	}
+	if _, err := app.db.Exec(`UPDATE channel_accounts SET display_name='Renamed Quartz', email='quartz@example.com' WHERE id=?`, accountID); err != nil {
+		t.Fatal(err)
+	}
+	if got := requestAccountsPage(t, app, "/api/accounts/page?query=quar"); len(got.Items) != 1 || got.Items[0].ID != accountID {
+		t.Fatalf("updated account was not found through FTS: %#v", got.Items)
+	}
+	if got := requestAccountsPage(t, app, "/api/accounts/page?query=need"); len(got.Items) != 0 {
+		t.Fatalf("stale FTS row remained after update: %#v", got.Items)
+	}
+	if _, err := app.db.Exec(`DELETE FROM channel_accounts WHERE id=?`, accountID); err != nil {
+		t.Fatal(err)
+	}
+	if got := requestAccountsPage(t, app, "/api/accounts/page?query=quar"); len(got.Items) != 0 {
+		t.Fatalf("stale FTS row remained after delete: %#v", got.Items)
 	}
 }
 

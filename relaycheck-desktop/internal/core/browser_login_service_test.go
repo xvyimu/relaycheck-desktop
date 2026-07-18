@@ -2,10 +2,34 @@ package core
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestBrowserLoginServiceDoesNotReturnInternalLoadErrors(t *testing.T) {
+	secretError := errors.New(`open C:\Users\secret-user\relaycheck.db: token=TOP_SECRET`)
+	service := &BrowserLoginService{
+		loadAuth: func(context.Context, string) (accountAuthContext, error) {
+			return accountAuthContext{}, secretError
+		},
+	}
+
+	openResult := service.Open(t.Context(), "account-1", nil)
+	if openResult.Message != "加载账号授权失败。" {
+		t.Fatalf("unexpected browser open public message: %q", openResult.Message)
+	}
+	saveResult := service.Save(t.Context(), "account-1", nil)
+	if saveResult.Message != "加载账号授权失败。" {
+		t.Fatalf("unexpected browser save public message: %q", saveResult.Message)
+	}
+	for _, message := range []string{openResult.Message, saveResult.Message} {
+		if strings.Contains(message, "secret-user") || strings.Contains(message, "TOP_SECRET") {
+			t.Fatalf("browser login result leaked an internal error: %q", message)
+		}
+	}
+}
 
 func TestBrowserLoginServiceOpenAlreadyOpenIncludesResolvedEntryMetadata(t *testing.T) {
 	app := newTestApp(t)

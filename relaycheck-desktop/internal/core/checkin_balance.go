@@ -98,23 +98,7 @@ func (a *App) handleTodayCheckins(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	today := todayCST()
-	rows, err := a.db.QueryContext(r.Context(), `
-		SELECT l.id, l.account_id, a.display_name, l.upstream_site_id, s.name, COALESCE(l.channel_id,''),
-		       l.status, COALESCE(l.reward,''), COALESCE(l.message,''), COALESCE(l.raw_response_masked,''),
-		       l.started_at, l.finished_at
-		FROM checkin_logs l
-		JOIN channel_accounts a ON a.id = l.account_id
-		JOIN upstream_sites s ON s.id = l.upstream_site_id
-		WHERE substr(l.started_at, 1, 10) = ?
-		ORDER BY l.started_at DESC
-	`, today)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	defer rows.Close()
-	logs, err := scanCheckinLogs(rows)
+	logs, err := a.loadTodayCheckinsAt(r.Context(), time.Now())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -122,18 +106,45 @@ func (a *App) handleTodayCheckins(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, logs)
 }
 
+func (a *App) loadTodayCheckinsAt(ctx context.Context, currentTime time.Time) ([]CheckinLog, error) {
+	dayStart, dayEnd := cstDayBounds(currentTime)
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT l.id, l.account_id, a.display_name, l.upstream_site_id, s.name, COALESCE(l.channel_id,''),
+		       l.status, COALESCE(l.reward,''), COALESCE(l.message,''), COALESCE(l.raw_response_masked,''),
+		       l.started_at, l.finished_at
+		FROM checkin_logs l
+		JOIN channel_accounts a ON a.id = l.account_id
+		JOIN upstream_sites s ON s.id = l.upstream_site_id
+		WHERE l.started_at >= ? AND l.started_at < ?
+		ORDER BY l.started_at DESC
+	`, dayStart, dayEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	logs, err := scanCheckinLogs(rows)
+	if err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
 func (a *App) handleCheckinStatus(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	status, err := cachedRead(a, "checkin-status", shortReadCacheTTL, func() (CheckinStatus, error) {
-		return a.buildCheckinStatus(r.Context(), nowCST())
-	})
+	status, err := a.loadCheckinStatus(r)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, status)
+}
+
+func (a *App) loadCheckinStatus(r *http.Request) (CheckinStatus, error) {
+	return cachedRead(a, "checkin-status", shortReadCacheTTL, func() (CheckinStatus, error) {
+		return a.buildCheckinStatus(r.Context(), nowCST())
+	})
 }
 
 func (a *App) handleBulkRefreshBalances(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +155,10 @@ func (a *App) handleBulkRefreshBalances(w http.ResponseWriter, r *http.Request) 
 		Limit       int  `json:"limit"`
 		MissingOnly bool `json:"missingOnly"`
 	}
-	_ = decodeJSON(r, &input)
+	if err := decodeOptionalJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "请求参数无效。")
+		return
+	}
 	input.Limit = clampBatchLimit(input.Limit, 10)
 	accountIDs, err := a.loadBalanceRefreshAccountIDs(r.Context(), input.Limit, input.MissingOnly)
 	if err != nil {
@@ -215,7 +229,7 @@ func (a *App) refreshBalanceForBulk(ctx context.Context, id string, auth *accoun
 	}
 	result, err := a.refreshAccountBalance(ctx, id, auth)
 	if err != nil {
-		item.Message = err.Error()
+		item.Message = publicOperationFailure("balance", "bulk-refresh", id, "余额刷新失败，请稍后重试。", err)
 		return item
 	}
 	item.Status = "success"
@@ -367,13 +381,18 @@ func (a *App) buildCheckinStatus(ctx context.Context, currentTime time.Time) (Ch
 }
 
 func (a *App) checkinTodaySummary(ctx context.Context) (CheckinTodaySummary, error) {
+	return a.checkinTodaySummaryAt(ctx, time.Now())
+}
+
+func (a *App) checkinTodaySummaryAt(ctx context.Context, currentTime time.Time) (CheckinTodaySummary, error) {
 	summary := CheckinTodaySummary{}
+	dayStart, dayEnd := cstDayBounds(currentTime)
 	rows, err := a.db.QueryContext(ctx, `
 		SELECT status, COUNT(*)
 		FROM checkin_logs
-		WHERE substr(started_at, 1, 10)=?
+		WHERE started_at >= ? AND started_at < ?
 		GROUP BY status
-	`, todayCST())
+	`, dayStart, dayEnd)
 	if err != nil {
 		return summary, err
 	}
@@ -398,7 +417,7 @@ func (a *App) checkinTodaySummary(ctx context.Context) (CheckinTodaySummary, err
 			summary.FailedCount += count
 		}
 	}
-	dueAccounts, err := a.loadDueCheckinAccounts(ctx, "", 0)
+	dueAccounts, err := a.checkinBatch.loadDueAccountsAt(ctx, "", 0, currentTime)
 	if err != nil {
 		return summary, err
 	}
@@ -512,7 +531,7 @@ func annotateCheckinRetry(result checkinResult) checkinResult {
 
 func classifyCheckinResponse(status int, body string) checkinResult {
 	text := strings.ToLower(body)
-	message := extractMessage(body)
+	message := publicUpstreamMessage(extractMessage(body))
 	switch {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
 		return checkinResult{Status: "auth_expired", Message: firstNonEmpty(message, "登录态已失效。")}
@@ -536,6 +555,25 @@ func classifyCheckinResponse(status int, body string) checkinResult {
 		}
 		return checkinResult{Status: "success", Message: msg, Reward: reward}
 	}
+}
+
+func publicUpstreamMessage(message string) string {
+	message = strings.TrimSpace(message)
+	if message == "" || len(message) > 240 {
+		return ""
+	}
+	lower := strings.ToLower(message)
+	sensitiveFragments := []string{
+		"token=", "api_key=", "apikey=", "password=", "authorization:", "bearer ",
+		"sql:", "select ", "insert into ", "update ", "delete from ",
+		`:\`, ":/", `/home/`, `/users/`, `/var/`, `/tmp/`, `/etc/`, `\\`,
+	}
+	for _, fragment := range sensitiveFragments {
+		if strings.Contains(lower, fragment) {
+			return ""
+		}
+	}
+	return message
 }
 
 // isAlreadyCheckedIn detects "already checked in" responses with broader keyword coverage.
@@ -735,7 +773,11 @@ func (a *App) doLoginHTTP(req *http.Request, jar *cookiejar.Jar) (*http.Response
 	if a != nil {
 		policy = a.externalURLPolicy()
 	}
-	client := newNetworkHTTPClient(defaultHTTPTimeout, a.currentNetworkProxyConfig(), policy)
+	resolved, err := resolveOutboundHTTPURL(req.Context(), req.URL.String(), policy)
+	if err != nil {
+		return nil, err
+	}
+	client := newNetworkHTTPClient(defaultHTTPTimeout, a.currentNetworkProxyConfig(), policy, resolved)
 	client.Jar = jar
 	return client.Do(req)
 }

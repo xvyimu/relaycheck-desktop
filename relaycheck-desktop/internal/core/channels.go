@@ -14,18 +14,22 @@ func (a *App) handleChannels(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	items, err := cachedRead(a, "channels-list", shortReadCacheTTL, func() ([]ImportedChannel, error) {
-		mirror, err := a.channelsService.ListChannels(r.Context())
-		if err != nil {
-			return nil, err
-		}
-		return channelsListToCore(mirror), nil
-	})
+	items, err := a.loadChannels(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *App) loadChannels(ctx context.Context) ([]ImportedChannel, error) {
+	return cachedRead(a, "channels-list", shortReadCacheTTL, func() ([]ImportedChannel, error) {
+		mirror, err := a.channelsService.ListChannels(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return channelsListToCore(mirror), nil
+	})
 }
 
 func (a *App) handleBulkChannelSourceSyncStatus(w http.ResponseWriter, r *http.Request) {

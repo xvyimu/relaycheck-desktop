@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -39,12 +40,14 @@ func (a *App) healthStatus(ctx context.Context) HealthStatus {
 
 func (a *App) healthCheckDB(ctx context.Context) HealthCheck {
 	if err := a.db.PingContext(ctx); err != nil {
-		return HealthCheck{ID: "db", Label: "SQLite 连接", Status: "error", Message: err.Error()}
+		log.Printf("[health] database ping failed causeType=%T", err)
+		return HealthCheck{ID: "db", Label: "SQLite 连接", Status: "error", Message: "数据库连接失败。"}
 	}
 	var one int
 	if err := a.db.QueryRowContext(ctx, `SELECT 1`).Scan(&one); err != nil || one != 1 {
 		if err != nil {
-			return HealthCheck{ID: "db", Label: "SQLite 连接", Status: "error", Message: err.Error()}
+			log.Printf("[health] database query failed causeType=%T", err)
+			return HealthCheck{ID: "db", Label: "SQLite 连接", Status: "error", Message: "数据库查询失败。"}
 		}
 		return HealthCheck{ID: "db", Label: "SQLite 连接", Status: "error", Message: "SELECT 1 返回异常。"}
 	}

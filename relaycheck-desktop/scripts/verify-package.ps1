@@ -74,6 +74,18 @@ function Remove-RootItem {
   }
 }
 
+function Remove-RootDirectoryIfEmpty {
+  param([string]$Path)
+
+  $full = Assert-UnderRoot $Path "temporary directory"
+  if (
+    (Test-Path -LiteralPath $full -PathType Container) -and
+    -not (Get-ChildItem -LiteralPath $full -Force -ErrorAction SilentlyContinue)
+  ) {
+    Remove-Item -LiteralPath $full -Force
+  }
+}
+
 function Normalize-PackagePath {
   param([string]$Path)
   return $Path.Replace("\", "/").TrimStart("/")
@@ -327,6 +339,73 @@ function Test-Manifest {
     Add-Failure "manifest platform is not windows"
   }
 
+  $toolchain = Get-PropertyValue $manifest "toolchain"
+  $toolchainChecks = @{
+    go = '^go version go\d+\.\d+\.\d+\s+\S+/\S+$'
+    node = '^v\d+\.\d+\.\d+$'
+    npm = '^\d+\.\d+\.\d+$'
+    goVersionFile = '^\d+\.\d+\.\d+$'
+    nodeVersionFile = '^\d+\.\d+\.\d+$'
+    packageManager = '^npm@\d+\.\d+\.\d+$'
+  }
+  foreach ($field in $toolchainChecks.Keys) {
+    $value = [string](Get-PropertyValue $toolchain $field)
+    if ($value -match $toolchainChecks[$field]) {
+      Write-Pass "manifest toolchain.$field present"
+    } else {
+      Add-Failure "manifest toolchain.$field is invalid: $value"
+    }
+  }
+
+  $goToolchain = [string](Get-PropertyValue $toolchain "go")
+  $goVersionFile = [string](Get-PropertyValue $toolchain "goVersionFile")
+  $goVersionMatch = [regex]::Match($goToolchain, '^go version go(\d+\.\d+\.\d+)(?:\s|$)')
+  if ($goVersionMatch.Success -and $goVersionFile -match '^\d+\.\d+\.\d+$') {
+    if ($goVersionMatch.Groups[1].Value -eq $goVersionFile) {
+      Write-Pass "manifest Go toolchain matches .go-version"
+    } else {
+      Add-Failure "manifest Go toolchain $($goVersionMatch.Groups[1].Value) does not match .go-version $goVersionFile"
+    }
+  }
+
+  $nodeToolchain = [string](Get-PropertyValue $toolchain "node")
+  $nodeVersionFile = [string](Get-PropertyValue $toolchain "nodeVersionFile")
+  $nodeVersionMatch = [regex]::Match($nodeToolchain, '^v(\d+\.\d+\.\d+)$')
+  if ($nodeVersionMatch.Success -and $nodeVersionFile -match '^\d+\.\d+\.\d+$') {
+    if ($nodeVersionMatch.Groups[1].Value -eq $nodeVersionFile) {
+      Write-Pass "manifest Node.js toolchain matches .node-version"
+    } else {
+      Add-Failure "manifest Node.js toolchain $($nodeVersionMatch.Groups[1].Value) does not match .node-version $nodeVersionFile"
+    }
+  }
+
+  $npmToolchain = [string](Get-PropertyValue $toolchain "npm")
+  $packageManager = [string](Get-PropertyValue $toolchain "packageManager")
+  $packageManagerMatch = [regex]::Match($packageManager, '^npm@(\d+\.\d+\.\d+)$')
+  if ($npmToolchain -match '^\d+\.\d+\.\d+$' -and $packageManagerMatch.Success) {
+    if ($npmToolchain -eq $packageManagerMatch.Groups[1].Value) {
+      Write-Pass "manifest npm toolchain matches packageManager"
+    } else {
+      Add-Failure "manifest npm toolchain $npmToolchain does not match packageManager $($packageManagerMatch.Groups[1].Value)"
+    }
+  }
+
+  $sourceInputs = @(Get-PropertyValue $manifest "sourceInputs")
+  $requiredSourceInputs = @(".go-version", "go.mod", "go.sum", "vendor/modules.txt", "frontend/.node-version", "frontend/package.json", "frontend/package-lock.json")
+  foreach ($requiredSource in $requiredSourceInputs) {
+    $sourceMatch = $sourceInputs | Where-Object { (Normalize-PackagePath ([string](Get-PropertyValue $_ "path"))) -eq $requiredSource }
+    if ($null -eq $sourceMatch) {
+      Add-Failure "manifest sourceInputs missing $requiredSource"
+      continue
+    }
+    $sourceHash = [string](Get-PropertyValue $sourceMatch "sha256")
+    if ($sourceHash -notmatch '^[a-fA-F0-9]{64}$') {
+      Add-Failure "manifest sourceInputs hash invalid for $requiredSource"
+    } else {
+      Write-Pass "manifest sourceInputs includes $requiredSource"
+    }
+  }
+
   Assert-ManifestPath $PackageRoot $manifest "entrypoint" "relaycheck.exe"
   Assert-ManifestPath $PackageRoot $manifest "operatorRunbook" "docs/OPERATOR_RUNBOOK.md"
   Assert-ManifestPath $PackageRoot $manifest "operatorAcceptanceRecord" "docs/OPERATOR_ACCEPTANCE_RECORD.md"
@@ -435,7 +514,10 @@ $checksumRequiredFiles = $requiredFiles | Where-Object { $_ -ne "checksums.sha25
 Test-ChecksumFile $packageRoot $checksumRequiredFiles
 
 if (-not [string]::IsNullOrWhiteSpace($extractedDir) -and -not $KeepExtracted) {
+  $extractRoot = Split-Path -Parent $extractedDir
   Remove-RootItem $extractedDir
+  Remove-RootDirectoryIfEmpty $extractRoot
+  Remove-RootDirectoryIfEmpty (Split-Path -Parent $extractRoot)
 }
 
 if ($failures.Count -gt 0) {

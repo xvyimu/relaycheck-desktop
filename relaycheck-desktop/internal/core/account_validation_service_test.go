@@ -4,8 +4,45 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
+
+func TestAccountValidationServiceDoesNotReturnDatabaseErrors(t *testing.T) {
+	app := newTestApp(t)
+	if err := app.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	result := app.accountValidation.TestAPIKey(t.Context(), "account-1", nil)
+	if result.Message != "加载账号授权失败。" {
+		t.Fatalf("unexpected API key load public message: %q", result.Message)
+	}
+	if strings.Contains(strings.ToLower(result.Message), "closed") || strings.Contains(result.Message, "C:\\") {
+		t.Fatalf("API key result leaked an internal database error: %q", result.Message)
+	}
+}
+
+func TestAccountValidationServiceDoesNotReturnUpstreamBodies(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"token=TOP_SECRET"}`))
+	}))
+	defer server.Close()
+
+	app := newTestApp(t)
+	defer app.Close()
+	app.allowLocalOutbound = true
+
+	result := app.accountValidation.TestAPIKey(t.Context(), "account-1", &accountAuthContext{
+		AccountID: "account-1",
+		BaseURL:   server.URL,
+		APIKey:    "sk-validation",
+	})
+	if strings.Contains(result.Message, "TOP_SECRET") || strings.Contains(result.ModelTestMessage, "TOP_SECRET") {
+		t.Fatalf("API key result leaked an upstream body: message=%q modelMessage=%q", result.Message, result.ModelTestMessage)
+	}
+}
 
 func TestAccountValidationServiceTestLoginUsesAccountAPIHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

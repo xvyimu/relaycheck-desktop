@@ -14,12 +14,12 @@ import (
 func (s *Service) ImportLegacyConfig(ctx context.Context, content string, fileName string) (map[string]interface{}, error) {
 	var cfg legacySiteConfig
 	if err := json.Unmarshal([]byte(content), &cfg); err != nil {
-		return nil, fmt.Errorf("旧配置 JSON 解析失败：%w", err)
+		return nil, wrapImportError(ErrImportInvalidFormat, err)
 	}
 
 	baseURL := normalizeBaseURL(firstNonEmpty(cfg.BaseURL, cfg.LoginURL, cfg.CheckinURL, cfg.BalanceURL))
 	if baseURL == "" {
-		return nil, errorsText("旧配置里没有可识别的 base_url/login_url/checkin_url。")
+		return nil, wrapImportError(ErrImportInvalidFormat, errorsText("旧配置里没有可识别的 base_url/login_url/checkin_url"))
 	}
 	siteName := firstNonEmpty(cfg.SiteName, cfg.Name, hostLabel(baseURL), fileName)
 	loginURL := strings.TrimSpace(cfg.LoginURL)
@@ -42,7 +42,7 @@ func (s *Service) ImportLegacyConfig(ctx context.Context, content string, fileNa
 
 	siteID, created, err := s.upsertLegacySite(ctx, siteName, baseURL, loginURL, checkinConfig, balanceConfig, content)
 	if err != nil {
-		return nil, err
+		return nil, wrapImportError(ErrImportStorage, err)
 	}
 
 	accountID := ""
@@ -51,7 +51,7 @@ func (s *Service) ImportLegacyConfig(ctx context.Context, content string, fileNa
 	if loginName != "" && strings.TrimSpace(cfg.Password) != "" {
 		accountID, accountImported, err = s.importLegacyAccount(ctx, siteID, siteName, cfg.Email, cfg.Username, cfg.Password)
 		if err != nil {
-			return nil, err
+			return nil, wrapImportError(ErrImportStorage, err)
 		}
 	}
 

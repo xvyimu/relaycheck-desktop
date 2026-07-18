@@ -18,7 +18,9 @@ func (a *App) handleChromePasswordImportPreview(w http.ResponseWriter, r *http.R
 	}
 	result, err := a.accountsService.PreviewChromePasswordImport(r.Context(), input.CSVContent)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeImportFailure(w, err, importFailureMessages{
+			InvalidFormat: "Chrome 密码 CSV 格式或结构无效。",
+		})
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -37,7 +39,9 @@ func (a *App) handleChromePasswordImport(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := a.accountsService.ImportChromePasswords(r.Context(), input.CSVContent)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeImportFailure(w, err, importFailureMessages{
+			InvalidFormat: "Chrome 密码 CSV 格式或结构无效。",
+		})
 		return
 	}
 	a.audit("import.chrome_passwords", "warning", "", "account", "", "Chrome 密码 CSV 导入完成。", map[string]interface{}{

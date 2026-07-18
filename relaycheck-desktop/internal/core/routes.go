@@ -20,6 +20,9 @@ var (
 func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/health", a.handleHealth)
 	mux.HandleFunc("/api/analytics", a.requireSession(a.handleAnalytics))
+	mux.HandleFunc("/api/dashboard/ops", a.requireSession(a.handleDashboardOps))
+	mux.HandleFunc("/api/dashboard/inventory", a.requireSession(a.handleDashboardInventory))
+	mux.HandleFunc("/api/dashboard/model-usage", a.requireSession(a.handleDashboardModelUsage))
 	mux.HandleFunc("/api/scheduler/channel-schedules", a.requireSession(a.handleChannelSchedules))
 	mux.HandleFunc("/api/scheduler/calendar", a.requireSession(a.handleScheduleCalendar))
 	mux.HandleFunc("/api/scheduler/next-runs", a.requireSession(a.handleNextRuns))
@@ -45,6 +48,7 @@ func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/system/proxy-test", a.requireSession(a.handleSystemProxyTest))
 	mux.HandleFunc("/api/system/diagnostics", a.requireSession(a.handleSystemDiagnostics))
 	mux.HandleFunc("/api/system/action-center", a.requireSession(a.handleActionCenter))
+	mux.HandleFunc("/api/system/action-center/samples", a.requireSession(a.handleActionCenterSamples))
 	mux.HandleFunc("/api/system/audit-log", a.requireSession(a.handleAuditLog))
 	mux.HandleFunc("/api/system/backups", a.requireSession(a.handleSystemBackups))
 	mux.HandleFunc("/api/system/backup", a.requireSession(a.handleSystemBackup))
@@ -72,6 +76,7 @@ func (a *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/accounts", a.requireSession(a.handleAccounts))
 	mux.HandleFunc("/api/accounts/page", a.requireSession(a.handleAccountsPage))
 	mux.HandleFunc("/api/accounts/summary", a.requireSession(a.handleAccountsSummary))
+	mux.HandleFunc("/api/accounts/search-sites", a.requireSession(a.handleAccountSiteSearch))
 	mux.HandleFunc("/api/accounts/search-index", a.requireSession(a.handleAccountSearchIndex))
 	mux.HandleFunc("/api/accounts/bulk-open-browser-login", a.requireSession(a.handleBulkOpenBrowserLogin))
 	mux.HandleFunc("/api/accounts/bulk-finish-browser-login", a.requireSession(a.handleBulkFinishBrowserLogin))
@@ -119,7 +124,7 @@ func (a *App) systemStatus(r *http.Request) (SystemStatus, error) {
 	if err != nil {
 		return SystemStatus{}, err
 	}
-	diagnostics, err := a.systemDiagnostics(r)
+	diagnostics, err := a.loadSystemDiagnostics(r)
 	if err != nil {
 		return SystemStatus{}, err
 	}

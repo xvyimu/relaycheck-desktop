@@ -1,8 +1,11 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"io"
+	"log"
+	"strings"
 	"testing"
 )
 
@@ -29,6 +32,24 @@ func TestNewIDUsesProvidedRandomBytes(t *testing.T) {
 
 	if id != "00000000000000000000000000000000" {
 		t.Fatalf("unexpected deterministic ID: %s", id)
+	}
+}
+
+func TestAppCloseIsIdempotent(t *testing.T) {
+	app := newTestApp(t)
+	var logs bytes.Buffer
+	previousWriter := log.Writer()
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(previousWriter) })
+
+	if err := app.Close(); err != nil {
+		t.Fatalf("first Close: %v", err)
+	}
+	if err := app.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+	if strings.Contains(logs.String(), "wal checkpoint failed") {
+		t.Fatalf("second Close attempted another checkpoint: %s", logs.String())
 	}
 }
 

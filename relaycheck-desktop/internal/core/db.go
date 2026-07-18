@@ -268,6 +268,9 @@ CREATE INDEX IF NOT EXISTS idx_site_pricing_cache_synced ON site_pricing_cache(l
 	if err := a.ensurePerformanceIndexes(ctx); err != nil {
 		return err
 	}
+	if err := a.ensureAccountSearchFTS(ctx); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -369,13 +372,55 @@ CREATE INDEX IF NOT EXISTS idx_imported_channels_kind_updated ON imported_channe
 CREATE INDEX IF NOT EXISTS idx_upstream_sites_kind_updated ON upstream_sites(kind, updated_at);
 CREATE INDEX IF NOT EXISTS idx_upstream_sites_updated ON upstream_sites(updated_at);
 CREATE INDEX IF NOT EXISTS idx_channel_accounts_updated ON channel_accounts(updated_at);
+CREATE INDEX IF NOT EXISTS idx_channel_accounts_updated_id ON channel_accounts(updated_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_channel_accounts_key_check ON channel_accounts(api_key_last_checked_at, updated_at);
 CREATE INDEX IF NOT EXISTS idx_checkin_logs_account_started ON checkin_logs(account_id, started_at);
+CREATE INDEX IF NOT EXISTS idx_checkin_logs_account_started_id ON checkin_logs(account_id, started_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_balance_snapshots_account_created ON balance_snapshots(account_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_balance_snapshots_account_created_id ON balance_snapshots(account_id, created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_balance_snapshots_site_created ON balance_snapshots(upstream_site_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_app_notifications_read_created ON app_notifications(read, created_at);
 `)
 	return err
+}
+
+func (a *App) ensureAccountSearchFTS(ctx context.Context) error {
+	var existed int
+	if err := a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='account_search_fts'`).Scan(&existed); err != nil {
+		return err
+	}
+	if _, err := a.db.ExecContext(ctx, `
+CREATE VIRTUAL TABLE IF NOT EXISTS account_search_fts USING fts5(
+	display_name,
+	email,
+	username,
+	login_status,
+	content='channel_accounts',
+	content_rowid='rowid',
+	tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER IF NOT EXISTS channel_accounts_search_ai AFTER INSERT ON channel_accounts BEGIN
+	INSERT INTO account_search_fts(rowid, display_name, email, username, login_status)
+	VALUES (new.rowid, new.display_name, new.email, new.username, new.login_status);
+END;
+CREATE TRIGGER IF NOT EXISTS channel_accounts_search_ad AFTER DELETE ON channel_accounts BEGIN
+	INSERT INTO account_search_fts(account_search_fts, rowid, display_name, email, username, login_status)
+	VALUES ('delete', old.rowid, old.display_name, old.email, old.username, old.login_status);
+END;
+CREATE TRIGGER IF NOT EXISTS channel_accounts_search_au AFTER UPDATE ON channel_accounts BEGIN
+	INSERT INTO account_search_fts(account_search_fts, rowid, display_name, email, username, login_status)
+	VALUES ('delete', old.rowid, old.display_name, old.email, old.username, old.login_status);
+	INSERT INTO account_search_fts(rowid, display_name, email, username, login_status)
+	VALUES (new.rowid, new.display_name, new.email, new.username, new.login_status);
+END;
+`); err != nil {
+		return err
+	}
+	if existed == 0 {
+		_, err := a.db.ExecContext(ctx, `INSERT INTO account_search_fts(account_search_fts) VALUES('rebuild')`)
+		return err
+	}
+	return nil
 }
 
 // identifierPattern matches SQLite-safe identifiers (table/column names).

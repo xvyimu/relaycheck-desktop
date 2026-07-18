@@ -78,7 +78,11 @@ func (s *AccountValidationService) TestAPIKey(ctx context.Context, id string, au
 	if auth == nil {
 		loaded, err := s.accountAuth.Load(ctx, id)
 		if err != nil {
-			return apiKeyTestResult{AccountID: id, Status: "failed", Message: err.Error()}
+			message := "加载账号授权失败。"
+			if err.Error() == accountAuthNotFoundMessage {
+				message = accountAuthNotFoundMessage
+			}
+			return apiKeyTestResult{AccountID: id, Status: "failed", Message: publicAccountFailure("api_key_load_auth", id, message, err)}
 		}
 		auth = loaded
 	}
@@ -102,10 +106,10 @@ func (s *AccountValidationService) TestAPIKey(ctx context.Context, id string, au
 	result.Path = "/v1/models"
 	if modelsErr != nil {
 		result.Status = "unknown"
-		result.Message = modelsErr.Error()
+		result.Message = publicAccountFailure("api_key_models_request", id, "API Key 检测请求失败，请检查站点网络后重试。", modelsErr)
 	} else if modelsStatus == http.StatusUnauthorized || modelsStatus == http.StatusForbidden {
 		result.Status = "expired"
-		result.Message = firstNonEmpty(extractMessage(modelsBody), "API Key 无权访问 /v1/models。")
+		result.Message = "API Key 无权访问 /v1/models。"
 	} else if modelsStatus >= 200 && modelsStatus < 300 {
 		models := parseModelIDs(modelsBody)
 		result.Status = "valid"
@@ -120,24 +124,24 @@ func (s *AccountValidationService) TestAPIKey(ctx context.Context, id string, au
 		}
 	} else if modelsStatus == http.StatusNotFound || modelsStatus == http.StatusMethodNotAllowed {
 		result.Status = "unknown"
-		result.Message = firstNonEmpty(extractMessage(modelsBody), "/v1/models 不可用，继续用面板接口判断 Key。")
+		result.Message = "/v1/models 不可用，继续用面板接口判断 Key。"
 	} else {
 		result.Status = "unknown"
-		result.Message = firstNonEmpty(extractMessage(modelsBody), fmt.Sprintf("/v1/models 返回 HTTP %d。", modelsStatus))
+		result.Message = fmt.Sprintf("/v1/models 返回 HTTP %d。", modelsStatus)
 	}
 
 	if result.Status == "unknown" {
 		probes := []string{"/api/user/self", "/api/token/"}
 		for _, path := range probes {
-			status, body, err := s.accountAPI.Do(ctx, *auth, http.MethodGet, path, nil)
+			status, _, err := s.accountAPI.Do(ctx, *auth, http.MethodGet, path, nil)
 			if err != nil {
 				result.Path = path
-				result.Message = err.Error()
+				result.Message = publicAccountFailure("api_key_fallback_request", id, "API Key 检测请求失败，请检查站点网络后重试。", err)
 				continue
 			}
 			result.HTTPStatus = status
 			result.Path = path
-			result.Message = firstNonEmpty(extractMessage(body), fmt.Sprintf("%s 返回 HTTP %d", path, status))
+			result.Message = fmt.Sprintf("%s 返回 HTTP %d", path, status)
 			if status == http.StatusOK {
 				result.Status = "valid"
 				break
@@ -202,22 +206,22 @@ func (s *AccountValidationService) SpeedTestAPIKeyModel(ctx context.Context, aut
 	result.ModelTestHTTPStatus = status
 	result.ModelTestPath = "/v1/chat/completions"
 	if err != nil {
-		result.ModelTestMessage = err.Error()
+		result.ModelTestMessage = publicAccountFailure("api_key_model_test", auth.AccountID, "模型可用性测试失败，请检查站点网络后重试。", err)
 		return
 	}
 	if status == http.StatusUnauthorized || status == http.StatusForbidden {
 		result.Status = "expired"
-		result.ModelTestMessage = firstNonEmpty(extractMessage(responseBody), "模型调用未授权。")
+		result.ModelTestMessage = "模型调用未授权。"
 		return
 	}
 	if status < 200 || status >= 300 {
-		result.ModelTestMessage = firstNonEmpty(extractMessage(responseBody), fmt.Sprintf("模型调用返回 HTTP %d。", status))
+		result.ModelTestMessage = fmt.Sprintf("模型调用返回 HTTP %d。", status)
 		return
 	}
 	if responseExplicitlyFailed(responseBody) {
-		result.ModelTestMessage = firstNonEmpty(extractMessage(responseBody), "模型调用返回失败。")
+		result.ModelTestMessage = "模型调用返回失败。"
 		return
 	}
 	result.ModelUsable = true
-	result.ModelTestMessage = firstNonEmpty(extractMessage(responseBody), "模型调用成功。")
+	result.ModelTestMessage = "模型调用成功。"
 }

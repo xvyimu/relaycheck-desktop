@@ -56,6 +56,8 @@ type App struct {
 	checkinExecutor     *CheckinExecutor
 	balanceRefresher    *BalanceRefresher
 	checkinBatch        *CheckinBatchOrchestrator
+	checkinPlanStore    *CheckinPlanStore
+	checkinPlans        *CheckinPlanService
 	checkinTasks        *CheckinTaskService
 	scheduleProjection  *ScheduleProjectionService
 	schedulerRepo       *SchedulerRepo
@@ -79,6 +81,8 @@ type App struct {
 	schedulerStartedAt  time.Time
 	schedulerWG         sync.WaitGroup
 	taskRunner          *TaskRunner
+	closeOnce           sync.Once
+	closeErr            error
 	// rootCtx is the process-level context cancelled by Close(). Long-running
 	// background tasks (checkin/test-keys/etc.) derive their ctx from it so
 	// that shutdown interrupts prelude work (e.g. loading the job list from
@@ -124,7 +128,6 @@ type BrowserLoginSession struct {
 	StartedAt time.Time
 	PID       int
 }
-
 
 // openAppDB opens SQLite with the production pool and pragmas.
 // Used by NewApp and restore/reopen so recovery does not degrade to MaxOpenConns(1).
@@ -196,6 +199,8 @@ func NewApp(root string) (*App, error) {
 	app.checkinExecutor = NewCheckinExecutor(app)
 	app.balanceRefresher = NewBalanceRefresher(app)
 	app.checkinBatch = NewCheckinBatchOrchestrator(app)
+	app.checkinPlanStore = NewCheckinPlanStore()
+	app.checkinPlans = NewCheckinPlanService(app)
 	app.rootCtx, app.rootCancel = context.WithCancel(context.Background())
 	app.taskRunner.setRootCtx(app.rootCtx)
 	app.siteTasks = NewSiteTaskService(app)
@@ -271,26 +276,29 @@ func NewApp(root string) (*App, error) {
 
 // Close releases resources held by the App, including the database.
 func (a *App) Close() error {
-	a.mu.Lock()
-	cancel := a.schedulerCancel
-	a.schedulerCancel = nil
-	rootCancel := a.rootCancel
-	a.rootCancel = nil
-	a.mu.Unlock()
-	if cancel != nil {
-		cancel()
-		a.schedulerWG.Wait()
-	}
-	if rootCancel != nil {
-		rootCancel()
-	}
-	if a.notificationHub != nil {
-		a.notificationHub.Close()
-	}
-	if _, execErr := a.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); execErr != nil {
-		log.Printf("[app] wal checkpoint failed: %v", execErr)
-	}
-	return a.db.Close()
+	a.closeOnce.Do(func() {
+		a.mu.Lock()
+		cancel := a.schedulerCancel
+		a.schedulerCancel = nil
+		rootCancel := a.rootCancel
+		a.rootCancel = nil
+		a.mu.Unlock()
+		if cancel != nil {
+			cancel()
+			a.schedulerWG.Wait()
+		}
+		if rootCancel != nil {
+			rootCancel()
+		}
+		if a.notificationHub != nil {
+			a.notificationHub.Close()
+		}
+		if _, execErr := a.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); execErr != nil {
+			log.Printf("[app] wal checkpoint failed: %v", execErr)
+		}
+		a.closeErr = a.db.Close()
+	})
+	return a.closeErr
 }
 
 // DataDir returns the application data directory path.
@@ -360,6 +368,17 @@ func now() string {
 // regardless of the server's local timezone.
 func todayCST() string {
 	return time.Now().In(cstZone()).Format("2006-01-02")
+}
+
+// cstDayBounds returns the UTC timestamps that enclose the CST calendar day
+// containing currentTime. Persisted operational timestamps use RFC3339 UTC,
+// so callers must compare them against this range rather than their UTC date
+// prefix to avoid misclassifying the first eight hours of a CST day.
+func cstDayBounds(currentTime time.Time) (startUTC string, endUTC string) {
+	cstTime := currentTime.In(cstZone())
+	start := time.Date(cstTime.Year(), cstTime.Month(), cstTime.Day(), 0, 0, 0, 0, cstZone()).UTC()
+	end := start.AddDate(0, 0, 1)
+	return start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano)
 }
 
 // cstZone returns the China Standard Time (UTC+8) location. Centralising this

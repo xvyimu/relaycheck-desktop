@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const accountProblemPredicate = `(
@@ -101,6 +102,18 @@ func escapeAccountSearch(value string) string {
 	return strings.ReplaceAll(value, `_`, `\_`)
 }
 
+func buildAccountFTSQuery(value string) string {
+	terms := strings.Fields(strings.TrimSpace(value))
+	quoted := make([]string, 0, len(terms))
+	for _, term := range terms {
+		term = strings.ReplaceAll(term, `"`, `""`)
+		if term != "" {
+			quoted = append(quoted, `"`+term+`"*`)
+		}
+	}
+	return strings.Join(quoted, " AND ")
+}
+
 func buildAccountPageWhere(options accountPageOptions, includeCursor bool) (string, []interface{}) {
 	where := ` WHERE 1=1`
 	args := []interface{}{}
@@ -109,12 +122,14 @@ func buildAccountPageWhere(options accountPageOptions, includeCursor bool) (stri
 		args = append(args, options.UpstreamSiteID)
 	}
 	if options.Query != "" {
-		where += ` AND LOWER(
-			COALESCE(a.display_name, '') || ' ' || COALESCE(a.email, '') || ' ' ||
-			COALESCE(a.username, '') || ' ' || COALESCE(s.name, '') || ' ' ||
-			COALESCE(a.login_status, '')
-		) LIKE ? ESCAPE '\'`
-		args = append(args, "%"+strings.ToLower(escapeAccountSearch(options.Query))+"%")
+		where += ` AND (
+			a.rowid IN (SELECT rowid FROM account_search_fts WHERE account_search_fts MATCH ?)
+			OR LOWER(s.name) LIKE ? ESCAPE '\'
+		)`
+		args = append(args,
+			buildAccountFTSQuery(options.Query),
+			"%"+strings.ToLower(escapeAccountSearch(options.Query))+"%",
+		)
 	}
 	if options.Status == "problem" {
 		where += ` AND ` + accountProblemPredicate
@@ -127,13 +142,19 @@ func buildAccountPageWhere(options accountPageOptions, includeCursor bool) (stri
 }
 
 func (a *App) loadAccountPage(ctx context.Context, options accountPageOptions) (AccountPage, error) {
+	started := time.Now()
+	defer func() { logSlowOperation(ctx, "sql", "accounts-page", started, nil, nil) }()
 	page := AccountPage{Items: []ChannelAccount{}}
+	summary, err := a.loadAccountSummary(ctx)
+	if err != nil {
+		return page, err
+	}
+	page.AccountTotal = summary.AccountTotal
+	page.ProblemTotal = summary.ProblemTotal
+
 	where, filterArgs := buildAccountPageWhere(options, false)
-	countQuery := `SELECT
-		(SELECT COUNT(*) FROM channel_accounts),
-		(SELECT COUNT(*) FROM channel_accounts a WHERE ` + accountProblemPredicate + `),
-		(SELECT COUNT(*) FROM channel_accounts a JOIN upstream_sites s ON s.id = a.upstream_site_id` + where + `)`
-	if err := a.db.QueryRowContext(ctx, countQuery, filterArgs...).Scan(&page.AccountTotal, &page.ProblemTotal, &page.Total); err != nil {
+	countQuery := `SELECT COUNT(*) FROM channel_accounts a JOIN upstream_sites s ON s.id = a.upstream_site_id` + where
+	if err := a.db.QueryRowContext(ctx, countQuery, filterArgs...).Scan(&page.Total); err != nil {
 		return page, err
 	}
 
@@ -262,10 +283,66 @@ func (a *App) handleAccountSearchIndex(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
+	w.Header().Set("Deprecation", "true")
+	w.Header().Set("Link", "</api/accounts/search-sites>; rel=\"successor-version\"")
 	items, err := a.loadAccountSearchIndex(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "加载账号搜索索引失败。")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *App) handleAccountSiteSearch(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodGet) {
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	if len(query) > 200 {
+		writeError(w, http.StatusBadRequest, "搜索关键词不能超过 200 个字符。")
+		return
+	}
+	result := AccountSiteSearchResult{Items: []AccountSiteSearchItem{}}
+	if query == "" {
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
+	limit := clampListLimit(queryInt(r, "limit", 200), 200, 500)
+	pattern := "%" + strings.ToLower(escapeAccountSearch(query)) + "%"
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT DISTINCT s.id, s.name, s.base_url
+		FROM upstream_sites s
+		WHERE EXISTS (
+			SELECT 1 FROM channel_accounts a
+			WHERE a.upstream_site_id = s.id
+			  AND (
+				a.rowid IN (SELECT rowid FROM account_search_fts WHERE account_search_fts MATCH ?)
+				OR LOWER(s.name) LIKE ? ESCAPE '\'
+			  )
+		)
+		ORDER BY s.name, s.id
+		LIMIT ?
+	`, buildAccountFTSQuery(query), pattern, limit+1)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "搜索账号关联站点失败。")
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var item AccountSiteSearchItem
+		if err := rows.Scan(&item.UpstreamSiteID, &item.UpstreamSiteName, &item.UpstreamSiteBaseURL); err != nil {
+			writeError(w, http.StatusInternalServerError, "读取账号关联站点失败。")
+			return
+		}
+		result.Items = append(result.Items, item)
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "读取账号关联站点失败。")
+		return
+	}
+	if len(result.Items) > limit {
+		result.Items = result.Items[:limit]
+		result.Truncated = true
+	}
+	writeJSON(w, http.StatusOK, result)
 }

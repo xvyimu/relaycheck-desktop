@@ -1,6 +1,8 @@
 package core
 
 import (
+	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -8,6 +10,61 @@ import (
 	"testing"
 	"time"
 )
+
+func TestNetworkHTTPClientPinsInitialResolvedIP(t *testing.T) {
+	reached := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	serverURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinnedURL, err := url.Parse("http://rebind.invalid:" + serverURL.Port())
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved := resolvedOutboundURL{URL: pinnedURL, IPs: []net.IP{net.ParseIP("127.0.0.1")}}
+	client := newNetworkHTTPClient(3*time.Second, NetworkProxyConfig{}, outboundURLPolicy{}, resolved)
+
+	req, err := http.NewRequest(http.MethodGet, pinnedURL.String(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("expected request to use the validated IP instead of resolving hostname again: %v", err)
+	}
+	defer resp.Body.Close()
+	if !reached {
+		t.Fatal("expected pinned target server to receive the request")
+	}
+}
+
+func TestProxyTestDoesNotExposeRejectedURLParserDetails(t *testing.T) {
+	app := newTestApp(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/system/proxy/test", strings.NewReader(`{"targetUrl":"http://[::1/token=TOP_SECRET"}`))
+	rec := httptest.NewRecorder()
+
+	app.handleSystemProxyTest(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var response apiResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Error != "测试地址不安全，请检查 URL。" {
+		t.Fatalf("unexpected public proxy-test error: %q", response.Error)
+	}
+	if strings.Contains(response.Error, "TOP_SECRET") || strings.Contains(response.Error, "::1") {
+		t.Fatalf("proxy-test response leaked rejected URL: %q", response.Error)
+	}
+}
 
 func TestValidateNetworkProxyConfigAcceptsLocalHTTPProxy(t *testing.T) {
 	config := NetworkProxyConfig{
@@ -81,7 +138,11 @@ func TestNetworkHTTPClientRejectsRedirectToMetadata(t *testing.T) {
 	}))
 	defer metaPublic.Close()
 
-	client := newNetworkHTTPClient(3*time.Second, NetworkProxyConfig{}, outboundURLPolicy{AllowLocal: true})
+	initial, err := resolveOutboundHTTPURL(t.Context(), metaPublic.URL, outboundURLPolicy{AllowLocal: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := newNetworkHTTPClient(3*time.Second, NetworkProxyConfig{}, outboundURLPolicy{AllowLocal: true}, initial)
 	req, err := http.NewRequest(http.MethodGet, metaPublic.URL, nil)
 	if err != nil {
 		t.Fatal(err)

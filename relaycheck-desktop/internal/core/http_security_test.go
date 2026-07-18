@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAllowedHostAcceptsLoopbackHostsOnRuntimePort(t *testing.T) {
@@ -133,6 +135,84 @@ func TestSecureLocalHandlerRequestIDAndAccessLog(t *testing.T) {
 	}
 	if logs.String() == "" || strings.Contains(logs.String(), "should-not-be-logged") || strings.Contains(logs.String(), "secret") {
 		t.Fatalf("access log leaked sensitive content: %s", logs.String())
+	}
+}
+
+func TestSecureLocalHandlerAddsSanitizedResourceCorrelation(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	app.SetRuntimeAddress("127.0.0.1", 3001)
+
+	var logs bytes.Buffer
+	previousWriter := accessLogWriter
+	accessLogWriter = &logs
+	defer func() { accessLogWriter = previousWriter }()
+
+	handler := app.SecureLocalHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fields := correlationFromContext(r.Context())
+		if fields.AccountID != "account-123" || fields.SiteID != "site-456" || fields.TaskID != "task-789" {
+			t.Fatalf("unexpected correlation fields: %#v", fields)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:3001/api/accounts/account-123/checkin?siteId=site-456&taskId=task-789&token=secret", nil)
+	req.RemoteAddr = "127.0.0.1:55123"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	var entry map[string]interface{}
+	if err := json.Unmarshal(bytes.TrimSpace(logs.Bytes()), &entry); err != nil {
+		t.Fatal(err)
+	}
+	if entry["accountId"] != "account-123" || entry["siteId"] != "site-456" || entry["taskId"] != "task-789" {
+		t.Fatalf("correlation missing from access log: %#v", entry)
+	}
+	if strings.Contains(logs.String(), "secret") || strings.Contains(logs.String(), "token=") {
+		t.Fatalf("correlation log leaked query data: %s", logs.String())
+	}
+}
+
+func TestSlowOperationLogIsStructuredAndSanitized(t *testing.T) {
+	var logs bytes.Buffer
+	previousWriter := accessLogWriter
+	previousThreshold := slowOperationThreshold
+	accessLogWriter = &logs
+	slowOperationThreshold = 0
+	defer func() {
+		accessLogWriter = previousWriter
+		slowOperationThreshold = previousThreshold
+	}()
+	ctx := withCorrelation(context.Background(), correlationFields{
+		RequestID: "request-1",
+		AccountID: "account-1",
+		SiteID:    "site-1",
+	})
+	logSlowOperation(ctx, "sql", "usage-overview", time.Now(), errors.New("password=secret"), nil)
+
+	var entry map[string]interface{}
+	if err := json.Unmarshal(bytes.TrimSpace(logs.Bytes()), &entry); err != nil {
+		t.Fatal(err)
+	}
+	if entry["event"] != "slow_operation" || entry["operation"] != "usage-overview" || entry["errorType"] == nil {
+		t.Fatalf("unexpected slow operation entry: %#v", entry)
+	}
+	if strings.Contains(logs.String(), "password") || strings.Contains(logs.String(), "secret") {
+		t.Fatalf("slow operation log leaked error content: %s", logs.String())
+	}
+}
+
+func TestCSPSeparatesStaticStylesFromLegacyStyleAttributes(t *testing.T) {
+	rec := httptest.NewRecorder()
+	setSecurityHeaders(rec)
+	csp := rec.Header().Get("content-security-policy")
+	if !strings.Contains(csp, "style-src 'self'") {
+		t.Fatalf("style-src must be self-only: %s", csp)
+	}
+	if strings.Contains(csp, "style-src 'self' 'unsafe-inline'") {
+		t.Fatalf("style-src must not allow inline style blocks: %s", csp)
+	}
+	if !strings.Contains(csp, "style-src-attr 'none'") || strings.Contains(csp, "unsafe-inline") {
+		t.Fatalf("style attributes must be disabled without unsafe-inline: %s", csp)
 	}
 }
 

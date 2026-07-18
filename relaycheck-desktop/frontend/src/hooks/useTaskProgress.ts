@@ -48,7 +48,7 @@ export function useTaskProgress() {
   useEffect(() => cleanup, [cleanup]);
 
   const startTask = useCallback(
-    async (type: TaskType, params?: Record<string, unknown>) => {
+    async (type: TaskType, params?: Record<string, unknown>): Promise<boolean> => {
       setState({ progress: null, loading: true, error: "" });
 
       try {
@@ -93,12 +93,14 @@ export function useTaskProgress() {
             error: prev.progress ? "" : "连接中断，请重试。",
           }));
         };
+        return true;
       } catch (err) {
         setState({
           progress: null,
           loading: false,
           error: err instanceof Error ? err.message : "启动任务失败",
         });
+        return false;
       }
     },
     [cleanup],

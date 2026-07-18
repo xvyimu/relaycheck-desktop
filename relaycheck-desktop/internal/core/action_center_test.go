@@ -1,6 +1,8 @@
 package core
 
 import (
+	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 )
@@ -42,8 +44,8 @@ func TestActionCenterAnnotatesOperationalMetadata(t *testing.T) {
 	if keyIssue.RecommendedAction == "" {
 		t.Fatal("api-key-problems recommended action should be populated")
 	}
-	if len(keyIssue.Samples) != 1 || keyIssue.Samples[0].Label == "" {
-		t.Fatalf("api-key-problems samples = %#v, want one non-empty sample", keyIssue.Samples)
+	if len(keyIssue.Samples) != 0 {
+		t.Fatalf("initial action center should lazy-load samples, got %#v", keyIssue.Samples)
 	}
 
 	siteIssue := findActionItem(t, center.Items, "unreachable-sites")
@@ -53,14 +55,42 @@ func TestActionCenterAnnotatesOperationalMetadata(t *testing.T) {
 	if siteIssue.Impact == "" || siteIssue.RecommendedAction == "" {
 		t.Fatalf("unreachable-sites metadata missing impact/action: %#v", siteIssue)
 	}
-	if len(siteIssue.Samples) != 1 {
-		t.Fatalf("unreachable-sites samples = %#v, want one sample with site entity", siteIssue.Samples)
+	if len(siteIssue.Samples) != 0 {
+		t.Fatalf("initial action center should lazy-load samples, got %#v", siteIssue.Samples)
 	}
-	if siteIssue.Samples[0].EntityType != "site" || siteIssue.Samples[0].EntityID != "site-down" {
-		t.Fatalf("unreachable-sites sample entity = %#v, want site/site-down", siteIssue.Samples[0])
+}
+
+func TestActionCenterSamplesLoadOnDemand(t *testing.T) {
+	app := newTestApp(t)
+	nowText := now()
+	if _, err := app.db.Exec(`
+		INSERT INTO upstream_sites (id, name, base_url, kind, health_status, created_at, updated_at)
+		VALUES ('site-lazy', 'Lazy Site', 'https://lazy.example', 'newapi', 'unreachable', ?, ?)
+	`, nowText, nowText); err != nil {
+		t.Fatal(err)
 	}
-	if siteIssue.Samples[0].Label == "" {
-		t.Fatal("unreachable-sites sample label should be non-empty")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system/action-center/samples?id=unreachable-sites", nil)
+	rec := httptest.NewRecorder()
+	app.handleActionCenterSamples(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Data []ActionSample `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Data) != 1 || response.Data[0].EntityType != "site" || response.Data[0].EntityID != "site-lazy" {
+		t.Fatalf("unexpected lazy samples: %#v", response.Data)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/system/action-center/samples?id=unknown", nil)
+	rec = httptest.NewRecorder()
+	app.handleActionCenterSamples(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown action status = %d, want 404", rec.Code)
 	}
 }
 
@@ -114,14 +144,8 @@ func TestActionCenterIncludesChannelHealthRisks(t *testing.T) {
 	if item.Impact == "" || item.RecommendedAction == "" {
 		t.Fatalf("missing health risk metadata: %#v", item)
 	}
-	if len(item.Samples) != 1 {
-		t.Fatalf("channel-health-risks samples = %#v, want one site sample", item.Samples)
-	}
-	if item.Samples[0].EntityType != "site" || item.Samples[0].EntityID != "site-health-risk" {
-		t.Fatalf("channel-health-risks sample entity = %#v, want site/site-health-risk", item.Samples[0])
-	}
-	if item.Samples[0].Label == "" {
-		t.Fatal("channel-health-risks sample label should be non-empty")
+	if len(item.Samples) != 0 {
+		t.Fatalf("initial action center should lazy-load samples, got %#v", item.Samples)
 	}
 }
 
