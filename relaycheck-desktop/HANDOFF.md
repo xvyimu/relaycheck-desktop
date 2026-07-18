@@ -24,7 +24,7 @@ Read this first, then `CLAUDE.md` for architecture.
 
 **Still external / needs materials:**
 
-- Authenticode signing — scaffold ready (`scripts/sign-release.ps1`, signtool present). **Blocked:** `RELAYCHECK_SIGN_PFX` + password unset. Do not invent certs.
+- Authenticode signing — scaffold ready (`scripts/sign-release.ps1`, signtool present). **Hard block:** no PFX on disk and no Code Signing cert in Windows stores (only localhost HTTPS + Phone). Do not invent certs. See `docs/deploy/code-signing-readiness-2026-07-18.md`.
 - Multi-host / larger-DB RUM — local representative API p95 captured on this operator host (`docs/perf/production-rum-collection-plan-2026-07-18.md` + gitignored `docs/perf/samples/local-api-p95-20260718-195231.json`). Cold-start UI waterfall + multi-machine still open.
 - Full schema FK migration — still deferred. Local historical orphan **cleanup done** (18 `checkin_logs`; backup under `data/backups/pre-orphan-cleanup-20260718-195632/`; precheck now 0). Cascade delete + UI live.
 

@@ -1,7 +1,20 @@
 # Code signing readiness (Authenticode)
 
 - **Date:** 2026-07-18
-- **Status:** **Blocked on materials** — `signtool.exe` + `scripts/sign-release.ps1` ready; `RELAYCHECK_SIGN_PFX` / password still unset (2026-07-18 recheck). Binary may exist at `dist\relaycheck.exe` after local build but remains **unsigned**.
+- **Status:** **Blocked on materials** — tooling ready; **no Authenticode code-signing cert on this machine** (2026-07-18 exhaustive recheck).
+
+## Exhaustive local search (2026-07-18)
+
+| Probe | Result |
+|---|---|
+| `RELAYCHECK_SIGN_PFX` / `…_PASSWORD` env | unset |
+| `signtool.exe` | present (Windows Kits 10.0.26100) |
+| `dist\relaycheck.exe` | present after local build; **unsigned** |
+| Filesystem `*.pfx` under user/Documents/Downloads/Desktop + D:/E: secrets|certs | **0 hits** |
+| `Cert:\CurrentUser\My` private keys | Phone helper + ASP.NET Core **localhost HTTPS** only — **no Code Signing EKU** |
+| `Cert:\LocalMachine\My` | no usable code-signing private key |
+
+**Explicit non-action:** do **not** mint a self-signed “production” cert for distribution (SmartScreen noise; policy in this doc).
 
 ## Goal
 
