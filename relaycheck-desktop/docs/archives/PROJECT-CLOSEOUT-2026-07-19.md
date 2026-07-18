@@ -7,7 +7,7 @@
 | Field | Value |
 |---|---|
 | Path | `E:\zidqiandao\relaycheck-desktop` |
-| HEAD | **`42f21c8`** = `main` = `origin/main` |
+| HEAD | **`0d400d4`** = `main` = `origin/main` (last feature **`42f21c8`**) |
 | Remote | https://github.com/xvyimu/relaycheck-desktop |
 | Data | `data/` preserved; backups `pre-orphan-cleanup-20260718-195632/`, `pre-fk-phase-ab-*/` |
 | Local DB | FK Phase A+B migrated (`schema.fk_phase="2"`); `foreign_key_check` empty; logs 487 / accounts 25 |
