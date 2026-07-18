@@ -67,9 +67,9 @@ Writes gitignored JSON under `docs/perf/samples/`.
 ## Acceptance for closing this item
 
 - [x] Operator host identified — local machine `姜佳` (Win 10.0.26100, 24 CPU, 23.2 GB RAM) treated as representative **operator** host  
-- [ ] Cold start waterfall recorded with commit SHA (process spawn → first health only; no UI first-interactive timing yet)  
+- [x] Cold start **process** waterfall recorded with commit SHA (spawn → first health) — **not** Wails/WebView first-interactive  
 - [x] API p95 table for ≥4 endpoints with N≥50 — see below  
-- [x] Results stored under gitignored `docs/perf/samples/local-api-p95-*.json`; HANDOFF links  
+- [x] Results stored under gitignored `docs/perf/samples/local-api-p95-*.json` / `local-cold-start-*.json`; HANDOFF links
 
 ## Local representative sample (2026-07-18)
 
@@ -87,3 +87,17 @@ Writes gitignored JSON under `docs/perf/samples/`.
 | `/api/dashboard/ops` | 50 | 0 | 35 | 55 | 38 |
 
 **Caveats:** loopback only; warm process after spawn; small DB; not multi-host / not third-party browser RUM. `accounts-page` p95 spike likely cold-cache / page assembly — re-measure on larger inventory before claiming production SLO.
+
+## Local cold-start process waterfall (2026-07-18)
+
+- **Script:** `scripts/sample-cold-start.ps1`
+- **Commit at sample:** `5ce688d` (binary may lag HEAD if not rebuilt)
+- **Sample (gitignored):** `docs/perf/samples/local-cold-start-20260718-220951.json`
+
+| mark | ms |
+|---|---:|
+| processSpawn | 811 |
+| firstHealth (`/api/health`) | 1388 |
+| systemStatusAfterHealth | 1411 |
+
+**Not measured:** desktop shell first paint / first interactive (needs UI instrumentation or manual stopwatch on Wails window).

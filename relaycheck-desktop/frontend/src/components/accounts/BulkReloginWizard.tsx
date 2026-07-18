@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 
 import { accountApi } from "@/api/accounts";
-import { api } from "@/api/client";
 import { isProblemAccount } from "@/components/accounts/helpers";
 import { RELOGIN_STEPS } from "@/lib/accountActions";
 import type { Account, BulkBrowserOpenResponse, BulkBrowserSaveResponse } from "@/types";
@@ -35,10 +34,7 @@ export function BulkReloginWizard({ accounts, onDone }: BulkReloginWizardProps) 
     setBusy("open");
     setMessage("");
     try {
-      const result = await api<BulkBrowserOpenResponse>(accountApi.bulk("bulk-open-browser-login"), {
-        method: "POST",
-        body: JSON.stringify({ limit }),
-      });
+      const result = await accountApi.postBulk<BulkBrowserOpenResponse>("bulk-open-browser-login", { limit });
       setLastOpen(result);
       setPhase("opened");
       setMessage(
@@ -56,10 +52,7 @@ export function BulkReloginWizard({ accounts, onDone }: BulkReloginWizardProps) 
     setBusy("save");
     setMessage("");
     try {
-      const result = await api<BulkBrowserSaveResponse>(accountApi.bulk("bulk-finish-browser-login"), {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
+      const result = await accountApi.postBulk<BulkBrowserSaveResponse>("bulk-finish-browser-login", {});
       setLastSave(result);
       setPhase("saved");
       setMessage(

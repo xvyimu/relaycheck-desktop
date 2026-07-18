@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { accountActionUrl, accountApi } from "@/api/accounts";
-import { api } from "@/api/client";
+import { accountApi } from "@/api/accounts";
 import {
   accountActionButtonLabel,
   appendReloginHint,
@@ -148,9 +147,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     await runAction(
       "网页登录",
       async () => {
-        const result = await api<BrowserLoginOpenResponse>(accountActionUrl(account.id, "open-browser-login"), {
-          method: "POST",
-        });
+        const result = await accountApi.postAction<BrowserLoginOpenResponse>(account.id, "open-browser-login");
         if (isBrowserLoginOpenSuccess(result.status)) {
           setReloginPhase("browser_open");
           setSessionOpenKind(browserSessionOpenKind(result.status));
@@ -165,9 +162,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     await runAction(
       "保存授权",
       async () => {
-        const result = await api<BrowserLoginSaveResponse>(accountActionUrl(account.id, "finish-browser-login"), {
-          method: "POST",
-        });
+        const result = await accountApi.postAction<BrowserLoginSaveResponse>(account.id, "finish-browser-login");
         if (isBrowserLoginSaveSuccess(result.status)) {
           setReloginPhase("auth_saved");
           setSessionOpenKind(null);
@@ -182,9 +177,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     await runAction(
       "测试登录态",
       async () => {
-        const result = await api<LoginStatusTestResponse>(accountActionUrl(account.id, "test-login"), {
-          method: "POST",
-        });
+        const result = await accountApi.postAction<LoginStatusTestResponse>(account.id, "test-login");
         if (isLoginStatusValid(result.status)) {
           setReloginPhase("idle");
         }
@@ -202,22 +195,19 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
       if (!confirmed) return;
     }
     await runAction("保存账号", async () => {
-      await api(accountApi.item(account.id), {
-        method: "PUT",
-        body: JSON.stringify({
-          displayName,
-          siteName,
-          baseUrl,
-          loginUrl,
-          kind: kind === "auto" ? "" : kind,
-          email,
-          username,
-          authType,
-          password,
-          apiKey,
-          clearApiKey,
-          siteUpdateScope,
-        }),
+      await accountApi.update(account.id, {
+        displayName,
+        siteName,
+        baseUrl,
+        loginUrl,
+        kind: kind === "auto" ? "" : kind,
+        email,
+        username,
+        authType,
+        password,
+        apiKey,
+        clearApiKey,
+        siteUpdateScope,
       });
       setEditing(false);
     });
@@ -228,7 +218,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     setBusy("检测密钥");
     setMessage("");
     try {
-      const result = await api<APIKeyTestResult>(accountActionUrl(account.id, "test-api-key"), { method: "POST" });
+      const result = await accountApi.postAction<APIKeyTestResult>(account.id, "test-api-key");
       await onDone();
       setMessage(formatAPIKeyTestMessage(result));
     } catch (error) {
@@ -243,7 +233,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
       `确认删除账号"${account.displayName}"？这会删除该账号保存的密码、Cookie、Token 和 API Key 等凭据。`,
     );
     if (!confirmed) return;
-    await runAction("删除账号", () => api(accountApi.item(account.id), { method: "DELETE" }));
+    await runAction("删除账号", () => accountApi.remove(account.id));
   }
 
   function renderPrimaryButton(key: PrimaryActionKey) {
@@ -292,7 +282,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
             disabled={isBusy}
             aria-label={`为 ${account.displayName} 执行签到`}
             onClick={() =>
-              void runAction("签到", () => api(accountActionUrl(account.id, "checkin"), { method: "POST" }))
+              void runAction("签到", () => accountApi.postAction(account.id, "checkin"))
             }
           >
             {accountActionButtonLabel("签到", busy)}
@@ -488,7 +478,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
                   disabled={isBusy}
                   aria-label={`为 ${account.displayName} 执行签到`}
                   onClick={() =>
-                    void runAction("签到", () => api(accountActionUrl(account.id, "checkin"), { method: "POST" }))
+                    void runAction("签到", () => accountApi.postAction(account.id, "checkin"))
                   }
                 >
                   {accountActionButtonLabel("签到", busy)}
@@ -500,9 +490,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
                 disabled={isBusy}
                 aria-label={`刷新 ${account.displayName} 的余额`}
                 onClick={() =>
-                  void runAction("刷新余额", () =>
-                    api(accountActionUrl(account.id, "refresh-balance"), { method: "POST" }),
-                  )
+                  void runAction("刷新余额", () => accountApi.postAction(account.id, "refresh-balance"))
                 }
               >
                 {accountActionButtonLabel("刷新余额", busy)}

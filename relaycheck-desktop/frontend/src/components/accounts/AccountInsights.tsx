@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { accountCleanupApi, type UnsupportedCheckinCleanupResult } from "@/api/account-cleanup";
-import { accountActionUrl, accountApi } from "@/api/accounts";
-import { api } from "@/api/client";
+import { accountApi } from "@/api/accounts";
 import { keysApi } from "@/api/keys";
 import { modelsApi } from "@/api/models";
 import { formatPriceComparisonBadge, formatPriceComparisonMeta, formatPricingSource } from "@/lib/format";
@@ -158,7 +157,7 @@ export function AccountInsights({
     setKeyTestBusyId(account.id);
     setMessage(`正在检测 ${account.displayName} 的 API Key…`);
     try {
-      const result = await api<APIKeyTestResult>(accountActionUrl(account.id, "test-api-key"), { method: "POST" });
+      const result = await accountApi.postAction<APIKeyTestResult>(account.id, "test-api-key");
       setMessage(`${account.displayName}：${formatAPIKeyTestMessage(result)}`);
       await onDone();
     } catch (error) {
@@ -343,10 +342,7 @@ export function AccountInsights({
             type="button"
             onClick={async () => {
               setMessage("正在批量打开网页登录窗口…");
-              const result = await api<BulkBrowserOpenResponse>(accountApi.bulk("bulk-open-browser-login"), {
-                method: "POST",
-                body: JSON.stringify({ limit: 5 }),
-              });
+              const result = await accountApi.postBulk<BulkBrowserOpenResponse>("bulk-open-browser-login", { limit: 5 });
               setMessage(
                 `网页登录已打开/复用 ${result.opened} 个，失败 ${result.failed} 个。登录完成后点"批量保存已登录"。`,
               );
@@ -694,10 +690,7 @@ export function AccountInsights({
               type="button"
               onClick={async () => {
                 setMessage("正在用已保存密码重登…");
-                const result = await api<BulkPasswordLoginResponse>(accountApi.bulk("bulk-password-login"), {
-                  method: "POST",
-                  body: JSON.stringify({ limit: 20 }),
-                });
+                const result = await accountApi.postBulk<BulkPasswordLoginResponse>("bulk-password-login", { limit: 20 });
                 setMessage(
                   `密码重登处理 ${result.processed} 个，成功 ${result.success} 个，失败 ${result.failed} 个。`,
                 );
@@ -712,10 +705,7 @@ export function AccountInsights({
             <button
               onClick={async () => {
                 setMessage("正在保存已完成网页登录的账号…");
-                const result = await api<BulkBrowserSaveResponse>(accountApi.bulk("bulk-finish-browser-login"), {
-                  method: "POST",
-                  body: JSON.stringify({}),
-                });
+                const result = await accountApi.postBulk<BulkBrowserSaveResponse>("bulk-finish-browser-login", {});
                 setMessage(`保存授权 ${result.saved} 个，失败/未完成 ${result.failed} 个。`);
                 await onDone();
               }}
@@ -737,7 +727,7 @@ export function AccountInsights({
                     </span>
                     <button
                       onClick={async () => {
-                        await api(accountActionUrl(account.id, "open-browser-login"), { method: "POST" });
+                        await accountApi.postAction(account.id, "open-browser-login");
                       }}
                     >
                       打开
@@ -762,7 +752,7 @@ export function AccountInsights({
                           `确认删除疑似误匹配账号"${account.displayName}"？这会删除该账号保存的本地凭据。`,
                         );
                         if (!confirmed) return;
-                        await api(accountApi.item(account.id), { method: "DELETE" });
+                        await accountApi.remove(account.id);
                         await onDone();
                       }}
                     >

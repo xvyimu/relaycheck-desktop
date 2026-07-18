@@ -27,7 +27,7 @@ describe("account API contract", () => {
     expect(accountApi.bulk("bulk-password-login")).toBe("/api/accounts/bulk-password-login");
   });
 
-  it("page/postAction/remove 走中央 request helper", async () => {
+  it("page/postAction/remove/create/update/postBulk 走中央 request helper", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
       Promise.resolve(
         new Response(JSON.stringify({ ok: true, data: { items: [] } }), {
@@ -39,11 +39,20 @@ describe("account API contract", () => {
     await accountApi.page({ limit: 10, status: "all" });
     await accountApi.postAction("id/1", "checkin", {});
     await accountApi.remove("id/1");
+    await accountApi.create({ displayName: "n" });
+    await accountApi.update("id/1", { displayName: "n2" });
+    await accountApi.postBulk("bulk-open-browser-login", { limit: 5 });
     expect(fetchMock).toHaveBeenCalledWith("/api/accounts/page?limit=10", expect.objectContaining({}));
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/accounts/id%2F1/checkin",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenCalledWith("/api/accounts/id%2F1", expect.objectContaining({ method: "DELETE" }));
+    expect(fetchMock).toHaveBeenCalledWith("/api/accounts", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenCalledWith("/api/accounts/id%2F1", expect.objectContaining({ method: "PUT" }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/accounts/bulk-open-browser-login",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

@@ -67,6 +67,22 @@ function remove(id: string): Promise<unknown> {
   return api(accountBase(id), { method: "DELETE" });
 }
 
+/** POST 创建账号。 */
+function create(body: unknown): Promise<unknown> {
+  return api("/api/accounts", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** PUT 更新账号。 */
+function update(id: string, body: unknown): Promise<unknown> {
+  return api(accountBase(id), {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
 /** POST 批量账号 action。 */
 function postBulk<T>(action: AccountBulkAction, body?: unknown): Promise<T> {
   return api<T>(`/api/accounts/${action}`, {
@@ -89,6 +105,8 @@ export const accountApi = {
   command: (action: AccountCommand) => `/api/accounts/${action}`,
   page,
   postAction,
+  create,
+  update,
   remove,
   postBulk,
 } as const;

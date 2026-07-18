@@ -3,8 +3,8 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-18 (session close — site delete UI + orphan cleanup + local API p95)  
-**HEAD:** `3cadcaf` on `main` / `origin/main`  
+**Last updated:** 2026-07-18 (accountApi residual migrate + cold-start process sample)  
+**HEAD:** see `git rev-parse --short HEAD` on `main` / `origin/main`
 **Worktree policy:** local `dist/` / `frontend/dist/` / `frontend/coverage/` may be deleted anytime (gitignored). Never delete `data/`.
 
 ---
@@ -15,16 +15,15 @@ Read this first, then `CLAUDE.md` for architecture.
 
 **Optional residual code (non-blocking):**
 
-- AccountCard / AccountForm / AccountInsights / BulkRelogin still use `api()` + `accountApi` URL builders; helpers exist for incremental migration.
-- `useApi` path-string consumers can later take constants from `systemApi`.
-- Cold-start UI first-interactive timing (RUM plan still open checkbox).
+- `useApi` path-string consumers can later take constants from `systemApi` (accounts residual `api()` call sites migrated to `accountApi.create/update/postAction/postBulk/remove`).
+- Desktop **UI** first-interactive timing still open (process spawn→health is done via `scripts/sample-cold-start.ps1`).
 
 **Still external / needs materials:**
 
 | Item | Status | Unlock |
 |---|---|---|
 | Authenticode | **Hard block** — no PFX on disk, no Code Signing EKU in stores | Operator places Code Signing PFX + sets `RELAYCHECK_SIGN_PFX` / `_PASSWORD`, then `scripts/sign-release.ps1` |
-| Multi-host / large-DB RUM | Local operator-host API p95 done | Larger inventory + multi-machine + UI waterfall |
+| Multi-host / large-DB RUM | Local API p95 + process cold-start done | Larger inventory + multi-machine + UI first-interactive |
 | Full SQLite FK table rebuild | Deferred by design | Explicit product confirm + backup |
 
 **Do not without explicit confirm:** full-table FK migration, delete `data/*`, force-push, cloud deploy, real upstream checkin blasts, minting self-signed “production” certs.

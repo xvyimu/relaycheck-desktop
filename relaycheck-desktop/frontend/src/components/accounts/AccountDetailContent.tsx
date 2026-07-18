@@ -1,7 +1,6 @@
 import { useState } from "react";
 
-import { accountActionUrl } from "@/api/accounts";
-import { api } from "@/api/client";
+import { accountApi } from "@/api/accounts";
 import {
   browserSessionOpenKind,
   browserSessionRunningLabel,
@@ -41,10 +40,7 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
     setBusy("open");
     setMessage("");
     try {
-      const result = await api<BrowserLoginOpenResponse>(accountActionUrl(account.id, "open-browser-login"), {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
+      const result = await accountApi.postAction<BrowserLoginOpenResponse>(account.id, "open-browser-login", {});
       if (isBrowserLoginOpenSuccess(result.status)) {
         setReloginPhase("browser_open");
         setSessionOpenKind(browserSessionOpenKind(result.status));
@@ -62,10 +58,7 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
     setBusy("save");
     setMessage("");
     try {
-      const result = await api<BrowserLoginSaveResponse>(accountActionUrl(account.id, "finish-browser-login"), {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
+      const result = await accountApi.postAction<BrowserLoginSaveResponse>(account.id, "finish-browser-login", {});
       if (isBrowserLoginSaveSuccess(result.status)) {
         setReloginPhase("auth_saved");
         setSessionOpenKind(null);
@@ -83,10 +76,7 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
     setBusy("test");
     setMessage("");
     try {
-      const result = await api<LoginStatusTestResponse>(accountActionUrl(account.id, "test-login"), {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
+      const result = await accountApi.postAction<LoginStatusTestResponse>(account.id, "test-login", {});
       if (isLoginStatusValid(result.status)) {
         setReloginPhase("auth_saved");
       }
