@@ -3,229 +3,97 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-17 (07-17 full P1-P3 optimization, dependency hardening, release package verified locally)
+**Last updated:** 2026-07-18  
+**HEAD:** `a8f372d` on `main` / `origin/main`  
+**Worktree policy:** local `dist/` / `frontend/dist/` / `frontend/coverage/` may be deleted anytime (gitignored). Never delete `data/`.
 
 ---
 
-## ⏳ TODO (next session)
+## TODO (next session)
 
-1. [x] **Commit + push FE-4/BE-2** — 5147d2b already on SSH main.
-2. [x] **2026-07-16 review follow-ups (2026-07-17)** — Prettier CI; Action Center COUNT batch; usage per-account window; search-index cap; list Deprecation; SSRF resolve+redirect pin; site truncate UI; bundle budget CI; runbook token ACL. Local Go still 1.26.4 (release wants 1.26.5).
-3. [x] **Optional re-release** — Go 1.26.5 + Node 22.23.1 + npm 10.9.8 package created and verified; final dirty verification zip SHA256 `221d99b32f5e7e1aa51e1d4d9e016274347c9e0753deaa1f314a65701cbd8a66`.
-4. [x] **Continue frontend coverage** — floor is now **53/45/40/54** and current coverage is **54.99/46.36/42.28/56.11**; 44 files / 309 tests.
-5. [x] **2026-07-17 review S1/P2/P3** — FTS/indexes, channel owner, usage limits, Action Center lazy samples, Windows DACL, CSP, dashboard aggregation, observability and CI hardening completed. See `docs/full-stack-code-review-optimization-2026-07-17.md`.
-6. [ ] **External measurement only** — collect representative RUM/startup waterfall and API p95 after deployment; local synthetic results cannot prove the <2s / -50% production targets.
+1. [ ] **SitesPanel / remaining bare API** — scan components still using raw `api("/api/...")` outside typed owners; converge one surface at a time.
+2. [ ] **LocalNewAPISyncPanel behavior tests** — mount list+exclude-rules, sync default body, draft token path, failure `role=alert`.
+3. [ ] **External measurement only** — RUM/startup waterfall and API p95 after real deployment; local smoke cannot prove production p95.
+4. [ ] **Optional:** archive `.planning/**` to zip if disk hygiene is desired (default: keep).
 
-**已完成（勿重做）**
-
-- [x] **P1-P3 close-out + dependency/release hardening (2026-07-17, uncommitted)**
-  - Go module baseline 1.25.0; `golang.org/x/sys` 0.35.0→0.44.0 and vendor refreshed; `govulncheck@v1.5.0` reports no vulnerabilities.
-  - Frontend floor 53/45/40/54; 44 files / 309 tests; actual 54.99/46.36/42.28/56.11. `AccountCardEditor` behavior coverage added.
-  - Full `verify-release.ps1 -BrowserPort 5174` passed, including Go test/vet, build/audit/vuln scan, binary health and all browser smoke suites.
-  - Exact-toolchain dirty package verified: Go 1.26.5, Node 22.23.1, npm 10.9.8; manifest/source inputs/internal checksums/zip sidecar all pass.
-
-- [x] **2026-07-17 review S0 + business result hardening (uncommitted)**
-  - FE: AccountDetail 登录态测试端点修为 `/test-login` 并补点击请求断言；coverage floor 提至 **50/45/35/50**。
-  - SSRF: 初始目标与 redirect 均保存已解析 IP，DialContext 仅拨已验证地址；allowLocal 只放宽本机目标策略，不再让远端域名绕过 pin；rebinding 回归测试已覆盖。
-  - Public contract: health DB 错误、browser profile 绝对路径、账号验证上游 body、browser/batch/checkin/balance/task/scheduler/proxy raw error 全部收敛为稳定文案；日志只留 operation/entity/causeType。
-  - Import: accounts domain 增加 path/format/upstream-auth/upstream-unavailable/storage typed errors；SQLite 损坏不再误报路径越界，NewAPI 401/403 与网络/5xx 分开，响应不拼接上游 body。
-  - Gates: `go vet` PASS；Go internal **1071 passed**；core **457 passed / 56.3%**；frontend **36 files / 289 tests**；coverage **52.36/47.72/38.58/53.54**；format/lint/tsc/build/budget/audit 全绿，audit 0 vulnerabilities。
-
-- [x] **P1 coverage + accounts import error contract (2026-07-17, uncommitted)**
-  - FE: `useAccountsPage` mount/disabled requests, `useChannelActions` refresh/seed and `useSiteAccounts` selected/all-site boundaries; explicit regression guards against full `/api/accounts` fetch. DialogShell focus/scroll behavior, 2FA guide, task progress, account diagnostics and Settings populated states now have contracts. Frontend coverage **41% → 52.36% statements**；289 tests.
-  - BE: `writePublicError` logs request metadata plus error type (never a potentially secret upstream payload) while four account import handlers return stable Chinese public messages (SQLite/Admin API/legacy config/Chrome CSV). `import_error_contract_test.go` proves no source path, SQL or token fragments reach the response. Encrypted backup handlers remain protected by existing 5xx `writeError` redaction.
-  - Gates: Go internal PASS; core **56.3%**; frontend format/lint/tsc/tests/coverage/build/budget PASS.
-
-- [x] **2026-07-16 full-stack review follow-ups (2026-07-17)** — 见 
-  - FE-A Prettier 3 文件；FE-E 站点 truncated 提示；FE-C Insights 标明当前页
-  - BE-B Action Center 零参 COUNT 批量子查询；BE-C usage ROW_NUMBER 每账号2快照；BE-D list Deprecation；BE-H search-index SUBSTR 4k；BE-E resolveOutboundHTTPURL + redirect pin
-  - CF-C  + CI step；CF-E runbook token ACL
-  - Gates: go internal PASS · frontend format/lint/tsc · tests 273 · build+budget OK
-
-
-- [x] **FE-4 / BE-2 accounts scale-out (2026-07-16)** — 启动不再全量 `/api/accounts`
-  - BE: `internal/core/accounts_page.go` → `/api/accounts/page` (cursor+filters+totals) · `/api/accounts/summary` · `/api/accounts/search-index`；`routes.go`/`models.go`；`accounts_list_test.go` 覆盖 cursor/filter/summary/index
-  - FE: `useInventoryData` → summary only；`useAccountsPage` + `AccountsPanel` 服务端分页；`useChannelActions`/`useChannelFilters` 改 search-index；`useSiteAccounts` 改 page API；Dashboard 用 accountTotal/problemTotal
-  - Gates: `go test -mod=vendor -count=1 ./internal/core/ ./internal/accounts/` PASS · frontend `tsc` 0 · `npm test` 271 · `lint` 0
-  - 有意保留: `GET /api/accounts` 兼容；`POST /api/accounts` 创建；站点主从 limit=200/page
-  - **已 commit/push:** `5147d2b` (2026-07-16)
-
-
-- [x] **Completion audit (2026-07-13)** — current-state verification rerun after handoff status correction
-  - Backend: `rtk go test -mod=vendor -count=1 ./internal/accounts/ ./internal/core/` → 529 passed in 2 packages
-  - Frontend: `rtk npx tsc -b` → no errors; `rtk npm test` → 29 files / 268 tests passed; `rtk npm run lint` → exit 0
-  - Release: `scripts/verify-package.ps1 -ZipPath dist/releases/relaycheck-desktop-1.1.0-bdb476755c64-20260713-073147.zip` → package verification passed
-  - Remote: SSH `main` verified at `24d9ed471842a634002ebea89e32ecc970b585b9`; no commit/push/fetch performed
-
-- [x] **Docs pass (2026-07-13)** — 结构文档对齐 S3/S4/P2 落地
-  - `internal/core/PACKAGE_INDEX.md`：日期 2026-07-13；新增 `session_token.go` / `session_token_test.go` / `s3_helpers_test.go`；`http.go` 注明 errorClass + token gate + loopback write guard
-  - `docs/PROJECT_STRUCTURE.md`：日期 2026-07-13；main.go 数据根 + token env；SettingsCards/pagination/safeExternalUrl/navigation；安全模型改为 opt-in token；审查报告入 Active Documents；验证段改为 tsc/test/lint + 离线 release 路径 + CI
-  - Commits: `c97e85f` · `ccd2f98`
-
-- [x] **P2 零散 (2026-07-13)** — 承 review BE-10 / BE-11 / AR-4  
-  - **BE-10** Dashboard COUNT 聚合：`buildDashboardSummary` 5 次独立 `COUNT(*)` 折成单 SQL 标量子查询，省 4 次 SQLite RTT（`commit 459289e`）  
-  - **BE-11** 错误稳定：`writeError` 已统一 `errorClass`（validation/server/rate_limited…）对外；`/api/v1` 前缀属契约级迁移（84 处调用点 + SPA 同步），单机本地形态无功能收益，**主动不做**  
-  - **AR-4** 导航 intent：全局搜 `setTab("accounts"/"balances")` 字面量 **0 命中**，全走 `navigation.ts`（`accounts`→`{sites, accountsView:"all"}`、`balances`→`{sites, accountsView:"all", query:"余额"}`），已清  
-  - Gates: core **55.4%** · go PASS · frontend **268** + tsc 0 + lint 0
-
-- [x] **P2 三项落地 (2026-07-13)** — 承 review「Settings 大拆分 / 列表虚拟化 / 本机 API token」  
-  - **Settings 大拆分**: `Settings.tsx` 789→431 行；抽出 `SettingsCards.tsx`（About/VersionCheck/PortCheck/Path/Help/Legend/Sync/ChannelHealth/Scheduler/AuditLog/JsonEditor 11 卡）；`parseSetting`/`parseStringSetting` 收敛 useMemo 解析  
-  - **列表虚拟化（分页）**: `AccountsPanel.tsx` `ACCOUNTS_PER_PAGE=50` + `page` 状态 + `pageAccounts` 切片；筛选变化重置页；`pagination-bar.css`（>50 条才显示分页条）  
-  - **本机 API token（opt-in）**: `internal/core/session_token.go`（256-bit hex + HttpOnly/SameSite=Strict cookie + `subtle.ConstantTimeCompare`）；`RELAYCHECK_REQUIRE_TOKEN=1` 才启用，token 写 `data/session-token.txt`(0600)；`requireSession` 前置 `validateSessionToken`；默认关闭不改现有可信单用户流；SPA 无需改动（`credentials: same-origin` 自动带 cookie）；`session_token_test.go` 4 用例  
-  - Gates: core **55.2%** · go PASS · frontend **268** + lint 0 + tsc 0 + build 0
-- [x] **S4 审查落地 (2026-07-13)** — 见 `docs/code-review-s4-implementation-2026-07-13.md`  
-  - FE: dialogEpoch 关抽屉；safeExternalUrl；启动仅等 system；Insights 展开后拉 models  
-  - BE: openAppDB；digest 单 cancel；health/status 路径脱敏；accounts `limit`；settings 白名单；JSON 8MiB；import 根收紧；releaseUrl sanitize  
-  - CF: CI + go vet；`scripts/build-desktop.ps1`  
-  - Gates: core **55.2%** · go packages PASS · frontend **268** + lint 0
-- [x] **B · S3 (2026-07-13)**  
-  - AR-1 freeze + cover ≥55；BE-3 loopback RemoteAddr；FE-4 cascade docs；CI 骨架
-- [x] **A · Release zip (2026-07-13)** — commit `a611273`  
-  - Zip: `dist/releases/relaycheck-desktop-1.1.0-a6112733657e-20260713-022651.zip`  
-  - SHA256: `50d36aa7a6ea0ec387c1b3445cdfbf65ac1245c3c0b8f04b18caa1ea139808d5`
-- [x] Push S0/S1/S2 — tip was `8b32f21` / S2 `91b9f40` → origin/main via `ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git`（https 443 + 死代理 7897 仍不可用）
-- [x] Visual smoke / session-expiry runbook / full-stack review report
-- [x] S0 / S1 / S2 review（见 Current state）
-
-**Git/remote 备忘**
-
-当前 committed `HEAD` 与 SSH 远端 `main` 基线均为 `1b95b0d`。不要因为本地 stale `origin/main` 而重复 push；后续确需发布时先 `git ls-remote` / fetch 核对，再使用 SSH 别名远端，勿依赖 HTTPS + 7897。当前 07-17 S0/P1 改动尚未 commit/push。
-
-```powershell
-cd E:\zidqiandao\relaycheck-desktop
-git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main
-```
+**Do not without explicit confirm:** DB migration, delete `data/*`, site-delete semantics change, force-push, deploy, real upstream checkin blasts.
 
 ---
 
-## Current state
+## Done (do not redo)
 
-Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **IA-2** (accounts tab physically merged into 站点与账号), **#8.3 channel-sync UI**, **#9 Phase 2 bulk re-login**, **#8.4/#8.2**, **Action Center site sample deep-links**, **#9 R2 session indicator**, and **2026-07-12 frontend optimization + S0–S2 review** are on branch `main`.  
-**Committed local/remote baseline:** `1b95b0d` (SSH remote synced before this local work). Working tree contains the uncommitted 07-17 P1-P3 implementation. Exact-toolchain release verification and dirty package verification both pass; a clean release still requires commit/push authorization.
+### 2026-07-18 — security closed loops + typed API (pushed)
 
-### P2 三项落地 (2026-07-13) — done
+| Commit | Summary |
+|---|---|
+| `f5c10de` | Checkin + unsupported-cleanup `previewId` freeze/claim; JSON fail-closed; CST day bounds; atomic checkin save; instance key ACL; public errors; incremental smoke + CI |
+| `b98218e` | Typed API owners: accounts, models, keys, channels, local-newapi, notifications, system, scheduler, sites; panel wiring + behavior tests |
+| `5f5c556` | SOP architecture/QA/security docs + handoff notes |
+| `a8f372d` | Ignore local `frontend/verify-canary.txt` / `verify-nav-output.txt` |
 
-| 项 | 摘要 | 关键文件 |
-|----|------|---------|
-| Settings 大拆分 | 789→431 行；11 卡片抽出 | `frontend/src/components/settings/{Settings,SettingsCards}.tsx` |
-| 列表虚拟化（分页） | 50/页；筛选重置；>50 才显示 | `AccountsPanel.tsx` · `styles/components/pagination-bar.css` |
-| 本机 API token（opt-in） | `RELAYCHECK_REQUIRE_TOKEN=1`；HttpOnly/Strict cookie；常量时间比较；默认关 | `internal/core/session_token.go`(+`_test.go`) · `main.go` · `http.go:requireSession` |
+**Frontend gate snapshot (typed API batch):** ~63 files / 387 tests; coverage ~66.99 / 58.80 / 59.73 / 68.18 (floors 53/45/40/54).  
+**Go gate snapshot (security batch):** prior full run 13 packages / 1148 tests; re-run only if backend files change.
 
-Token 默认关闭；启用后 token 写 `data/session-token.txt`(0600)，`/api/health` 不受限，SPA 无需改动。
+### Contract owners (frontend)
 
-### S4 review implementation (2026-07-13) — done
+| Owner | Path |
+|---|---|
+| checkin / cleanup preview | `frontend/src/api/checkins.ts`, `account-cleanup.ts` |
+| models / keys | `frontend/src/api/models.ts`, `keys.ts` |
+| channels | `frontend/src/api/channels.ts` |
+| local-newapi | `frontend/src/api/local-newapi.ts` |
+| notifications | `frontend/src/api/notifications.ts` |
+| system / scheduler / sites | `frontend/src/api/system.ts`, `scheduler.ts`, `sites.ts` |
 
-See `docs/code-review-s4-implementation-2026-07-13.md`. Cover **55.2%**, frontend **268** tests.
+### 2026-07-17 and earlier
 
-### S3 mid-term (2026-07-13) — done
+See `docs/full-stack-code-review-optimization-2026-07-17.md` for P1–P3 close-out, SSRF pin, import typed errors, coverage floors, release verifier history. Older session bullets remain valid as historical evidence in that report; they are **already on main**, not uncommitted.
 
-| ID | Summary | Status |
-|----|---------|--------|
-| AR-1 | App freeze policy + core cover ≥55% (55.1%) | done |
-| BE-3 | Loopback RemoteAddr on writes + threat model doc; no unlock password | done |
-| FE-4 | Recovery cascade docs + stub delete dates | done |
-| CI | `.github/workflows/ci.yml` windows go/frontend | done |
+---
 
-### S2 review polish (2026-07-12) — done
+## Read order for a new agent
 
-| ID | Summary | Status |
-|----|---------|--------|
-| BE-5 | GET settings mask notification secrets; PUT empty preserves ciphertext | done |
-| BE-4 | SQLite import path allowlist (Abs+EvalSymlinks+roots) | done |
-| FE-2 | keep-alive `inert`/`aria-hidden`; `useApi({enabled})` pause | done |
-| FE-3 | ChannelsPanel seeds from inventory; models-only when seeded | done |
-| FE-6 | DialogShell body scroll-lock + `titleId`/aria-labelledby | done |
-| FE-5 | SettingsProxy / SettingsBackup / SettingsExportImport; clear export password | done |
-| FE-4 | recovery cascade note + drop duplicate `.muted` | done |
-| FE-7 | settings-split + dialog-shell contract tests | done |
+1. This file  
+2. `docs/housekeep/project-cleanup-plan-2026-07-18.md`  
+3. `docs/sop/relaycheck-security-consistency-verification-2026-07-18.md`  
+4. `docs/sop/relaycheck-incremental-architecture.md`  
+5. `docs/sop/relaycheck-incremental-qa-report.md`  
+6. `CLAUDE.md` + user `~\CLAUDE.md` workstyle  
 
-**Verify (S2):**
+Housekeep session files: `task_plan.md`, `findings.md`, `progress.md`.
 
-```powershell
-cd E:\zidqiandao\relaycheck-desktop
-go test -mod=vendor -count=1 ./internal/accounts/ ./internal/core/
-cd frontend
-npx tsc -b
-npm test          # 264 passed
-npm run lint
-```
+---
 
-### Frontend optimization (2026-07-12) — done
+## Local hygiene
 
-Report: `docs/frontend-optimization-report-2026-07-12.md`
+| Path | Policy |
+|---|---|
+| `data/` | **Never delete** (DB + keys); gitignored |
+| `dist/`, `frontend/dist/`, `frontend/coverage/` | Safe to delete; regenerate via build/test/package scripts |
+| `frontend/verify-*.txt` | gitignored canaries |
+| `.planning/` | Historical agent plans; keep unless user asks to archive |
+| `vendor/` | Keep; Go modules vendored |
 
-| Track | Summary | Status |
-|-------|---------|--------|
-| Theme integrity | Fix circular `--surface-solid`; class-only `html.dark`; FOUC bootstrap | done |
-| Primitives | Tokenized Button/Card/Badge/Empty; **no Radix/shadcn** | done |
-| DialogShell | Shared Escape + focus trap/cycle/restore; Sites / Accounts / master-detail / Channels / Onboarding / 2FA | done |
-| Idle tabs | `lib/idle-tabs.ts` 5 min TTL; dashboard pinned | done |
-| Lazy + chunks | Non-dashboard panels `React.lazy`; Vite `manualChunks` | done |
-| CSS merge | `layers/control-room.css` = redesign → layout-harmonization → linear; old files stubbed | done |
-| Button ghost | `variant="ghost"` → CSS class `ghost`; product ghost call sites migrated; 0 residual `button.ghost` natives | done |
-| exhaustive-deps | Stable refresh/destructure + Settings `DEFAULT_*` module constants | done |
-| Tooling | ESLint 9 flat + react-hooks; Prettier | done |
+---
 
-**Verify (frontend close-out):**
+## Commands (smoke)
 
 ```powershell
 cd E:\zidqiandao\relaycheck-desktop\frontend
-npx tsc -b
-npm test          # 264 passed
-npm run build
-npm run lint      # 0 errors, 0 warns
-```
-
-### Product tracks
-
-| Track | Summary | Status |
-|-------|---------|--------|
-| S1–S6 | Action-first accounts/sites/dashboard/sidebar/CSS | done |
-| β-MVP | `SiteAccountMasterDetail` dual-pane (≥1180) / stack (≤900); default layout on Sites | done |
-| IA-2 | Physically merge accounts tab into 站点与账号 (`c517226`) | done |
-| #8.3 | `LocalNewAPISyncPanel` + `syncFeedback`; Scan tab | done |
-| #8.4 | exclude samples + `GET /api/local-newapi/exclude-rules` | done |
-| #8.2 | last_sync_at / last_sync_summary on instances | done |
-| #9 Phase 2 | `BulkReloginWizard` + detail re-login strip | done |
-| #9 R2 / 9.3 | Session chip while `browser_open` | done |
-| Action Center deep-link | `ActionSample` → sites master-detail | done |
-
-### Constraints (still hold)
-
-- No auto-login / 2FA bypass; never “请关闭 2FA”
-- No secrets in docs/logs
-- Reuse `?upstreamSiteId=`
-- No Radix/shadcn (project-owned `components/ui/*` only)
-- **Do not push unless asked** (or after proxy is up and user expects publish)
-
-### Token save note (#8.3)
-
-There is **no** `POST /api/local-newapi/{id}/sync-token`. Saving a system access token is done by posting `accessToken` + `saveAccessToken: true` on `POST …/{id}/sync`.
-
-### Specs
-
-- Frontend opt report: `docs/frontend-optimization-report-2026-07-12.md`
-- **Full-stack review:** `docs/code-review-optimization-2026-07-12.md`（2026-07-12）
-- β review: `docs/superpowers/specs/2026-07-11-layout-beta-design-review-draft.md`
-- #8: `docs/superpowers/specs/2026-07-11-newapi-channel-sync-exploration.md`
-- #9: `docs/superpowers/specs/2026-07-11-session-relogin-plan.md`
-
-### Suggested verify after pull
-
-```powershell
-cd E:\zidqiandao\relaycheck-desktop
-go test -mod=vendor -count=1 ./internal/accounts/ ./internal/core/
-cd frontend
-npx tsc -b
 npm test
-npm run lint
-# optional: npm run build
-```
+npm run test:coverage
+npm run build
 
-Preserved: `vendor/`, `data/`, `frontend/dist/`. Run `cd frontend; npm ci` if `node_modules` missing.
+cd E:\zidqiandao\relaycheck-desktop
+go test -mod=vendor -count=1 ./internal/core
+go test -mod=vendor ./... -count=1 -timeout 120s
+```
 
 ---
 
-## Historical sessions
+## Open product risks (unchanged)
 
-See git log and earlier HANDOFF history for alpha S1–S6, AccountTaskService, CheckinTaskService, and global optimization closure.
+- SQLite FK / site-delete semantics + orphan cleanup (needs backup + confirm)  
+- Full backup restore service rebind matrix  
+- Proxy-mode DNS rebinding  
+- Real upstream checkin / desktop signing / production RUM  
