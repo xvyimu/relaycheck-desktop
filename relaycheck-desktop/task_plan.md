@@ -42,8 +42,8 @@
 - 状态：`complete`
 - progress 勾选；docs-only commit `c81f423`
 
-## Dependency graph
-Phase1 → Phase2 → Phase3 → Phase4
-
+### Phase 5 — Archive `.planning`
+- 状态：`complete`
+- 产出：`docs/archives/planning-history-2026-07-18.tar.gz` + README；`git rm -r` + `.gitignore`
 ## Vertical slice acceptance
 「整理后」：新人读 HANDOFF + housekeep 文档知道删了什么、为何保留 data/planning；磁盘上无 coverage/dist 垃圾；主分支与 origin 一致（已 push）。

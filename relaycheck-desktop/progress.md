@@ -10,7 +10,7 @@
 | clean | 删 dist frontend/dist frontend/coverage | GONE; DATA_OK; ~28MB freed |
 | handoff | 同步 a8f372d | HANDOFF rewritten UTF-8 |
 | commit | docs housekeep only | c81f423 docs(housekeep)... |
-
+| archive | .planning → docs/archives tarball | tar.gz 31KB; 20 sessions; git rm + ignore |
 ## Errors
 | 错误 | 处理 |
 |---|---|

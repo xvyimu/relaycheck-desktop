@@ -75,7 +75,7 @@ Remove-Item -Recurse -Force dist, frontend\dist, frontend\coverage -ErrorAction 
 
 | 路径 | 原因 | 若清理 |
 |---|---|---|
-| `.planning/**` | 多服务拆分历史 planning-with-files 会话 | 可归档为 zip 后删；**本轮不删** |
+| `.planning/**` | 历史 planning-with-files（曾 tracked） | **已归档** `docs/archives/planning-history-2026-07-18.tar.gz` 并 gitignore |
 | `frontend/node_modules` | 开发必需 | 仅磁盘极度紧张时 `npm ci` 重装 |
 | `docs/sop` 全量 | 已提交权威增量文档 | 不删 |
 

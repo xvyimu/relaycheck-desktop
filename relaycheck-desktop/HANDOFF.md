@@ -14,7 +14,7 @@ Read this first, then `CLAUDE.md` for architecture.
 1. [ ] **SitesPanel / remaining bare API** — scan components still using raw `api("/api/...")` outside typed owners; converge one surface at a time.
 2. [ ] **LocalNewAPISyncPanel behavior tests** — mount list+exclude-rules, sync default body, draft token path, failure `role=alert`.
 3. [ ] **External measurement only** — RUM/startup waterfall and API p95 after real deployment; local smoke cannot prove production p95.
-4. [ ] **Optional:** archive `.planning/**` to zip if disk hygiene is desired (default: keep).
+4. [x] **Archive `.planning/**`** — 2026-07-18: tarball `docs/archives/planning-history-2026-07-18.tar.gz` + README; directory removed and gitignored.
 
 **Do not without explicit confirm:** DB migration, delete `data/*`, site-delete semantics change, force-push, deploy, real upstream checkin blasts.
 
@@ -71,7 +71,7 @@ Housekeep session files: `task_plan.md`, `findings.md`, `progress.md`.
 | `data/` | **Never delete** (DB + keys); gitignored |
 | `dist/`, `frontend/dist/`, `frontend/coverage/` | Safe to delete; regenerate via build/test/package scripts |
 | `frontend/verify-*.txt` | gitignored canaries |
-| `.planning/` | Historical agent plans; keep unless user asks to archive |
+| `.planning/` | **Archived** to `docs/archives/planning-history-2026-07-18.tar.gz`; gitignored if recreated |
 | `vendor/` | Keep; Go modules vendored |
 
 ---

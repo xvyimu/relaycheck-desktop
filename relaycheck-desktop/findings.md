@@ -17,7 +17,7 @@
 | `frontend/node_modules/` | 大 | 否 | 是 | **保留** 开发依赖 |
 | `data/` | DB+keys | 否 | 是 | **禁止删** 运行时数据 |
 | `vendor/` | 大 | 是 | 否 | **保留** Go vendor |
-| `.planning/` | 多会话 md | 否? | 否 | **默认保留** 历史规划 |
+| `.planning/` | 多会话 md | 曾是 | 现是 | **已归档 tarball + 删除 + ignore** |
 | `docs/` | 文档 | 是 | 否 | **保留** |
 
 ## 文档健康
