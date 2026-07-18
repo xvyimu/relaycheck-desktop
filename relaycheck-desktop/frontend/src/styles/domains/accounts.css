@@ -977,6 +977,18 @@
   max-width: 220px;
 }
 
+.master-detail-site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.master-detail-site-actions .master-detail-account-filter {
+  flex: 1 1 180px;
+}
+
 .site-bulk-actions {
   display: flex;
   flex-wrap: wrap;

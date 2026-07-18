@@ -18,21 +18,27 @@
    - `upstream_sites` by `id`
 6. Response returns cascade counts; missing site → 404; `__global__` compatibility id rejected.
 7. Frontend: `sitesApi.remove(id)` typed DELETE owner.
+8. UI entry points (with `window.confirm` cascade copy + backup hint):
+   - Sites 卡片布局「删除」
+   - 站点详情抽屉「删除站点」
+   - 主从布局选中站点「删除站点」
+9. Handler invalidates read cache after successful delete (`invalidateReadCache`).
 
 ## Explicitly not done (still needs product confirm + backup)
 
 - Adding FK constraints to existing tables via rebuild migration (SQLite rewrite).
-- One-shot orphan cleanup of historical rows already left behind by old deletes.
+- One-shot orphan **cleanup** of historical rows already left behind by old deletes.
 - Soft-delete / archive-site product mode.
 - Touching real `data/relaycheck.db` contents in this session.
 
-## Operator checklist before enabling aggressive UI delete
+## Operator checklist before using UI delete
 
 1. Backup: Settings → 立即备份，或 copy `data\relaycheck.db*`.
-2. Prefer API/UI delete only after cascade is deployed.
-3. If orphans already exist, run a **future** maintenance query after backup (not shipped as auto-migration here).
+2. Prefer API/UI delete only after cascade is deployed (this build).
+3. Historical orphans: run **read-only** precheck first — `scripts/precheck-site-orphans.ps1` / `docs/sop/relaycheck-site-orphan-precheck-2026-07-18.md`. Cleanup still needs separate confirm.
 
 ## Tests
 
 - `go test -mod=vendor ./internal/sites -run DeleteUpstream`
 - Frontend `sitesApi.remove` contract test
+- Frontend `siteDelete` message helpers + master-detail delete label

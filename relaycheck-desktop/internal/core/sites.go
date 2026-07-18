@@ -308,6 +308,8 @@ func (a *App) deleteUpstreamSite(w http.ResponseWriter, r *http.Request, id stri
 		writePublicError(w, http.StatusInternalServerError, "删除站点失败，请稍后重试。", err)
 		return
 	}
+	// 级联删除会改动站点/账号/排程等读缓存；立即失效避免 2s TTL 内返回幽灵站点。
+	a.invalidateReadCache()
 	// 返回级联计数，便于前端确认未留下孤儿数据。
 	writeJSON(w, http.StatusOK, result)
 }

@@ -1,11 +1,13 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
+import { sitesApi } from "@/api/sites";
 import { AccountCard } from "@/components/accounts/AccountCard";
 import { AccountDetailContent } from "@/components/accounts/AccountDetailContent";
 import { isProblemAccount } from "@/components/accounts/helpers";
 import { DialogShell } from "@/components/ui/dialog-shell";
 import { Empty } from "@/components/ui/empty";
 import { useSiteAccounts } from "@/hooks/useSiteAccounts";
+import { formatSiteDeleteResult, siteDeleteConfirmMessage } from "@/lib/siteDelete";
 import type { Account, NavigationIntent, UpstreamSite } from "@/types";
 import { Button } from "@/components/ui/button";
 
@@ -53,6 +55,8 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
   const [statusFilter, setStatusFilter] = useState("all");
   const [detailAccount, setDetailAccount] = useState<Account | null>(null);
   const [mobileSubview, setMobileSubview] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [message, setMessage] = useState("");
 
   const siteScoped = useSiteAccounts(selectedSiteId || "all");
   const { enabled: siteScopedEnabled, refresh: refreshSiteScoped } = siteScoped;
@@ -114,6 +118,25 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
       await refreshSiteScoped();
     }
   }, [onRefresh, refreshSiteScoped, siteScopedEnabled]);
+
+  /** 主从视图删除站点：二次确认 + 级联提示，成功后清除选中并刷新。 */
+  const removeSelectedSite = useCallback(async () => {
+    if (!selectedSite || deleteBusy) return;
+    const confirmed = window.confirm(siteDeleteConfirmMessage(selectedSite));
+    if (!confirmed) return;
+    setDeleteBusy(true);
+    setMessage("");
+    try {
+      const result = await sitesApi.remove(selectedSite.id);
+      clearSelection();
+      await onRefresh();
+      setMessage(formatSiteDeleteResult(selectedSite.name, result));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "删除站点失败。");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }, [clearSelection, deleteBusy, onRefresh, selectedSite]);
 
   const shellClass = ["master-detail", mobileSubview && selectedSiteId ? "master-detail-subview" : ""]
     .filter(Boolean)
@@ -223,17 +246,28 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
                   {siteScoped.loading ? " · 加载中…" : ""}
                 </p>
               </div>
-              <label className="field master-detail-account-filter">
-                <span>账号状态</span>
-                <select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                  aria-label="筛选账号状态"
+              <div className="master-detail-site-actions">
+                <label className="field master-detail-account-filter">
+                  <span>账号状态</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                    aria-label="筛选账号状态"
+                  >
+                    <option value="all">全部</option>
+                    <option value="problem">异常优先</option>
+                  </select>
+                </label>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  type="button"
+                  disabled={deleteBusy}
+                  onClick={() => void removeSelectedSite()}
                 >
-                  <option value="all">全部</option>
-                  <option value="problem">异常优先</option>
-                </select>
-              </label>
+                  {deleteBusy ? "删除中…" : "删除站点"}
+                </Button>
+              </div>
             </>
           ) : (
             <div className="master-detail-empty">
@@ -241,6 +275,7 @@ function SiteAccountMasterDetailBase({ sites, onRefresh, intent }: SiteAccountMa
               <span>选中后将通过服务端按站点加载账号，不拉取全量列表。</span>
             </div>
           )}
+          {message ? <div className="problem-hint">{message}</div> : null}
           {siteScoped.error ? <div className="error">{siteScoped.error}</div> : null}
         </div>
 

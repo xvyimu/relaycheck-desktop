@@ -7,6 +7,7 @@ import { DialogShell } from "@/components/ui/dialog-shell";
 import { Empty } from "@/components/ui/empty";
 import { formatConfidence, formatDuration, formatTime } from "@/lib/format";
 import { loginDiscoverySourceLabel, normalizeLoginDiscovery, parseLoginDiscovery } from "@/lib/loginDiscovery";
+import { formatSiteDeleteResult, siteDeleteConfirmMessage } from "@/lib/siteDelete";
 import type { LoginDiscovery, NextRunItem, NavigationIntent, SiteDetail, TabKey, UpstreamSite } from "@/types";
 import { useNextRuns } from "@/hooks/useNextRuns";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
@@ -165,6 +166,27 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate, dialogEpoch = 0 
     setDetail(null);
     setDetailBusyId("");
   }, []);
+
+  /** 删除站点：二次确认 + 级联提示，契约归 sitesApi.remove。 */
+  async function removeSite(site: UpstreamSite) {
+    if (busyId) return;
+    const confirmed = window.confirm(siteDeleteConfirmMessage(site));
+    if (!confirmed) return;
+    setBusyId(site.id);
+    setMessage("");
+    try {
+      const result = await sitesApi.remove(site.id);
+      if (detail?.site.id === site.id) {
+        closeDetail();
+      }
+      await onRefresh();
+      setMessage(formatSiteDeleteResult(site.name, result));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "删除站点失败。");
+    } finally {
+      setBusyId("");
+    }
+  }
 
   const detailDiscovery = detail ? siteLoginDiscovery(detail.site, detail.detection) : null;
   const detailCandidates = detailDiscovery?.candidates?.slice(0, 6) || [];
@@ -375,7 +397,7 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate, dialogEpoch = 0 
                         <Button
                           variant="ghost"
                           type="button"
-                          disabled={detailBusyId === site.id}
+                          disabled={detailBusyId === site.id || busyId === site.id}
                           onClick={() => void openDetail(site)}
                         >
                           {detailBusyId === site.id ? "加载中…" : "详情"}
@@ -384,6 +406,7 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate, dialogEpoch = 0 
                           <Button
                             variant="ghost"
                             type="button"
+                            disabled={busyId === site.id}
                             onClick={() => {
                               const next = siteAccountsNavigationIntent(site.id);
                               onNavigate(next.target, { upstreamSiteId: next.upstreamSiteId });
@@ -393,8 +416,17 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate, dialogEpoch = 0 
                           </Button>
                         ) : null}
                         <button disabled={busyId === site.id} onClick={() => void detect(site)} type="button">
-                          {busyId === site.id ? "探测中…" : "探测能力"}
+                          {busyId === site.id ? "处理中…" : "探测能力"}
                         </button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          type="button"
+                          disabled={busyId === site.id}
+                          onClick={() => void removeSite(site)}
+                        >
+                          {busyId === site.id ? "删除中…" : "删除"}
+                        </Button>
                       </div>
                     </article>
                   );
@@ -428,6 +460,7 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate, dialogEpoch = 0 
                     {onNavigate ? (
                       <button
                         type="button"
+                        disabled={busyId === detail.site.id}
                         onClick={() => {
                           const next = siteAccountsNavigationIntent(detail.site.id);
                           onNavigate(next.target, { upstreamSiteId: next.upstreamSiteId });
@@ -436,6 +469,15 @@ function SitesPanelBase({ sites, onRefresh, intent, onNavigate, dialogEpoch = 0 
                         查看账号
                       </button>
                     ) : null}
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      type="button"
+                      disabled={busyId === detail.site.id}
+                      onClick={() => void removeSite(detail.site)}
+                    >
+                      {busyId === detail.site.id ? "删除中…" : "删除站点"}
+                    </Button>
                     <Button variant="ghost" type="button" onClick={closeDetail} className="dialog-shell-close">
                       关闭
                     </Button>

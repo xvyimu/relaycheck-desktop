@@ -57,4 +57,15 @@ describe("SiteAccountMasterDetail", () => {
     expect(html).toContain("当前站点");
     expect(html).toContain("Alpha");
   });
+
+  it("renders delete site control when a site is selected", () => {
+    const html = renderToStaticMarkup(
+      <SiteAccountMasterDetail
+        sites={sites}
+        onRefresh={async () => {}}
+        intent={{ target: "sites", upstreamSiteId: "site-1" } as never}
+      />,
+    );
+    expect(html).toContain("删除站点");
+  });
 });

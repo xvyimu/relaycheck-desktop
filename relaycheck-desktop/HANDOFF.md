@@ -3,7 +3,7 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-18 (session close archive + accounts/system request helpers)  
+**Last updated:** 2026-07-18 (site delete UI + cache invalidate + orphan precheck)  
 **HEAD:** see `git rev-parse --short HEAD` on `main` / `origin/main`  
 **Worktree policy:** local `dist/` / `frontend/dist/` / `frontend/coverage/` may be deleted anytime (gitignored). Never delete `data/`.
 
@@ -14,6 +14,8 @@ Read this first, then `CLAUDE.md` for architecture.
 1. [x] Sites/analytics typed APIs + LocalNewAPISyncPanel tests + local deploy/perf docs  
 2. [x] Archive `.planning/**`  
 3. [x] Session close archive (`docs/archives/session-close-2026-07-18.md`) + memory  
+4. [x] Site delete UI (confirm + cascade copy) + read-cache invalidate + **read-only** orphan precheck  
+5. [x] checkin_logs orphan **dry-run** SQL (`scripts/sql/cleanup-checkin-log-orphans.dry-run.sql`) — mutate still blocked  
 
 **Optional residual code (non-blocking):**
 
@@ -24,10 +26,9 @@ Read this first, then `CLAUDE.md` for architecture.
 
 - Authenticode / store signing materials — scaffold: `scripts/sign-release.ps1` + `docs/deploy/code-signing-readiness-2026-07-18.md` (**blocked without PFX**)
 - Production RUM + multi-host API p95 — plan: `docs/perf/production-rum-collection-plan-2026-07-18.md` (local sampler only)
-- Full schema FK migration / historical orphan cleanup — **deferred**; site **delete cascade is implemented in app** (`docs/sop/relaycheck-site-delete-cascade-2026-07-18.md`)
+- Full schema FK migration / historical orphan **cleanup** — **deferred** (precheck only: `scripts/precheck-site-orphans.ps1`); cascade delete + UI are live (`docs/sop/relaycheck-site-delete-cascade-2026-07-18.md`)
 
-**Do not without explicit confirm:** DB migration, delete `data/*`, site-delete semantics change, force-push, cloud deploy, real upstream checkin blasts.
-
+**Do not without explicit confirm:** DB migration, delete `data/*`, orphan cleanup SQL that mutates, force-push, cloud deploy, real upstream checkin blasts.
 ---
 
 ## Done (do not redo)
@@ -107,9 +108,9 @@ go test -mod=vendor ./... -count=1 -timeout 120s
 
 ---
 
-## Open product risks (unchanged)
+## Open product risks (updated 2026-07-18)
 
-- SQLite FK / site-delete semantics + orphan cleanup (needs backup + confirm)  
+- SQLite full-table FK migration + historical orphan **cleanup** (precheck exists; mutate still needs backup + confirm)  
 - Full backup restore service rebind matrix  
 - Proxy-mode DNS rebinding  
 - Real upstream checkin / desktop signing / production RUM  
