@@ -3,32 +3,70 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-18 (site delete UI + cache invalidate + orphan precheck)  
-**HEAD:** see `git rev-parse --short HEAD` on `main` / `origin/main`  
+**Last updated:** 2026-07-18 (session close — site delete UI + orphan cleanup + local API p95)  
+**HEAD:** `3cadcaf` on `main` / `origin/main`  
 **Worktree policy:** local `dist/` / `frontend/dist/` / `frontend/coverage/` may be deleted anytime (gitignored). Never delete `data/`.
 
 ---
 
 ## TODO (next session)
 
-1. [x] Sites/analytics typed APIs + LocalNewAPISyncPanel tests + local deploy/perf docs  
-2. [x] Archive `.planning/**`  
-3. [x] Session close archive (`docs/archives/session-close-2026-07-18.md`) + memory  
-4. [x] Site delete UI (confirm + cascade copy) + read-cache invalidate + **read-only** orphan precheck  
-5. [x] checkin_logs orphan **dry-run** SQL (`scripts/sql/cleanup-checkin-log-orphans.dry-run.sql`) — mutate still blocked  
+**Code track for this product loop is closed.** Next work is external materials or optional residual polish.
 
 **Optional residual code (non-blocking):**
 
-- AccountCard / AccountForm / AccountInsights / BulkRelogin still use `api()` + `accountApi` URL builders; `accountApi.page/postAction/remove` helpers exist for incremental migration.
-- `useApi` path-string consumers (system status) can later take constants from `systemApi`.
+- AccountCard / AccountForm / AccountInsights / BulkRelogin still use `api()` + `accountApi` URL builders; helpers exist for incremental migration.
+- `useApi` path-string consumers can later take constants from `systemApi`.
+- Cold-start UI first-interactive timing (RUM plan still open checkbox).
 
 **Still external / needs materials:**
 
-- Authenticode signing — scaffold ready (`scripts/sign-release.ps1`, signtool present). **Hard block:** no PFX on disk and no Code Signing cert in Windows stores (only localhost HTTPS + Phone). Do not invent certs. See `docs/deploy/code-signing-readiness-2026-07-18.md`.
-- Multi-host / larger-DB RUM — local representative API p95 captured on this operator host (`docs/perf/production-rum-collection-plan-2026-07-18.md` + gitignored `docs/perf/samples/local-api-p95-20260718-195231.json`). Cold-start UI waterfall + multi-machine still open.
-- Full schema FK migration — still deferred. Local historical orphan **cleanup done** (18 `checkin_logs`; backup under `data/backups/pre-orphan-cleanup-20260718-195632/`; precheck now 0). Cascade delete + UI live.
+| Item | Status | Unlock |
+|---|---|---|
+| Authenticode | **Hard block** — no PFX on disk, no Code Signing EKU in stores | Operator places Code Signing PFX + sets `RELAYCHECK_SIGN_PFX` / `_PASSWORD`, then `scripts/sign-release.ps1` |
+| Multi-host / large-DB RUM | Local operator-host API p95 done | Larger inventory + multi-machine + UI waterfall |
+| Full SQLite FK table rebuild | Deferred by design | Explicit product confirm + backup |
 
-**Do not without explicit confirm:** DB migration, delete `data/*`, orphan cleanup SQL that mutates, force-push, cloud deploy, real upstream checkin blasts.
+**Do not without explicit confirm:** full-table FK migration, delete `data/*`, force-push, cloud deploy, real upstream checkin blasts, minting self-signed “production” certs.
+
+---
+
+## Done this close-out (2026-07-18 evening — pushed)
+
+| Commit | Summary |
+|---|---|
+| `fd5a87a` | Site delete UI (confirm + cascade copy) + read-cache invalidate + orphan precheck scripts/SOP |
+| `4b51187` | Local representative API p95 (N=50) recorded in RUM plan |
+| `9d19352` | Local cleanup of 18 orphan `checkin_logs` after backup + confirm |
+| `3cadcaf` | Signing hard-block after exhaustive cert/PFX search |
+
+**Also earlier same day (already on main):** cascade delete service (`081285c`), typed APIs, planning archive, security loops — see Done history below and `docs/archives/session-close-2026-07-18.md` + `session-close-2026-07-18-evening.md`.
+
+### Site delete
+
+- Backend: transactional cascade (accounts / checkin_logs / balances / schedules / pricing_cache)
+- Handler: `invalidateReadCache()` after DELETE
+- UI: Sites card + detail drawer + master-detail; `sitesApi.remove` + `lib/siteDelete.ts`
+- SOP: `docs/sop/relaycheck-site-delete-cascade-2026-07-18.md`
+
+### Orphans
+
+- Precheck: `scripts/precheck-site-orphans.ps1` + `scripts/sql/precheck-site-orphans.sql`
+- Dry-run cleanup SQL: `scripts/sql/cleanup-checkin-log-orphans.dry-run.sql`
+- **Local data:** 18 orphan logs deleted; backup `data/backups/pre-orphan-cleanup-20260718-195632/`; precheck all tables **0**
+- SOP: `docs/sop/relaycheck-site-orphan-precheck-2026-07-18.md`, `docs/sop/relaycheck-checkin-orphan-cleanup-dry-run-2026-07-18.md`
+
+### Local API p95 (operator host)
+
+- Plan + table: `docs/perf/production-rum-collection-plan-2026-07-18.md`
+- Sample JSON (gitignored): `docs/perf/samples/local-api-p95-20260718-195231.json`
+- Caveat: loopback, ~1.1MB DB; `accounts-page` p95 ~496ms
+
+### Signing
+
+- Scaffold: `scripts/sign-release.ps1` + `docs/deploy/code-signing-readiness-2026-07-18.md`
+- `dist\relaycheck.exe` may exist locally → **NotSigned**
+
 ---
 
 ## Done (do not redo)
@@ -42,9 +80,6 @@ Read this first, then `CLAUDE.md` for architecture.
 | `5f5c556` | SOP architecture/QA/security docs + handoff notes |
 | `a8f372d` | Ignore local `frontend/verify-canary.txt` / `verify-nav-output.txt` |
 
-**Frontend gate snapshot (typed API batch):** ~63 files / 387 tests; coverage ~66.99 / 58.80 / 59.73 / 68.18 (floors 53/45/40/54).  
-**Go gate snapshot (security batch):** prior full run 13 packages / 1148 tests; re-run only if backend files change.
-
 ### Contract owners (frontend)
 
 | Owner | Path |
@@ -56,28 +91,26 @@ Read this first, then `CLAUDE.md` for architecture.
 | notifications | `frontend/src/api/notifications.ts` |
 | system / scheduler / sites / analytics | `frontend/src/api/system.ts`, `scheduler.ts`, `sites.ts`, `analytics.ts` |
 
-### Local deploy & perf (desktop meaning of deploy)
+### Local deploy & perf
 
-- Playbook: `docs/deploy/local-desktop-playbook-2026-07-18.md` (`verify-release` → `package-release` → `verify-package`)
-- Local perf harness: `docs/perf/README.md` + `scripts/sample-local-perf.ps1` (writes gitignored JSON under `docs/perf/samples/`)
-- Production RUM/p95 still requires a representative installed host; local samples **do not** prove those targets.
+- Playbook: `docs/deploy/local-desktop-playbook-2026-07-18.md`
+- Local sampler: `scripts/sample-local-perf.ps1`
+- RUM plan (partial local fill): `docs/perf/production-rum-collection-plan-2026-07-18.md`
 
 ### 2026-07-17 and earlier
 
-See `docs/full-stack-code-review-optimization-2026-07-17.md` for P1–P3 close-out, SSRF pin, import typed errors, coverage floors, release verifier history. Older session bullets remain valid as historical evidence in that report; they are **already on main**, not uncommitted.
+See `docs/full-stack-code-review-optimization-2026-07-17.md`.
 
 ---
 
 ## Read order for a new agent
 
 1. This file  
-2. `docs/housekeep/project-cleanup-plan-2026-07-18.md`  
-3. `docs/sop/relaycheck-security-consistency-verification-2026-07-18.md`  
-4. `docs/sop/relaycheck-incremental-architecture.md`  
-5. `docs/sop/relaycheck-incremental-qa-report.md`  
+2. `docs/archives/session-close-2026-07-18-evening.md`  
+3. `docs/housekeep/project-cleanup-plan-2026-07-18.md`  
+4. `docs/sop/relaycheck-site-delete-cascade-2026-07-18.md`  
+5. `docs/deploy/code-signing-readiness-2026-07-18.md`  
 6. `CLAUDE.md` + user `~\CLAUDE.md` workstyle  
-
-Housekeep session files: `task_plan.md`, `findings.md`, `progress.md`.
 
 ---
 
@@ -85,11 +118,12 @@ Housekeep session files: `task_plan.md`, `findings.md`, `progress.md`.
 
 | Path | Policy |
 |---|---|
-| `data/` | **Never delete** (DB + keys); gitignored |
-| `dist/`, `frontend/dist/`, `frontend/coverage/` | Safe to delete; regenerate via build/test/package scripts |
+| `data/` | **Never delete** (DB + keys + local backups); gitignored |
+| `dist/`, `frontend/dist/`, `frontend/coverage/` | Safe to delete; regenerate via build/test/package |
 | `frontend/verify-*.txt` | gitignored canaries |
-| `.planning/` | **Archived** to `docs/archives/planning-history-2026-07-18.tar.gz`; gitignored if recreated |
-| `vendor/` | Keep; Go modules vendored |
+| `.planning/` | Archived; gitignored if recreated |
+| `docs/perf/samples/*.json` | gitignored local samples |
+| `vendor/` | Keep |
 
 ---
 
@@ -98,19 +132,18 @@ Housekeep session files: `task_plan.md`, `findings.md`, `progress.md`.
 ```powershell
 cd E:\zidqiandao\relaycheck-desktop\frontend
 npm test
-npm run test:coverage
 npm run build
 
 cd E:\zidqiandao\relaycheck-desktop
-go test -mod=vendor -count=1 ./internal/core
-go test -mod=vendor ./... -count=1 -timeout 120s
+go test -mod=vendor -count=1 ./internal/sites -run DeleteUpstream
+go test -mod=vendor -count=1 ./internal/core -timeout 120s
 ```
 
 ---
 
-## Open product risks (updated 2026-07-18)
+## Open product risks
 
-- SQLite full-table FK migration + historical orphan **cleanup** (precheck exists; mutate still needs backup + confirm)  
+- Full-table SQLite FK rebuild (not app-level cascade — that is done)  
 - Full backup restore service rebind matrix  
 - Proxy-mode DNS rebinding  
-- Real upstream checkin / desktop signing / production RUM  
+- Real upstream checkin blasts / Authenticode / multi-host RUM  
