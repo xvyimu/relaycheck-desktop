@@ -26,10 +26,9 @@
 
 ## Explicitly not done (still needs product confirm + backup)
 
-- Adding FK constraints to existing tables via rebuild migration (SQLite rewrite).
-- One-shot orphan **cleanup** of historical rows already left behind by old deletes.
+- Adding FK constraints to existing tables via rebuild migration (SQLite rewrite) — **design only:** `docs/sop/relaycheck-sqlite-fk-migration-plan-2026-07-18.md`
 - Soft-delete / archive-site product mode.
-- Touching real `data/relaycheck.db` contents in this session.
+- (Historical site orphans on this operator host cleaned 2026-07-18; other hosts must precheck.)
 
 ## Operator checklist before using UI delete
 
