@@ -1,25 +1,48 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
-import { accountsListUrl, SITE_ACCOUNTS_PAGE_LIMIT } from "../useSiteAccounts";
+afterEach(() => {
+  vi.resetModules();
+  vi.restoreAllMocks();
+  vi.doUnmock("react");
+  vi.doUnmock("@/api/client");
+});
 
-describe("accountsListUrl", () => {
-  it("returns unfiltered page URL for empty/all site ids", () => {
-    expect(accountsListUrl()).toBe(`/api/accounts/page?limit=${SITE_ACCOUNTS_PAGE_LIMIT}`);
-    expect(accountsListUrl(null)).toBe(`/api/accounts/page?limit=${SITE_ACCOUNTS_PAGE_LIMIT}`);
-    expect(accountsListUrl("")).toBe(`/api/accounts/page?limit=${SITE_ACCOUNTS_PAGE_LIMIT}`);
-    expect(accountsListUrl("   ")).toBe(`/api/accounts/page?limit=${SITE_ACCOUNTS_PAGE_LIMIT}`);
-    expect(accountsListUrl("all")).toBe(`/api/accounts/page?limit=${SITE_ACCOUNTS_PAGE_LIMIT}`);
-  });
+function mockReactHooks() {
+  vi.doMock("react", () => ({
+    useCallback: (callback: unknown) => callback,
+    useEffect: (effect: () => void | (() => void)) => {
+      effect();
+    },
+    useRef: (initial: unknown) => ({ current: initial }),
+    useState: (initial: unknown) => [initial, vi.fn()],
+  }));
+}
 
-  it("encodes upstreamSiteId for site-scoped page queries", () => {
-    expect(accountsListUrl("site-a")).toBe(
-      `/api/accounts/page?limit=${SITE_ACCOUNTS_PAGE_LIMIT}&upstreamSiteId=site-a`,
-    );
-    expect(accountsListUrl(" site-b ")).toBe(
-      `/api/accounts/page?limit=${SITE_ACCOUNTS_PAGE_LIMIT}&upstreamSiteId=site-b`,
-    );
-    expect(accountsListUrl("a b/c")).toBe(
-      `/api/accounts/page?limit=${SITE_ACCOUNTS_PAGE_LIMIT}&upstreamSiteId=a+b%2Fc`,
-    );
-  });
+it("loads a selected site's account page without requesting the legacy full account list", async () => {
+  mockReactHooks();
+  const api = vi.fn().mockResolvedValue({ items: [], total: 0, nextCursor: "" });
+  vi.doMock("@/api/client", () => ({ api }));
+
+  const { useSiteAccounts } = await import("../useSiteAccounts");
+  const state = useSiteAccounts("site-a");
+
+  expect(state.enabled).toBe(true);
+  expect(api).toHaveBeenCalledWith(
+    "/api/accounts/page?limit=200&upstreamSiteId=site-a",
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  expect(api).not.toHaveBeenCalledWith("/api/accounts");
+});
+
+it("keeps the all-sites master-detail state idle", async () => {
+  mockReactHooks();
+  const api = vi.fn();
+  vi.doMock("@/api/client", () => ({ api }));
+
+  const { useSiteAccounts } = await import("../useSiteAccounts");
+  const state = useSiteAccounts("all");
+
+  expect(state.enabled).toBe(false);
+  expect(state.url).toBeNull();
+  expect(api).not.toHaveBeenCalled();
 });

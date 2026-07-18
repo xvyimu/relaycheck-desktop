@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { buildAccountsPageUrl } from "@/api/accounts";
 import { api } from "@/api/client";
-import { buildAccountsPageUrl } from "@/hooks/useAccountsPage";
 import type { Account, AccountPage } from "@/types";
 
 /** Default page size for site master-detail (server page API). */

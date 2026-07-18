@@ -59,7 +59,7 @@ export function SettingsAboutCard({
           </strong>
         </div>
         {status.portConflict && status.preferredPort ? (
-          <div className="warning-banner" style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, fontSize: 13 }}>
+          <div className="warning-banner settings-port-conflict">
             <span>端口冲突</span>
             <strong>
               首选端口 {status.preferredPort} 被占用，已回退到 {status.port}
@@ -131,7 +131,7 @@ export function SettingsVersionCheckCard({
         </button>
       </div>
       {versionCheckResult ? (
-        <div className="detail-list" style={{ marginTop: 8 }}>
+        <div className="detail-list spacing-top-sm">
           <div>
             <span>当前版本</span>
             <strong>{versionCheckResult.currentVersion || status.productVersion}</strong>
@@ -160,7 +160,7 @@ export function SettingsVersionCheckCard({
                   href={safeExternalUrl(versionCheckResult.releaseUrl) || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ color: "var(--v4-blue)" }}
+                  className="settings-link"
                 >
                   打开下载页面
                 </a>
@@ -168,18 +168,7 @@ export function SettingsVersionCheckCard({
             </div>
           ) : null}
           {versionCheckResult.releaseNotes ? (
-            <div
-              style={{
-                marginTop: 4,
-                padding: "8px 12px",
-                background: "var(--v4-neutral-bg)",
-                borderRadius: 8,
-                fontSize: 13,
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {versionCheckResult.releaseNotes}
-            </div>
+            <div className="settings-release-notes">{versionCheckResult.releaseNotes}</div>
           ) : null}
         </div>
       ) : null}

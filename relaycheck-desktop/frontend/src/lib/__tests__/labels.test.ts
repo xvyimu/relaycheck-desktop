@@ -176,9 +176,12 @@ describe("loginStatusLabel", () => {
 describe("apiKeyStatusLabel", () => {
   it("returns correct labels for known statuses", () => {
     expect(apiKeyStatusLabel("valid")).toBe("密钥有效");
+    expect(apiKeyStatusLabel("invalid")).toBe("密钥无效");
     expect(apiKeyStatusLabel("expired")).toBe("密钥失效");
     expect(apiKeyStatusLabel("unknown")).toBe("密钥未知");
     expect(apiKeyStatusLabel("unchecked")).toBe("密钥未测");
+    expect(apiKeyStatusLabel("untested")).toBe("密钥未测");
+    expect(apiKeyStatusLabel("rate_limited")).toBe("检测限流");
     expect(apiKeyStatusLabel("missing")).toBe("无密钥");
   });
 

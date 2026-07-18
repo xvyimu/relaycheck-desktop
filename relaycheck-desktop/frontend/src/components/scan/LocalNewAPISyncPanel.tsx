@@ -1,13 +1,12 @@
 import { memo, useCallback, useEffect, useState } from "react";
 
-import { api } from "@/api/client";
+import { localNewapiApi } from "@/api/local-newapi";
 import {
   formatExcludedSamplesHint,
   formatImportCountersMessage,
   instanceNeedsCredential,
   syncCapabilityLabel,
   syncTokenStatusLabel,
-  type ImportCounters,
 } from "@/lib/syncFeedback";
 import type { ExcludedRelaySiteRule, LocalNewAPIInstance } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -37,7 +36,8 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
     setLoading(true);
     setListError("");
     try {
-      const list = await api<LocalNewAPIInstance[]>("/api/local-newapi");
+      // 实例列表契约归 localNewapiApi。
+      const list = await localNewapiApi.listInstances();
       setInstances(Array.isArray(list) ? list : []);
     } catch (error) {
       setListError(error instanceof Error ? error.message : "加载 NewAPI 实例失败");
@@ -49,7 +49,7 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
 
   const loadExcludeRules = useCallback(async () => {
     try {
-      const result = await api<{ rules?: ExcludedRelaySiteRule[]; note?: string }>("/api/local-newapi/exclude-rules");
+      const result = await localNewapiApi.excludeRules();
       setExcludeRules(Array.isArray(result.rules) ? result.rules : []);
       setExcludeNote(result.note || "");
     } catch {
@@ -70,23 +70,12 @@ function LocalNewAPISyncPanelBase({ onRefresh }: LocalNewAPISyncPanelProps) {
     }));
   }
 
+  /** 同步渠道；draft 令牌仅在非空时提交，成功后清空草稿。 */
   async function runSync(instance: LocalNewAPIInstance) {
     setBusyId(instance.id);
     try {
-      const body: Record<string, unknown> = {
-        importKeys: false,
-        detectAfterImport: false,
-        pageSize: 100,
-      };
       const draft = (tokenDrafts[instance.id] || "").trim();
-      if (draft) {
-        body.accessToken = draft;
-        body.saveAccessToken = true;
-      }
-      const result = await api<ImportCounters & { instanceId?: string }>(`/api/local-newapi/${instance.id}/sync`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
+      const result = await localNewapiApi.sync(instance.id, draft ? { accessToken: draft, saveAccessToken: true } : {});
       const text = formatImportCountersMessage(result);
       const sampleHint = formatExcludedSamplesHint(result.skippedExcludedSamples, result.skippedExcludedTruncated);
       const level =

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { buildAccountsPageUrl } from "@/api/accounts";
 import { api } from "@/api/client";
 import type { AccountPage } from "@/types";
+
+export { buildAccountsPageUrl } from "@/api/accounts";
+export type { AccountsPageQuery } from "@/api/accounts";
 
 export interface UseAccountsPageOptions {
   limit?: number;
@@ -22,28 +26,6 @@ export interface UseAccountsPageResult {
   hasPrev: boolean;
   refresh: () => Promise<void>;
   reset: () => void;
-}
-
-export type AccountsPageQuery = {
-  limit?: number;
-  query?: string;
-  status?: string;
-  upstreamSiteId?: string;
-  cursor?: string;
-};
-
-/** Pure URL builder for /api/accounts/page — exported for unit tests. */
-export function buildAccountsPageUrl(options: AccountsPageQuery = {}): string {
-  const params = new URLSearchParams();
-  params.set("limit", String(options.limit ?? 50));
-  const query = (options.query || "").trim();
-  const status = (options.status || "").trim();
-  const upstreamSiteId = (options.upstreamSiteId || "").trim();
-  if (query) params.set("query", query);
-  if (status && status !== "all") params.set("status", status);
-  if (upstreamSiteId && upstreamSiteId !== "all") params.set("upstreamSiteId", upstreamSiteId);
-  if (options.cursor) params.set("cursor", options.cursor);
-  return `/api/accounts/page?${params.toString()}`;
 }
 
 const emptyPage = (): AccountPage => ({ items: [], total: 0, accountTotal: 0, problemTotal: 0 });

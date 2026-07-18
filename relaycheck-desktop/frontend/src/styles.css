@@ -19,8 +19,6 @@
 @import "./styles/components/task-center.css";
 @import "./styles/components/theme-toggle.css";
 @import "./styles/domains/onboarding.css";
-@import "./styles/components/task-progress.css";
-@import "./styles/domains/analytics.css";
 @import "./styles/layers/recovery.css";
 @import "./styles/components/drawers.css";
 

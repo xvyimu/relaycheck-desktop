@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { accountActionUrl, accountApi } from "@/api/accounts";
 import { api } from "@/api/client";
 import {
   accountActionButtonLabel,
@@ -36,6 +37,7 @@ import type {
   LoginStatusTestResponse,
 } from "@/types";
 import { AccountKeySummary } from "@/components/accounts/AccountKeySummary";
+import { AccountCardEditor } from "@/components/accounts/AccountCardEditor";
 import {
   accountAvatarLabel,
   accountBackendShort,
@@ -146,7 +148,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     await runAction(
       "网页登录",
       async () => {
-        const result = await api<BrowserLoginOpenResponse>(`/api/accounts/${account.id}/open-browser-login`, {
+        const result = await api<BrowserLoginOpenResponse>(accountActionUrl(account.id, "open-browser-login"), {
           method: "POST",
         });
         if (isBrowserLoginOpenSuccess(result.status)) {
@@ -163,7 +165,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     await runAction(
       "保存授权",
       async () => {
-        const result = await api<BrowserLoginSaveResponse>(`/api/accounts/${account.id}/finish-browser-login`, {
+        const result = await api<BrowserLoginSaveResponse>(accountActionUrl(account.id, "finish-browser-login"), {
           method: "POST",
         });
         if (isBrowserLoginSaveSuccess(result.status)) {
@@ -180,7 +182,9 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     await runAction(
       "测试登录态",
       async () => {
-        const result = await api<LoginStatusTestResponse>(`/api/accounts/${account.id}/test-login`, { method: "POST" });
+        const result = await api<LoginStatusTestResponse>(accountActionUrl(account.id, "test-login"), {
+          method: "POST",
+        });
         if (isLoginStatusValid(result.status)) {
           setReloginPhase("idle");
         }
@@ -198,7 +202,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
       if (!confirmed) return;
     }
     await runAction("保存账号", async () => {
-      await api(`/api/accounts/${account.id}`, {
+      await api(accountApi.item(account.id), {
         method: "PUT",
         body: JSON.stringify({
           displayName,
@@ -224,7 +228,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
     setBusy("检测密钥");
     setMessage("");
     try {
-      const result = await api<APIKeyTestResult>(`/api/accounts/${account.id}/test-api-key`, { method: "POST" });
+      const result = await api<APIKeyTestResult>(accountActionUrl(account.id, "test-api-key"), { method: "POST" });
       await onDone();
       setMessage(formatAPIKeyTestMessage(result));
     } catch (error) {
@@ -239,7 +243,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
       `确认删除账号"${account.displayName}"？这会删除该账号保存的密码、Cookie、Token 和 API Key 等凭据。`,
     );
     if (!confirmed) return;
-    await runAction("删除账号", () => api(`/api/accounts/${account.id}`, { method: "DELETE" }));
+    await runAction("删除账号", () => api(accountApi.item(account.id), { method: "DELETE" }));
   }
 
   function renderPrimaryButton(key: PrimaryActionKey) {
@@ -287,7 +291,9 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
             type="button"
             disabled={isBusy}
             aria-label={`为 ${account.displayName} 执行签到`}
-            onClick={() => void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))}
+            onClick={() =>
+              void runAction("签到", () => api(accountActionUrl(account.id, "checkin"), { method: "POST" }))
+            }
           >
             {accountActionButtonLabel("签到", busy)}
           </button>
@@ -402,124 +408,37 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
       ) : null}
 
       {editing ? (
-        <div className="account-card-editor">
-          <div className="account-editor-head">
-            <strong>账号配置</strong>
-            <span>敏感字段留空会保留原值；站点网址变更可选择只改当前账号或同步同站点账号。</span>
-          </div>
-          <label className="field">
-            <span>站点名称</span>
-            <input value={siteName} onChange={(event) => setSiteName(event.target.value)} placeholder="站点名称" />
-          </label>
-          <label className="field">
-            <span>后台类型</span>
-            <select value={kind} onChange={(event) => setKind(event.target.value)}>
-              <option value="auto">自动/保持</option>
-              <option value="newapi">NewAPI</option>
-              <option value="oneapi">OneAPI</option>
-              <option value="sub2api">Sub2API</option>
-              <option value="modified_relay">魔改中转</option>
-            </select>
-          </label>
-          <label className="field span-2">
-            <span>站点网址</span>
-            <input
-              value={baseUrl}
-              onChange={(event) => setBaseUrl(event.target.value)}
-              placeholder="https://example.com"
-            />
-          </label>
-          <label className="field span-2">
-            <span>登录页</span>
-            <input
-              value={loginUrl}
-              onChange={(event) => setLoginUrl(event.target.value)}
-              placeholder="默认使用 /login"
-            />
-          </label>
-          <div className="field span-2">
-            <span>站点修改范围</span>
-            <div className="segmented scope-segmented">
-              <button
-                type="button"
-                className={siteUpdateScope === "current" ? "active" : ""}
-                onClick={() => setSiteUpdateScope("current")}
-              >
-                只改当前账号
-              </button>
-              <button
-                type="button"
-                className={siteUpdateScope === "shared" ? "active" : ""}
-                onClick={() => setSiteUpdateScope("shared")}
-              >
-                同步同站点全部账号
-              </button>
-            </div>
-            <em className="field-help">
-              {siteUpdateScope === "current"
-                ? "适合一个渠道有多个账号时，只修正这张账号卡。"
-                : "会更新这个上游站点，并影响绑定在同一站点下的账号。"}
-            </em>
-          </div>
-          <label className="field">
-            <span>显示名称</span>
-            <input
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder="显示名称"
-            />
-          </label>
-          <label className="field">
-            <span>邮箱</span>
-            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="邮箱账号" />
-          </label>
-          <label className="field">
-            <span>用户名</span>
-            <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="非邮箱账号" />
-          </label>
-          <label className="field">
-            <span>认证方式</span>
-            <select value={authType} onChange={(event) => setAuthType(event.target.value)}>
-              <option value="email_password">账号/邮箱 + 密码</option>
-              <option value="api_key">API Key</option>
-              <option value="browser_profile">网页登录授权</option>
-              <option value="cookie">Cookie</option>
-              <option value="access_token">Access Token</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>新密码，不填则保留</span>
-            <input
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="留空不覆盖旧密码"
-              type="password"
-            />
-          </label>
-          <label className="field">
-            <span>新 API Key，不填则保留</span>
-            <input
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder="留空不覆盖旧密钥"
-              type="password"
-            />
-          </label>
-          {account.apiKeyFingerprint ? (
-            <label className="check">
-              <input type="checkbox" checked={clearApiKey} onChange={(event) => setClearApiKey(event.target.checked)} />
-              清空当前 API Key
-            </label>
-          ) : null}
-          <div className="toolbar">
-            <button type="button" disabled={isBusy} onClick={() => void saveAccount()}>
-              {accountActionButtonLabel("保存账号", busy, "保存中…")}
-            </button>
-            <Button variant="ghost" type="button" disabled={isBusy} onClick={() => setEditing(false)}>
-              取消
-            </Button>
-          </div>
-        </div>
+        <AccountCardEditor
+          siteName={siteName}
+          setSiteName={setSiteName}
+          kind={kind}
+          setKind={setKind}
+          baseUrl={baseUrl}
+          setBaseUrl={setBaseUrl}
+          loginUrl={loginUrl}
+          setLoginUrl={setLoginUrl}
+          siteUpdateScope={siteUpdateScope}
+          setSiteUpdateScope={setSiteUpdateScope}
+          displayName={displayName}
+          setDisplayName={setDisplayName}
+          email={email}
+          setEmail={setEmail}
+          username={username}
+          setUsername={setUsername}
+          authType={authType}
+          setAuthType={setAuthType}
+          password={password}
+          setPassword={setPassword}
+          apiKey={apiKey}
+          setApiKey={setApiKey}
+          hasAPIKey={Boolean(account.apiKeyFingerprint)}
+          clearApiKey={clearApiKey}
+          setClearApiKey={setClearApiKey}
+          busy={busy}
+          isBusy={isBusy}
+          onSave={saveAccount}
+          onCancel={() => setEditing(false)}
+        />
       ) : null}
 
       <div className="account-card-actions">
@@ -569,7 +488,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
                   disabled={isBusy}
                   aria-label={`为 ${account.displayName} 执行签到`}
                   onClick={() =>
-                    void runAction("签到", () => api(`/api/accounts/${account.id}/checkin`, { method: "POST" }))
+                    void runAction("签到", () => api(accountActionUrl(account.id, "checkin"), { method: "POST" }))
                   }
                 >
                   {accountActionButtonLabel("签到", busy)}
@@ -582,7 +501,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
                 aria-label={`刷新 ${account.displayName} 的余额`}
                 onClick={() =>
                   void runAction("刷新余额", () =>
-                    api(`/api/accounts/${account.id}/refresh-balance`, { method: "POST" }),
+                    api(accountActionUrl(account.id, "refresh-balance"), { method: "POST" }),
                   )
                 }
               >

@@ -121,6 +121,18 @@ async function fulfillApi(route) {
 
   if (path === "/api/health") data = { status: "ok" };
   else if (path === "/api/system/status") data = statusPayload();
+  else if (path === "/api/dashboard/inventory") data = {
+    channels: [],
+    sites,
+    accountSummary: { accountTotal: 0, problemTotal: 0 },
+  };
+  else if (path === "/api/dashboard/ops") data = {
+    checkins: null,
+    notifications: { items: [], total: 0, unreadTotal: 0, importantTotal: 0, nextOffset: null },
+    diagnostics: null,
+    actionCenter: null,
+  };
+  else if (path === "/api/dashboard/model-usage") data = { model: null, pricing: null, usage: null };
   else if (path === "/api/channels") data = [];
   else if (path === "/api/upstream-sites") data = sites;
   else if (path === "/api/accounts") data = [];

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/api/client";
+import { channelsApi } from "@/api/channels";
+import { localNewapiApi } from "@/api/local-newapi";
 import { DialogShell } from "@/components/ui/dialog-shell";
 import { LineIcon } from "@/components/ui/line-icon";
-import type { LineIconName } from "@/types";
+import type { LineIconName, NavigationIntent, TabKey } from "@/types";
 import { Button } from "@/components/ui/button";
 
 const ONBOARDING_FLAG = "relaycheck_onboarding_done";
@@ -18,7 +19,7 @@ interface StepMeta {
   description: string;
 }
 
-const STEPS: StepMeta[] = [
+export const ONBOARDING_STEPS: StepMeta[] = [
   {
     key: "connect",
     index: 1,
@@ -45,9 +46,11 @@ const STEPS: StepMeta[] = [
     index: 4,
     icon: "checkins",
     title: "试签到一次",
-    description: "触发一次签到任务，验证整条链路是否畅通。",
+    description: "前往签到页预览待执行账号，确认后再验证整条链路。",
   },
 ];
+
+export const ONBOARDING_CHECKIN_INTENT = { target: "checkins", checkinPreview: "open" } as const;
 
 export function OnboardingStepIcon({ name }: { name: LineIconName }) {
   return (
@@ -61,26 +64,6 @@ export function onboardingStatusProps(kind: "success" | "danger") {
   return kind === "danger"
     ? ({ role: "alert", "aria-live": "assertive", "aria-atomic": true } as const)
     : ({ role: "status", "aria-live": "polite", "aria-atomic": true } as const);
-}
-
-interface ImportFromAdminResult {
-  instanceId?: string;
-  importedCount?: number;
-  sitesCreated?: number;
-  sitesMerged?: number;
-  detectedCount?: number;
-  syncTokenSaved?: boolean;
-}
-
-interface ChannelModelSyncOverview {
-  total?: number;
-  synced?: number;
-  failed?: number;
-  items?: Array<{ channelId?: string; channelName?: string; status?: string; message?: string }>;
-}
-
-interface TaskStartResult {
-  taskId: string;
 }
 
 function isOnboardingDone() {
@@ -112,7 +95,11 @@ export function reopenOnboarding() {
   window.dispatchEvent(new CustomEvent(REOPEN_EVENT));
 }
 
-export function OnboardingWizard() {
+type OnboardingWizardProps = {
+  onNavigate: (tab: TabKey, intent?: Omit<NavigationIntent, "target">) => void;
+};
+
+export function OnboardingWizard({ onNavigate }: OnboardingWizardProps) {
   const [open, setOpen] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -156,7 +143,7 @@ export function OnboardingWizard() {
   }
 
   function next() {
-    if (stepIndex < STEPS.length - 1) {
+    if (stepIndex < ONBOARDING_STEPS.length - 1) {
       setStepIndex(stepIndex + 1);
       setMessage("");
       setError("");
@@ -172,7 +159,7 @@ export function OnboardingWizard() {
   }
 
   async function runStep() {
-    const step = STEPS[stepIndex];
+    const step = ONBOARDING_STEPS[stepIndex];
     setBusy(true);
     setMessage("");
     setError("");
@@ -183,36 +170,26 @@ export function OnboardingWizard() {
           setBusy(false);
           return;
         }
-        const result = await api<ImportFromAdminResult>("/api/local-newapi/import-from-admin-api", {
-          method: "POST",
-          body: JSON.stringify({
-            baseUrl: baseUrl.trim(),
-            accessToken: accessToken.trim(),
-            saveAccessToken: saveToken,
-            importKeys: false,
-            skipCreateSites: false,
-            detectAfterImport: false,
-          }),
+        // Admin 导入契约归 localNewapiApi 所有；组件不拼 URL/默认开关。
+        const result = await localNewapiApi.importFromAdmin({
+          baseUrl,
+          accessToken,
+          saveAccessToken: saveToken,
         });
         setMessage(
           `已导入 ${result.importedCount ?? 0} 个渠道，新建站点 ${result.sitesCreated ?? 0} 个，合并站点 ${result.sitesMerged ?? 0} 个。`,
         );
       } else if (step.key === "channels") {
-        const result = await api<ChannelModelSyncOverview>("/api/channels/models/sync", {
-          method: "POST",
-          body: JSON.stringify({ limit: 10 }),
-        });
+        // 渠道模型同步契约归 channelsApi；Onboarding 使用较小 limit，并按真实 schema 展示。
+        const result = await channelsApi.syncModels({ limit: 10 });
         setMessage(
-          `模型同步完成：共 ${result.total ?? 0} 个，成功 ${result.synced ?? 0} 个，失败 ${result.failed ?? 0} 个。`,
+          `模型同步完成：共 ${result.channelCount ?? 0} 个，成功 ${result.syncedChannels ?? 0} 个，失败 ${result.failedCount ?? 0} 个。`,
         );
       } else if (step.key === "credentials") {
         setMessage("已记录。请稍后到「站点与账号」页的「全部账号」子视图，为每个站点补充登录凭据或 API Key。");
       } else if (step.key === "checkin") {
-        const result = await api<TaskStartResult>("/api/tasks/start", {
-          method: "POST",
-          body: JSON.stringify({ type: "checkin", params: {} }),
-        });
-        setMessage(`已触发签到任务，任务编号 ${result.taskId}。可在「签到」页查看进度。`);
+        close();
+        onNavigate(ONBOARDING_CHECKIN_INTENT.target, { checkinPreview: ONBOARDING_CHECKIN_INTENT.checkinPreview });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败，请稍后重试。");
@@ -221,8 +198,8 @@ export function OnboardingWizard() {
     }
   }
 
-  const step = STEPS[stepIndex];
-  const isLast = stepIndex === STEPS.length - 1;
+  const step = ONBOARDING_STEPS[stepIndex];
+  const isLast = stepIndex === ONBOARDING_STEPS.length - 1;
   const canRun = step.key !== "connect" || (baseUrl.trim().length > 0 && accessToken.trim().length > 0);
 
   return (
@@ -241,16 +218,16 @@ export function OnboardingWizard() {
           <span className="onboarding-eyebrow">首次启动引导</span>
         </div>
         <div className="onboarding-steps" role="list" aria-label="步骤指示器">
-          {STEPS.map((item, idx) => (
+          {ONBOARDING_STEPS.map((item, idx) => (
             <span
               key={item.key}
               role="listitem"
               aria-current={idx === stepIndex ? "step" : undefined}
-              aria-label={`步骤 ${item.index}/${STEPS.length}：${item.title}${idx < stepIndex ? "，已完成" : ""}`}
+              aria-label={`步骤 ${item.index}/${ONBOARDING_STEPS.length}：${item.title}${idx < stepIndex ? "，已完成" : ""}`}
               className={
                 "onboarding-step-dot" + (idx === stepIndex ? " active" : "") + (idx < stepIndex ? " completed" : "")
               }
-              title={`${item.index}/${STEPS.length} ${item.title}`}
+              title={`${item.index}/${ONBOARDING_STEPS.length} ${item.title}`}
             >
               {item.index}
             </span>
@@ -263,7 +240,7 @@ export function OnboardingWizard() {
           <OnboardingStepIcon name={step.icon} />
           <div className="onboarding-step-text">
             <div className="onboarding-step-meta">
-              步骤 {step.index}/{STEPS.length}
+              步骤 {step.index}/{ONBOARDING_STEPS.length}
             </div>
             <h3 className="onboarding-step-title" id="onboarding-title">
               {step.title}
@@ -316,21 +293,7 @@ export function OnboardingWizard() {
               <input type="checkbox" checked={saveToken} onChange={(event) => setSaveToken(event.target.checked)} />
               保存令牌以便后续定时同步
             </label>
-            <button
-              type="submit"
-              aria-hidden="true"
-              tabIndex={-1}
-              style={{
-                position: "absolute",
-                width: 1,
-                height: 1,
-                padding: 0,
-                margin: -1,
-                overflow: "hidden",
-                clip: "rect(0,0,0,0)",
-                border: 0,
-              }}
-            />
+            <button type="submit" aria-hidden="true" tabIndex={-1} className="sr-only" />
           </form>
         ) : null}
 
@@ -342,12 +305,12 @@ export function OnboardingWizard() {
 
         {step.key === "credentials" ? (
           <div className="onboarding-hint">
-            前往左侧「账号」页为每个站点补充登录凭据或 API Key。本步骤无需在此执行操作。
+            前往「站点与账号」→「全部账号」，为每个站点补充登录凭据或 API Key。本步骤无需在此执行操作。
           </div>
         ) : null}
 
         {step.key === "checkin" ? (
-          <div className="onboarding-hint">点击「执行」触发一次签到任务，验证账号凭据和站点规则是否就绪。</div>
+          <div className="onboarding-hint">前往「签到」页获取安全预览；确认将尝试执行的账号后，才会启动任务。</div>
         ) : null}
 
         {message ? (
@@ -369,7 +332,7 @@ export function OnboardingWizard() {
         <div className="onboarding-footer-actions">
           {step.key !== "credentials" ? (
             <button type="button" onClick={() => void runStep()} disabled={busy || !canRun}>
-              {busy ? "执行中…" : "执行"}
+              {busy ? "执行中…" : step.key === "checkin" ? "前往安全预览" : "执行"}
             </button>
           ) : null}
           <button type="button" onClick={next} disabled={busy}>

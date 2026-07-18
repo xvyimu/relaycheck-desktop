@@ -7,6 +7,7 @@ import { BulkReloginWizard } from "@/components/accounts/BulkReloginWizard";
 import { DialogShell } from "@/components/ui/dialog-shell";
 import { Empty } from "@/components/ui/empty";
 import { useAccountsPage } from "@/hooks/useAccountsPage";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import type { Account, NavigationIntent, UpstreamSite } from "@/types";
 import { Button } from "@/components/ui/button";
 
@@ -28,7 +29,9 @@ function AccountsPanelBase({ sites, onRefresh, intent }: AccountsPanelProps) {
     }
     return "all";
   });
-  const [query, setQuery] = useState(() => (typeof intent?.query === "string" ? intent.query : ""));
+  const [queryInput, setQueryInput] = useState(() => (typeof intent?.query === "string" ? intent.query : ""));
+  const [isComposing, setIsComposing] = useState(false);
+  const query = useDebouncedValue(queryInput, 250, !isComposing);
 
   // Server-side paginated accounts
   const pagination = useAccountsPage({
@@ -47,7 +50,7 @@ function AccountsPanelBase({ sites, onRefresh, intent }: AccountsPanelProps) {
       const nextSite = intent.upstreamSiteId.trim();
       setSiteFilter(nextSite || "all");
     }
-    if (typeof intent.query === "string") setQuery(intent.query);
+    if (typeof intent.query === "string") setQueryInput(intent.query);
   }, [intent]);
 
   const handleDone = useCallback(async () => {
@@ -59,14 +62,14 @@ function AccountsPanelBase({ sites, onRefresh, intent }: AccountsPanelProps) {
     return sites.slice().sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
   }, [sites]);
 
-  const hasActiveFilter = statusFilter !== "all" || siteFilter !== "all" || query.trim() !== "";
+  const hasActiveFilter = statusFilter !== "all" || siteFilter !== "all" || queryInput.trim() !== "";
   const selectedSiteName =
     siteFilter === "all" ? "" : siteOptions.find((site) => site.id === siteFilter)?.name || siteFilter;
 
   function clearFilters() {
     setStatusFilter("all");
     setSiteFilter("all");
-    setQuery("");
+    setQueryInput("");
   }
 
   const pageAccounts = pagination.page.items;
@@ -117,7 +120,16 @@ function AccountsPanelBase({ sites, onRefresh, intent }: AccountsPanelProps) {
           </label>
           <label className="field">
             <span>搜索</span>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="账号名、邮箱、站点" />
+            <input
+              value={queryInput}
+              onChange={(event) => setQueryInput(event.target.value)}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={(event) => {
+                setQueryInput(event.currentTarget.value);
+                setIsComposing(false);
+              }}
+              placeholder="账号名、邮箱、站点"
+            />
           </label>
         </div>
         <div className="toolbar">

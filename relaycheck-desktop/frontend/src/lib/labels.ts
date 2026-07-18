@@ -121,9 +121,12 @@ export function loginStatusLabel(status: string): string {
 export function apiKeyStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     valid: "密钥有效",
+    invalid: "密钥无效",
     expired: "密钥失效",
     unknown: "密钥未知",
     unchecked: "密钥未测",
+    untested: "密钥未测",
+    rate_limited: "检测限流",
     missing: "无密钥",
   };
   return labels[status] || status || "密钥未测";

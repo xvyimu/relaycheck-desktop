@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { channelsApi } from "@/api/channels";
 import { ChannelTable } from "@/components/channels/ChannelTable";
 import { DialogShell } from "@/components/ui/dialog-shell";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
@@ -39,13 +40,49 @@ export interface ChannelsPanelProps {
   inventoryChannels?: ImportedChannel[];
 }
 
-function healthToneClass(level: string) {
+/**
+ * 并行刷新模型、健康与 inventory；任一失败不阻断其它路径，
+ * 返回部分失败文案供面板展示，成功时返回空串。
+ */
+export async function refreshChannelPanelData(
+  refreshModels: () => Promise<void>,
+  refreshHealth: () => Promise<void>,
+  refreshInventory: () => Promise<void>,
+): Promise<string> {
+  const results = await Promise.allSettled([refreshModels(), refreshHealth(), refreshInventory()]);
+  const failed = results.filter((result) => result.status === "rejected").length;
+  if (failed === 0) return "";
+  return `部分刷新失败（${failed}/3），已保留成功更新的数据。`;
+}
+
+/**
+ * 先同步渠道模型，再刷新健康概览。
+ * 保证工具栏“同步模型”与健康卡片同按钮在同一所有权链路上顺序执行。
+ */
+export async function syncChannelModelsAndHealth(
+  syncModels: () => Promise<void>,
+  refreshHealth: () => Promise<void>,
+): Promise<void> {
+  await syncModels();
+  await refreshHealth();
+}
+
+/**
+ * inventory 已注入时不再由面板发起模型 autoload，避免与 Dashboard inventory 双请求。
+ */
+export function shouldAutoloadChannelModels(active: boolean, inventoryChannels?: ImportedChannel[]): boolean {
+  return active && inventoryChannels === undefined;
+}
+
+/** 将健康等级映射为面板 tone class，未知值安全回落到 success。 */
+export function healthToneClass(level: string) {
   if (level === "danger") return "level-danger";
   if (level === "warning") return "level-warning";
   return "level-success";
 }
 
-function topHealthRisks(sites: ChannelHealthSite[]) {
+/** 取最多 4 个 danger/warning 站点作为健康风险卡片数据源。 */
+export function topHealthRisks(sites: ChannelHealthSite[]) {
   return sites.filter((site) => site.level === "danger" || site.level === "warning").slice(0, 4);
 }
 
@@ -59,13 +96,15 @@ function ChannelsPanelBase({
   const actions = useChannelActions({
     active,
     initialChannels: inventoryChannels,
+    onInventoryRefresh: onRefresh,
   });
-  const { refresh: refreshActions, channels, searchIndex, setDrawer } = actions;
+  const { refresh: refreshActions, channels, setDrawer, setMessage } = actions;
   useEffect(() => {
     setDrawer(null);
   }, [dialogEpoch, setDrawer]);
-  const filters = useChannelFilters(channels, searchIndex, intent);
-  const health = useApi<ChannelHealthOverview>("/api/channels/health/overview", emptyHealthOverview, {
+  const filters = useChannelFilters(channels, intent, active);
+  // 健康概览路径归 channelsApi 所有，面板禁止手写 /api/channels/*。
+  const health = useApi<ChannelHealthOverview>(channelsApi.healthOverviewPath, emptyHealthOverview, {
     enabled: active,
   });
   const { refresh: refreshHealth } = health;
@@ -76,19 +115,16 @@ function ChannelsPanelBase({
   const healthProgressCurrent = healthTask.progress?.current;
   const healthProgressTotal = healthTask.progress?.total;
 
-  // When not seeded from inventory, fetch once while active.
+  // inventory 已注入时不 autoload 模型，避免 dual GET。
   useEffect(() => {
-    if (!active) return;
-    if (inventoryChannels) return;
+    if (!shouldAutoloadChannelModels(active, inventoryChannels)) return;
     void refreshActions();
   }, [active, inventoryChannels, refreshActions]);
 
   const refreshAll = useCallback(async () => {
-    // Domain refresh first; inventory reload is secondary for this panel.
-    await refreshActions();
-    await refreshHealth();
-    await onRefresh();
-  }, [onRefresh, refreshActions, refreshHealth]);
+    const partialError = await refreshChannelPanelData(refreshActions, refreshHealth, onRefresh);
+    if (partialError) setMessage(partialError);
+  }, [onRefresh, refreshActions, refreshHealth, setMessage]);
 
   async function refreshHealthProbe() {
     setHealthProbeMessage("健康探测任务已启动，结果会自动刷新。");
@@ -96,8 +132,7 @@ function ChannelsPanelBase({
   }
 
   async function syncModelsAndHealth() {
-    await actions.syncChannelModels();
-    await refreshHealth();
+    await syncChannelModelsAndHealth(actions.syncChannelModels, refreshHealth);
   }
 
   useEffect(() => {
@@ -223,6 +258,11 @@ function ChannelsPanelBase({
             <input
               value={filters.query}
               onChange={(event) => filters.setQuery(event.target.value)}
+              onCompositionStart={() => filters.setQueryComposing(true)}
+              onCompositionEnd={(event) => {
+                filters.setQuery(event.currentTarget.value);
+                filters.setQueryComposing(false);
+              }}
               placeholder="名称、网址、模型、账号"
             />
           </label>
@@ -274,6 +314,11 @@ function ChannelsPanelBase({
             </Button>
           </div>
         ) : null}
+        {filters.accountSearchLoading ? <div className="note">正在搜索账号关联站点…</div> : null}
+        {filters.accountSearchTruncated ? (
+          <div className="note">账号匹配站点较多，仅显示前 200 个匹配站点。</div>
+        ) : null}
+        {filters.accountSearchError ? <div className="note">账号搜索失败：{filters.accountSearchError}</div> : null}
         {actions.message ? <div className="note">{actions.message}</div> : null}
       </div>
       <ChannelTable
@@ -356,7 +401,7 @@ function ChannelsPanelBase({
                   <span className="text-muted-foreground text-sm">暂无模型列表</span>
                 )}
                 {actions.drawer.channel.modelsStatus ? (
-                  <div className="detail-list" style={{ marginTop: 8 }}>
+                  <div className="detail-list spacing-top-sm">
                     <div>
                       <span>同步状态</span>
                       <strong>{actions.drawer.channel.modelsStatus}</strong>

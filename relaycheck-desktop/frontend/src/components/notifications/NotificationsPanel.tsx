@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from "react";
 
-import { api } from "@/api/client";
+import { notificationsApi } from "@/api/notifications";
 import { formatTime } from "@/lib/format";
 import { statusTone } from "@/lib/tone";
 import type { NavigationIntent, NotificationItem } from "@/types";
@@ -61,17 +61,18 @@ function NotificationsPanelBase({
   }
 
   async function markAllRead() {
-    await runAction("全部标记已读", () => api("/api/notifications/mark-all-read", { method: "POST" }));
+    // 通知写路径归 notificationsApi，组件不拼 URL。
+    await runAction("全部标记已读", () => notificationsApi.markAllRead());
   }
 
   async function clearRead() {
     const confirmed = window.confirm(`确认清除 ${summary.read} 条已读通知？`);
     if (!confirmed) return;
-    await runAction("清除已读", () => api("/api/notifications/clear-read", { method: "POST" }));
+    await runAction("清除已读", () => notificationsApi.clearRead());
   }
 
   async function stowAndTrim() {
-    await runAction("收纳清理", () => api("/api/notifications/trim?keep=10", { method: "POST" }));
+    await runAction("收纳清理", () => notificationsApi.trim(10));
     setShowRead(false);
   }
 
@@ -116,12 +117,7 @@ function NotificationsPanelBase({
         >
           {busy === "清除已读" ? "清除中…" : "清除已读"}
         </Button>
-        <Button
-          variant="ghost"
-          onClick={() => setShowRead((prev) => !prev)}
-          type="button"
-          style={{ marginLeft: "auto" }}
-        >
+        <Button variant="ghost" onClick={() => setShowRead((prev) => !prev)} type="button" className="ml-auto">
           {showRead ? "仅未读" : "全部"}
         </Button>
       </div>
@@ -150,12 +146,7 @@ function NotificationsPanelBase({
         })}
 
         {!showRead && summary.read > 0 ? (
-          <Button
-            variant="ghost"
-            onClick={() => setShowRead(true)}
-            type="button"
-            style={{ textAlign: "center", width: "100%", padding: "10px" }}
-          >
+          <Button variant="ghost" onClick={() => setShowRead(true)} type="button" className="w-full p-2.5 text-center">
             展开 {summary.read} 条已读通知
           </Button>
         ) : null}

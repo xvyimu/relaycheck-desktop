@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
+import { accountCleanupApi, type UnsupportedCheckinCleanupResult } from "@/api/account-cleanup";
+import { accountActionUrl, accountApi } from "@/api/accounts";
 import { api } from "@/api/client";
+import { keysApi } from "@/api/keys";
+import { modelsApi } from "@/api/models";
 import { formatPriceComparisonBadge, formatPriceComparisonMeta, formatPricingSource } from "@/lib/format";
 import {
   apiKeyStatusLabel,
@@ -18,94 +22,26 @@ import type {
   KeyExportPreview,
   ModelOverview,
   ModelPricingOverview,
-  UnsupportedCheckinCleanupResult,
 } from "@/types";
 import { EmptyState } from "@/components/ui/empty-state";
 import { isLocalURL } from "@/components/accounts/helpers";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { TaskProgressView } from "@/components/ui/TaskProgressView";
 import { Button } from "@/components/ui/button";
+import {
+  buildModelCoverage,
+  downloadJSON,
+  isStaleAPIKeyCheck,
+  keyIssueLabel,
+  uniqueAccounts,
+} from "@/components/accounts/accountInsightsUtils";
+import { UnsupportedCheckinCleanupPanel } from "@/components/accounts/UnsupportedCheckinCleanupPanel";
 
-const API_KEY_STALE_MS = 24 * 60 * 60 * 1000;
 const UNSUPPORTED_CLEANUP_LIMIT = 10;
 const LABELS_TEST_KEYS = { title: "批量测试 Key（当前页）" } as const;
 const LABELS_REFRESH_BALANCE = { title: "批量刷新余额（当前页）" } as const;
 
-function isStaleAPIKeyCheck(account: Account) {
-  if (!account.apiKeyFingerprint) return false;
-  if (!account.apiKeyLastCheckedAt) return true;
-  const checkedAt = new Date(account.apiKeyLastCheckedAt).getTime();
-  if (!Number.isFinite(checkedAt)) return true;
-  return Date.now() - checkedAt > API_KEY_STALE_MS;
-}
-
-function uniqueAccounts(accounts: Account[]) {
-  const seen = new Set<string>();
-  return accounts.filter((account) => {
-    if (seen.has(account.id)) return false;
-    seen.add(account.id);
-    return true;
-  });
-}
-
-function buildModelCoverage(accounts: Account[]) {
-  const grouped = new Map<string, { model: string; accountIds: Set<string>; siteSamples: Set<string> }>();
-  for (const account of accounts) {
-    const models = new Set(
-      [...(account.apiKeySampleModels || []), account.apiKeyTestModel || ""]
-        .map((model) => model.trim())
-        .filter(Boolean),
-    );
-    for (const model of models) {
-      const current = grouped.get(model) || { model, accountIds: new Set<string>(), siteSamples: new Set<string>() };
-      current.accountIds.add(account.id);
-      if (account.upstreamSiteName) current.siteSamples.add(account.upstreamSiteName);
-      grouped.set(model, current);
-    }
-  }
-  return Array.from(grouped.values())
-    .map((item) => ({
-      model: item.model,
-      accountCount: item.accountIds.size,
-      siteSamples: Array.from(item.siteSamples).slice(0, 3),
-    }))
-    .sort((left, right) => right.accountCount - left.accountCount || left.model.localeCompare(right.model));
-}
-
-function cleanupReasonLabel(reason: string) {
-  switch (reason) {
-    case "site_not_support_checkin":
-      return "站点不支持签到";
-    case "last_checkin_unsupported":
-      return "上次签到不支持";
-    default:
-      return reason || "不支持签到";
-  }
-}
-function keyIssueLabel(account: Account) {
-  if (account.apiKeyStatus && !["valid", "unchecked"].includes(account.apiKeyStatus)) {
-    return apiKeyStatusLabel(account.apiKeyStatus);
-  }
-  if (!account.apiKeyLastCheckedAt || account.apiKeyStatus === "unchecked") {
-    return "未检测";
-  }
-  if (isStaleAPIKeyCheck(account)) {
-    return "超过 24 小时未重测";
-  }
-  return apiKeyStatusLabel(account.apiKeyStatus || "unchecked");
-}
-
-function downloadJSON(fileName: string, body: string) {
-  const blob = new Blob([body], { type: "application/json;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-/** Bulk insights operate on the accounts array passed in (current page only). */
+/** 账号洞察只处理调用方传入的当前分页账号，不隐式读取全量账号。 */
 export function AccountInsights({
   accounts,
   onDone,
@@ -186,29 +122,6 @@ export function AccountInsights({
       void onDone();
     }
   }, [balanceTask.progress?.status, onDone]);
-  const cleanupBatchLimit = cleanupPreview?.limit || UNSUPPORTED_CLEANUP_LIMIT;
-  const cleanupCanDelete = Boolean(cleanupPreview?.matched && cleanupPreview.deleted === 0);
-  const cleanupPreviewButtonLabel = cleanupBusy
-    ? "处理中"
-    : cleanupPreview?.deleted
-      ? cleanupPreview.hasMore
-        ? "继续预览下一批"
-        : "再次检查"
-      : cleanupPreview
-        ? "重新预览"
-        : "预览清理";
-  const cleanupStatusLabel = cleanupPreview
-    ? cleanupPreview.deleted
-      ? cleanupPreview.hasMore
-        ? "还有下一批"
-        : "已清理"
-      : cleanupPreview.matched
-        ? cleanupPreview.hasMore
-          ? "等待确认+"
-          : "等待确认"
-        : "无需清理"
-    : "先预览";
-
   useEffect(() => {
     let cancelled = false;
     if (!expanded) {
@@ -220,7 +133,8 @@ export function AccountInsights({
       setKeyExportPreview(null);
       return;
     }
-    void Promise.all([api<ModelOverview>("/api/models/overview"), api<ModelPricingOverview>("/api/models/pricing")])
+    // 模型/价格契约归 modelsApi 所有，组件只消费稳定 schema。
+    void Promise.all([modelsApi.overview(), modelsApi.pricing()])
       .then(([overview, pricing]) => {
         if (!cancelled) {
           setModelOverview(overview);
@@ -238,12 +152,13 @@ export function AccountInsights({
     };
   }, [expanded, keyAccounts.length, validKeyAccounts.length, usableModelAccounts.length, totalKnownModels]);
 
+  /** 检测单个账号的 API Key，并把稳定公共结果反馈给用户。 */
   async function testSingleKey(account: Account) {
     if (keyTestBusyId) return;
     setKeyTestBusyId(account.id);
     setMessage(`正在检测 ${account.displayName} 的 API Key…`);
     try {
-      const result = await api<APIKeyTestResult>(`/api/accounts/${account.id}/test-api-key`, { method: "POST" });
+      const result = await api<APIKeyTestResult>(accountActionUrl(account.id, "test-api-key"), { method: "POST" });
       setMessage(`${account.displayName}：${formatAPIKeyTestMessage(result)}`);
       await onDone();
     } catch (error) {
@@ -253,17 +168,16 @@ export function AccountInsights({
     }
   }
 
+  /** 同步当前可用 Key 的模型能力，再刷新价格概览与父级数据。 */
   async function syncModels() {
     if (modelSyncBusy || !keyAccounts.length) return;
     setModelSyncBusy(true);
     setMessage("正在同步 Key 模型列表、可用性和测速…");
     try {
-      const overview = await api<ModelOverview>("/api/models/sync", {
-        method: "POST",
-        body: JSON.stringify({ limit: 50 }),
-      });
+      // 同步 limit 由 modelsApi 默认值持有，组件只声明业务意图。
+      const overview = await modelsApi.sync({ limit: 50 });
       setModelOverview(overview);
-      const pricing = await api<ModelPricingOverview>("/api/models/pricing");
+      const pricing = await modelsApi.pricing();
       setPricingOverview(pricing);
       setKeyExportPreview(null);
       setMessage(
@@ -277,15 +191,13 @@ export function AccountInsights({
     }
   }
 
+  /** 同步站点价格缓存并更新当前洞察视图。 */
   async function syncPricing() {
     if (pricingSyncBusy) return;
     setPricingSyncBusy(true);
     setMessage("正在探测 NewAPI/Sub2API 站点 /api/pricing，并写入本地缓存…");
     try {
-      const pricing = await api<ModelPricingOverview>("/api/models/pricing/sync", {
-        method: "POST",
-        body: JSON.stringify({ limit: 50 }),
-      });
+      const pricing = await modelsApi.syncPricing({ limit: 50 });
       setPricingOverview(pricing);
       setMessage(
         `价格同步完成：在线缓存 ${pricing.liveCacheCount || 0} 个站点，价格来源 ${pricing.sourceCount} 条，对比模型 ${pricing.comparisons?.length || 0} 个。`,
@@ -297,12 +209,13 @@ export function AccountInsights({
     }
   }
 
+  /** 加载不含真实密钥的脱敏导出预览。 */
   async function loadKeyExportPreview() {
     if (keyExportBusy || !keyAccounts.length) return;
     setKeyExportBusy(true);
     setMessage("正在生成 Key 安全导出预览…");
     try {
-      const preview = await api<KeyExportPreview>("/api/keys/export-preview");
+      const preview = await keysApi.exportPreview();
       setKeyExportPreview(preview);
       setMessage(`已生成脱敏导出预览：${preview.total} 个 Key，有效 ${preview.valid} 个，可用 ${preview.usable} 个。`);
     } catch (error) {
@@ -312,9 +225,10 @@ export function AccountInsights({
     }
   }
 
+  /** 优先复制脱敏预览，剪贴板不可用时回退为本地 JSON 下载。 */
   async function copyKeyExportPreview() {
     try {
-      const preview = keyExportPreview || (await api<KeyExportPreview>("/api/keys/export-preview"));
+      const preview = keyExportPreview || (await keysApi.exportPreview());
       setKeyExportPreview(preview);
       const body = JSON.stringify(preview, null, 2);
       if (navigator.clipboard?.writeText) {
@@ -325,13 +239,12 @@ export function AccountInsights({
       downloadJSON("relaycheck-key-export-preview.json", body);
       setMessage("浏览器不支持剪贴板，已下载脱敏 Key 清单 JSON。");
     } catch (err) {
-      // Both api() (network/500) and navigator.clipboard.writeText()
-      // (permission denied) can reject; without this catch the onClick
-      // handler emits an unhandled rejection and the user sees no feedback.
+      // API 请求与剪贴板写入都可能失败；统一捕获可避免点击回调产生未处理拒绝。
       setMessage(err instanceof Error ? err.message : "复制失败");
     }
   }
 
+  /** 下载已经生成的脱敏预览；尚未生成时先触发只读预览。 */
   function downloadKeyExportPreview() {
     if (!keyExportPreview) {
       void loadKeyExportPreview();
@@ -340,18 +253,15 @@ export function AccountInsights({
     downloadJSON("relaycheck-key-export-preview.json", JSON.stringify(keyExportPreview, null, 2));
     setMessage("已下载脱敏 Key 清单 JSON。");
   }
+  /** 请求后端生成只读预览，并保存服务端签发的一次性 previewId。 */
   async function previewUnsupportedCheckinCleanup() {
     if (cleanupBusy) return;
     setCleanupBusy(true);
     setMessage("正在预览不支持签到账号，预览不会修改数据…");
     try {
-      const result = await api<UnsupportedCheckinCleanupResult>("/api/accounts/delete-unsupported-checkins", {
-        method: "POST",
-        body: JSON.stringify({
-          limit: UNSUPPORTED_CLEANUP_LIMIT,
-          dryRun: true,
-          includeLastUnsupported: cleanupIncludeLastUnsupported,
-        }),
+      const result = await accountCleanupApi.preview({
+        limit: UNSUPPORTED_CLEANUP_LIMIT,
+        includeLastUnsupported: cleanupIncludeLastUnsupported,
       });
       setCleanupPreview(result);
       setMessage(
@@ -371,30 +281,14 @@ export function AccountInsights({
     }
   }
 
-  async function deleteUnsupportedCheckinCleanup() {
-    if (cleanupBusy || !cleanupPreview?.matched) return;
-    const samples = cleanupPreview.items
-      .slice(0, 3)
-      .map((item) => item.upstreamSiteName + " / " + item.accountName)
-      .join("、");
-    const confirmed = window.confirm(
-      "确认删除 " +
-        cleanupPreview.matched +
-        " 个不支持签到的账号？这会同步删除这些账号的签到日志和余额快照。" +
-        (samples ? "\n样例：" + samples : ""),
-    );
-    if (!confirmed) return;
+  /** 消费当前预览 token；409 时清空旧预览并强制用户重新确认候选。 */
+  async function confirmUnsupportedCheckinCleanup(previewId: string) {
+    if (cleanupBusy || !previewId) return;
     setCleanupBusy(true);
     setMessage("正在删除不支持签到账号…");
     try {
-      const result = await api<UnsupportedCheckinCleanupResult>("/api/accounts/delete-unsupported-checkins", {
-        method: "POST",
-        body: JSON.stringify({
-          limit: UNSUPPORTED_CLEANUP_LIMIT,
-          dryRun: false,
-          includeLastUnsupported: cleanupIncludeLastUnsupported,
-        }),
-      });
+      // typed adapter 只提交 previewId，不允许 UI 重算 limit、范围或候选账号。
+      const result = await accountCleanupApi.confirm(previewId);
       setCleanupPreview(result);
       setMessage(
         "已删除 " +
@@ -404,10 +298,21 @@ export function AccountInsights({
       );
       await onDone();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "删除不支持签到账号失败");
+      const status = typeof error === "object" && error !== null && "status" in error ? error.status : undefined;
+      // 后端在事务前一次性消费 token；任何失败都必须清空旧预览，不能原地重试。
+      setCleanupPreview(null);
+      setMessage(
+        (error instanceof Error ? error.message : "删除不支持签到账号失败") +
+          (status === 409 ? " 请重新预览后再确认。" : " 当前预览已失效，请重新预览后再确认。"),
+      );
     } finally {
       setCleanupBusy(false);
     }
+  }
+
+  /** 清除已消费或范围已变化的预览，避免旧 token 再次启用删除按钮。 */
+  function clearUnsupportedCheckinCleanupPreview() {
+    setCleanupPreview(null);
   }
 
   return (
@@ -438,7 +343,7 @@ export function AccountInsights({
             type="button"
             onClick={async () => {
               setMessage("正在批量打开网页登录窗口…");
-              const result = await api<BulkBrowserOpenResponse>("/api/accounts/bulk-open-browser-login", {
+              const result = await api<BulkBrowserOpenResponse>(accountApi.bulk("bulk-open-browser-login"), {
                 method: "POST",
                 body: JSON.stringify({ limit: 5 }),
               });
@@ -773,85 +678,23 @@ export function AccountInsights({
                 </Button>
               </div>
             </div>
-            <div className="account-capability-panel unsupported-cleanup-panel is-actionable">
-              <div className="capability-panel-head">
-                <div>
-                  <span>签到清理</span>
-                  <strong>{cleanupPreview?.matched ?? unsupportedCheckinAccounts.length}</strong>
-                </div>
-                <em>{cleanupStatusLabel}</em>
-              </div>
-              <label className="cleanup-option">
-                <input
-                  type="checkbox"
-                  checked={cleanupIncludeLastUnsupported}
-                  onChange={(event) => {
-                    setCleanupIncludeLastUnsupported(event.currentTarget.checked);
-                    setCleanupPreview(null);
-                  }}
-                />
-                包含上次签到返回“不支持”的账号
-              </label>
-              <div className="capability-list cleanup-preview-list">
-                {(cleanupPreview?.items || []).slice(0, 5).map((item) => (
-                  <div className="capability-row issue-row" key={"cleanup-" + item.accountId}>
-                    <div>
-                      <strong title={item.accountName}>{item.accountName}</strong>
-                      <span title={item.upstreamSiteName + " · " + item.upstreamSiteKind}>
-                        {item.upstreamSiteName} · {cleanupReasonLabel(item.reason)}
-                      </span>
-                    </div>
-                    <b>{item.lastCheckinStatus || "site"}</b>
-                  </div>
-                ))}
-                {cleanupPreview && cleanupPreview.items.length > 5 ? (
-                  <span className="capability-empty">
-                    还有 {cleanupPreview.items.length - 5} 个账号未展开；本批接口最多处理 {cleanupBatchLimit} 个。
-                  </span>
-                ) : null}
-                {cleanupPreview?.hasMore ? (
-                  <span className="capability-empty">
-                    后面还有下一批候选账号；当前批次上限 {cleanupBatchLimit} 个，删除后请继续预览。
-                  </span>
-                ) : null}
-                {cleanupPreview && cleanupPreview.deleted > 0 ? (
-                  <span className="capability-empty">
-                    本批已通过 API 删除 {cleanupPreview.deleted} 个账号；再次预览会读取下一批或确认已归零。
-                  </span>
-                ) : null}
-                {!cleanupPreview ? (
-                  <span className="capability-empty">先预览将要删除的账号；预览模式不会写入数据库。</span>
-                ) : null}
-                {cleanupPreview && !cleanupPreview.items.length ? (
-                  <span className="capability-empty">当前没有匹配的不支持签到账号。</span>
-                ) : null}
-              </div>
-              <div className="mini-action-row">
-                <Button
-                  variant="ghost"
-                  type="button"
-                  disabled={cleanupBusy}
-                  onClick={() => void previewUnsupportedCheckinCleanup()}
-                >
-                  {cleanupPreviewButtonLabel}
-                </Button>
-                <button
-                  type="button"
-                  className="danger"
-                  disabled={cleanupBusy || !cleanupCanDelete}
-                  onClick={() => void deleteUnsupportedCheckinCleanup()}
-                >
-                  删除本批
-                </button>
-              </div>
-            </div>
+            <UnsupportedCheckinCleanupPanel
+              preview={cleanupPreview}
+              busy={cleanupBusy}
+              includeLastUnsupported={cleanupIncludeLastUnsupported}
+              initialMatched={unsupportedCheckinAccounts.length}
+              onPreview={previewUnsupportedCheckinCleanup}
+              onConfirm={confirmUnsupportedCheckinCleanup}
+              onIncludeLastUnsupportedChange={setCleanupIncludeLastUnsupported}
+              onClearPreview={clearUnsupportedCheckinCleanupPreview}
+            />
           </div>
           <div className="toolbar">
             <button
               type="button"
               onClick={async () => {
                 setMessage("正在用已保存密码重登…");
-                const result = await api<BulkPasswordLoginResponse>("/api/accounts/bulk-password-login", {
+                const result = await api<BulkPasswordLoginResponse>(accountApi.bulk("bulk-password-login"), {
                   method: "POST",
                   body: JSON.stringify({ limit: 20 }),
                 });
@@ -869,7 +712,7 @@ export function AccountInsights({
             <button
               onClick={async () => {
                 setMessage("正在保存已完成网页登录的账号…");
-                const result = await api<BulkBrowserSaveResponse>("/api/accounts/bulk-finish-browser-login", {
+                const result = await api<BulkBrowserSaveResponse>(accountApi.bulk("bulk-finish-browser-login"), {
                   method: "POST",
                   body: JSON.stringify({}),
                 });
@@ -894,7 +737,7 @@ export function AccountInsights({
                     </span>
                     <button
                       onClick={async () => {
-                        await api(`/api/accounts/${account.id}/open-browser-login`, { method: "POST" });
+                        await api(accountActionUrl(account.id, "open-browser-login"), { method: "POST" });
                       }}
                     >
                       打开
@@ -919,7 +762,7 @@ export function AccountInsights({
                           `确认删除疑似误匹配账号"${account.displayName}"？这会删除该账号保存的本地凭据。`,
                         );
                         if (!confirmed) return;
-                        await api(`/api/accounts/${account.id}`, { method: "DELETE" });
+                        await api(accountApi.item(account.id), { method: "DELETE" });
                         await onDone();
                       }}
                     >

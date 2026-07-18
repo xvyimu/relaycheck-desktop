@@ -1,0 +1,76 @@
+.scan-panel,
+.scan-card-content,
+.scan-result-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.scan-panel {
+  gap: 16px;
+}
+
+.scan-card-content {
+  gap: 12px;
+}
+
+.scan-copy {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.scan-result-title,
+.scan-result-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scan-result-list {
+  gap: 8px;
+}
+
+.scan-result-row {
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+}
+
+.scan-result-row.has-error {
+  background: rgb(239 68 68 / 4%);
+}
+
+.scan-result-path {
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-empty {
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.scan-next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scan-next-actions button {
+  min-height: 44px;
+}
+
+@media (max-width: 480px) {
+  .scan-next-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scan-next-actions button {
+    width: 100%;
+  }
+}

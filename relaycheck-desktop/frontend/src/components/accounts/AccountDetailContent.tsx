@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { accountActionUrl } from "@/api/accounts";
 import { api } from "@/api/client";
 import {
   browserSessionOpenKind,
@@ -40,7 +41,7 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
     setBusy("open");
     setMessage("");
     try {
-      const result = await api<BrowserLoginOpenResponse>(`/api/accounts/${account.id}/open-browser-login`, {
+      const result = await api<BrowserLoginOpenResponse>(accountActionUrl(account.id, "open-browser-login"), {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -61,7 +62,7 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
     setBusy("save");
     setMessage("");
     try {
-      const result = await api<BrowserLoginSaveResponse>(`/api/accounts/${account.id}/finish-browser-login`, {
+      const result = await api<BrowserLoginSaveResponse>(accountActionUrl(account.id, "finish-browser-login"), {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -82,7 +83,7 @@ export function AccountDetailContent({ account, onClose }: { account: Account; o
     setBusy("test");
     setMessage("");
     try {
-      const result = await api<LoginStatusTestResponse>(`/api/accounts/${account.id}/test-login-status`, {
+      const result = await api<LoginStatusTestResponse>(accountActionUrl(account.id, "test-login"), {
         method: "POST",
         body: JSON.stringify({}),
       });

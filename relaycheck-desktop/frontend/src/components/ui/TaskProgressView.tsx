@@ -1,5 +1,6 @@
 import type { TaskProgress } from "@/hooks/useTaskProgress";
 import { Button } from "@/components/ui/button";
+import "@/styles/components/task-progress.css";
 
 interface TaskProgressViewProps {
   progress: TaskProgress | null;
@@ -16,18 +17,6 @@ interface TaskProgressViewProps {
     close?: string;
   };
 }
-
-const statusColors: Record<string, string> = {
-  success: "var(--v4-success, #16a34a)",
-  already_checked: "var(--v4-info, #2563eb)",
-  failed: "var(--v4-danger, #dc2626)",
-  unsupported: "var(--v4-neutral, #6b7280)",
-  auth_expired: "var(--v4-warning, #d97706)",
-  manual_required: "var(--v4-warning, #d97706)",
-  valid: "var(--v4-success, #16a34a)",
-  expired: "var(--v4-danger, #dc2626)",
-  unknown: "var(--v4-neutral, #6b7280)",
-};
 
 const statusLabels: Record<string, string> = {
   success: "成功",
@@ -86,10 +75,10 @@ export function TaskProgressView({ progress, loading, error, onCancel, onDismiss
       </div>
 
       <div className="task-progress-bar-wrap">
-        <div className="task-progress-bar" style={{ width: `${pct}%` }} />
+        <progress className="task-progress-bar" max={100} value={pct} aria-label={`任务进度 ${pct}%`} />
       </div>
 
-      <div className="task-progress-stats" style={{ fontVariantNumeric: "tabular-nums" }}>
+      <div className="task-progress-stats">
         <span>
           {progress.current} / {progress.total}
         </span>
@@ -102,10 +91,7 @@ export function TaskProgressView({ progress, loading, error, onCancel, onDismiss
           {progress.results.slice(-20).map((item, i) => (
             <div key={`${item.id}-${i}`} className="task-progress-item">
               <span className="task-progress-item-name">{item.name}</span>
-              <span
-                className="task-progress-item-status"
-                style={{ color: statusColors[item.status] || "var(--v4-text)" }}
-              >
+              <span className={`task-progress-item-status status-${item.status}`}>
                 {statusLabels[item.status] || item.status}
               </span>
               {item.message ? <span className="task-progress-item-msg">{item.message}</span> : null}

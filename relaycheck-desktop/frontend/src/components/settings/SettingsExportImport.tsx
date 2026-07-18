@@ -54,7 +54,7 @@ export function SettingsExportImport({
         </button>
       </div>
       {exportResult ? (
-        <div className="detail-list" style={{ marginTop: 8 }}>
+        <div className="detail-list spacing-top-sm">
           <div>
             <span>文件名</span>
             <strong>{exportResult.fileName}</strong>
@@ -78,7 +78,7 @@ export function SettingsExportImport({
         </div>
       ) : null}
       {exports.length > 0 ? (
-        <div className="detail-list" style={{ marginTop: 12 }}>
+        <div className="detail-list spacing-top-md">
           <div className="section-heading">
             <strong>已有导出文件</strong>
           </div>
@@ -90,7 +90,7 @@ export function SettingsExportImport({
                 <Button
                   variant="ghost"
                   type="button"
-                  style={{ marginLeft: 8, padding: "2px 8px", fontSize: 12 }}
+                  className="settings-inline-button"
                   onClick={() => onImportFileNameChange(exp.fileName)}
                 >
                   选择导入
@@ -100,7 +100,7 @@ export function SettingsExportImport({
           ))}
         </div>
       ) : null}
-      <div className="proxy-form-grid" style={{ marginTop: 12 }}>
+      <div className="proxy-form-grid spacing-top-md">
         <label className="field">
           <span>导入密码</span>
           <input

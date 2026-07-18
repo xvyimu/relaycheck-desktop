@@ -110,6 +110,16 @@ try {
       apiKeyStatus: "valid",
     },
   ];
+  const accountPage = {
+    items: accounts,
+    total: accounts.length,
+    accountTotal: accounts.length,
+    problemTotal: 1,
+  };
+  const accountSummary = {
+    accountTotal: accounts.length,
+    problemTotal: 1,
+  };
   const checkins = {
     generatedAt: NOW,
     running: false,
@@ -163,6 +173,13 @@ try {
       createdAt: NOW,
     },
   ];
+  const notificationPage = {
+    items: notifications,
+    total: notifications.length,
+    unreadTotal: notifications.filter((item) => !item.read).length,
+    importantTotal: notifications.filter((item) => ["warning", "danger"].includes(item.level)).length,
+    nextOffset: null,
+  };
   const actionCenter = {
     generatedAt: NOW,
     overall: "warning",
@@ -323,13 +340,29 @@ try {
     let data;
     if (path === "/api/health") data = { status: "ok" };
     else if (path === "/api/system/status") data = statusPayload;
+    else if (path === "/api/dashboard/inventory") data = { channels, sites, accountSummary };
+    else if (path === "/api/dashboard/ops") data = {
+      checkins,
+      notifications: notificationPage,
+      diagnostics: { generatedAt: NOW, overall: "warning", items: [] },
+      actionCenter,
+    };
+    else if (path === "/api/dashboard/model-usage") data = {
+      model: modelOverview,
+      pricing: pricingOverview,
+      usage: usageOverview,
+    };
     else if (path === "/api/channels") data = channels;
     else if (path === "/api/channels/models/overview") data = { generatedAt: NOW, syncedChannels: 0, channelCount: 2, modelCount: 1, liveKeyCount: 1, rawOnlyCount: 0, failedCount: 0, uncheckedCount: 1, items: [], models: [] };
     else if (path === "/api/channels/health/overview") data = channelHealthOverview;
     else if (path === "/api/upstream-sites") data = sites;
     else if (path === "/api/accounts") data = accounts;
+    else if (path === "/api/accounts/page") data = accountPage;
+    else if (path === "/api/accounts/summary") data = accountSummary;
+    else if (path === "/api/accounts/search-sites") data = { items: [], truncated: false };
     else if (path === "/api/checkins/status") data = checkins;
     else if (path === "/api/notifications") data = notifications;
+    else if (path === "/api/notifications/page") data = notificationPage;
     else if (path === "/api/system/diagnostics") data = { generatedAt: NOW, overall: "warning", items: [] };
     else if (path === "/api/system/action-center") data = actionCenter;
     else if (path === "/api/models/overview") data = modelOverview;

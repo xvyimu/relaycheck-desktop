@@ -108,8 +108,30 @@ async function fulfillApi(route) {
 
   if (path === "/api/health") data = { status: "ok" };
   else if (path === "/api/system/status") data = statusPayload();
+  else if (path === "/api/dashboard/inventory") data = {
+    channels: [],
+    sites,
+    accountSummary: { accountTotal: accounts.length, problemTotal: 0 },
+  };
+  else if (path === "/api/dashboard/ops") data = {
+    checkins: null,
+    notifications: { items: [], total: 0, unreadTotal: 0, importantTotal: 0, nextOffset: null },
+    diagnostics: null,
+    actionCenter: null,
+  };
+  else if (path === "/api/dashboard/model-usage") data = { model: null, pricing: null, usage: null };
   else if (path === "/api/channels") data = [];
   else if (path === "/api/upstream-sites") data = sites;
+  else if (path === "/api/accounts/page") {
+    const siteId = (url.searchParams.get("upstreamSiteId") || "").trim();
+    const items = siteId ? accounts.filter((account) => account.upstreamSiteId === siteId) : accounts;
+    data = {
+      items,
+      total: items.length,
+      accountTotal: accounts.length,
+      problemTotal: 0,
+    };
+  }
   else if (path === "/api/accounts") {
     const siteId = (url.searchParams.get("upstreamSiteId") || "").trim();
     data = siteId ? accounts.filter((a) => a.upstreamSiteId === siteId) : accounts;
@@ -281,7 +303,7 @@ async function checkViewport(browser, viewport) {
     labelText || "none",
   );
   const tabCount = await page.locator(".sidebar nav button").count();
-  record("sidebar has all tab buttons", tabCount === 8, `count=${tabCount}`);
+  record("sidebar has all tab buttons", tabCount === 7, `count=${tabCount}`);
 
   await page.getByRole("button", { name: "仪表盘", exact: true }).click({ force: true });
   await page.waitForTimeout(400);
@@ -300,7 +322,8 @@ async function checkViewport(browser, viewport) {
     record("dashboard collapsibles default closed", collapsedToggle > 0, `collapsedToggles=${collapsedToggle}`);
   }
 
-  await page.getByRole("button", { name: "账号", exact: true }).click({ force: true });
+  await page.getByRole("button", { name: "站点与账号", exact: true }).click({ force: true });
+  await page.getByRole("button", { name: "全部账号", exact: true }).click({ force: true });
   await page.locator(".accounts-panel").waitFor({ state: "visible", timeout: 10000 });
   await page.waitForTimeout(300);
   const siteSelect = page.locator('.accounts-panel select[aria-label="按上游站点筛选账号"]');
@@ -318,7 +341,7 @@ async function checkViewport(browser, viewport) {
   const collapsedForm = await page.locator(".account-create-collapsed").count();
   record("create form collapsed by default", collapsedForm > 0);
 
-  await page.getByRole("button", { name: "站点", exact: true }).click({ force: true });
+  await page.getByRole("button", { name: "按站点", exact: true }).click({ force: true });
   await page.waitForTimeout(400);
   // S7.3: "查看账号" deep-links to sites master-detail (not accounts tab). Prefer list-mode CTA when present.
   const layoutList = page.getByRole("button", { name: "卡片", exact: true });

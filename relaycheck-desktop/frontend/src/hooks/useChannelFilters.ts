@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAccountSiteSearch } from "@/hooks/useAccountSiteSearch";
 import { CHANNELS_INITIAL_VISIBLE_LIMIT, CHANNEL_RAW_SEARCH_KEYS, TARGET_RELAY_KINDS } from "@/lib/constants";
-import type { AccountSearchIndexItem, ImportedChannel, NavigationIntent } from "@/types";
+import type { AccountSiteSearchItem, ImportedChannel, NavigationIntent } from "@/types";
 
 function isTargetRelayKindUI(kind?: string | null): boolean {
   return TARGET_RELAY_KINDS.has(kind || "");
@@ -58,26 +59,26 @@ function rawChannelSearchText(rawJson?: string): string {
   return parts.join(" ");
 }
 
-function channelAccountSearchText(channel: ImportedChannel, searchIndex: AccountSearchIndexItem[]): string {
+function channelMatchesAccountSearch(channel: ImportedChannel, matches: AccountSiteSearchItem[]): boolean {
   const channelBase = normalizeSearchURL(channel.baseUrl || "");
   const channelName = channel.name.trim().toLowerCase();
-  return searchIndex
-    .filter((entry) => {
-      const entryBase = normalizeSearchURL(entry.upstreamSiteBaseUrl || "");
-      const entryName = entry.upstreamSiteName.trim().toLowerCase();
-      return (
-        (channelBase && entryBase && channelBase === entryBase) ||
-        (channelName && entryName && (channelName.includes(entryName) || entryName.includes(channelName)))
-      );
-    })
-    .map((entry) => entry.searchText)
-    .join(" ")
-    .toLowerCase();
+  return matches.some((entry) => {
+    const entryBase = normalizeSearchURL(entry.upstreamSiteBaseUrl || "");
+    const entryName = entry.upstreamSiteName.trim().toLowerCase();
+    return (
+      (channelBase && entryBase && channelBase === entryBase) ||
+      (channelName && entryName && (channelName.includes(entryName) || entryName.includes(channelName)))
+    );
+  });
 }
 
 export interface ChannelFiltersResult {
   query: string;
   setQuery: (value: string) => void;
+  setQueryComposing: (value: boolean) => void;
+  accountSearchLoading: boolean;
+  accountSearchTruncated: boolean;
+  accountSearchError: string;
   sourceStatusFilter: string;
   setSourceStatusFilter: (value: string) => void;
   kindFilter: string;
@@ -112,14 +113,16 @@ function isHealthRiskChannel(channel: ImportedChannel): boolean {
 
 export function useChannelFilters(
   channels: ImportedChannel[],
-  searchIndex: AccountSearchIndexItem[],
   intent?: NavigationIntent | null,
+  active = true,
 ): ChannelFiltersResult {
   const [query, setQuery] = useState("");
+  const [queryComposing, setQueryComposing] = useState(false);
   const [sourceStatusFilter, setSourceStatusFilter] = useState("not_archived");
   const [kindFilter, setKindFilter] = useState("target_relay");
   const [healthFilter, setHealthFilter] = useState("all");
   const [visibleLimit, setVisibleLimit] = useState(CHANNELS_INITIAL_VISIBLE_LIMIT);
+  const accountSearch = useAccountSiteSearch(query, active && !queryComposing);
 
   const identifiedCount = channels.filter(
     (channel) => channel.upstreamKind && channel.upstreamKind !== "unknown",
@@ -155,14 +158,25 @@ export function useChannelFilters(
         channel.upstreamKind || "",
         channel.sourceType || "",
         channel.modelsMessage || "",
-        channelAccountSearchText(channel, searchIndex),
         rawChannelSearchText(channel.rawJson),
       ]
         .join(" ")
         .toLowerCase();
-      return combined.includes(normalizedQuery);
+      if (combined.includes(normalizedQuery)) return true;
+      return (
+        accountSearch.searchedQuery === normalizedQuery &&
+        channelMatchesAccountSearch(channel, accountSearch.data.items)
+      );
     });
-  }, [searchIndex, channels, healthFilter, kindFilter, query, sourceStatusFilter]);
+  }, [
+    accountSearch.data.items,
+    accountSearch.searchedQuery,
+    channels,
+    healthFilter,
+    kindFilter,
+    query,
+    sourceStatusFilter,
+  ]);
 
   const displayedChannels = visibleChannels.slice(0, visibleLimit);
   const hasMoreChannels = visibleChannels.length > displayedChannels.length;
@@ -195,6 +209,10 @@ export function useChannelFilters(
   return {
     query,
     setQuery,
+    setQueryComposing,
+    accountSearchLoading: accountSearch.loading,
+    accountSearchTruncated: accountSearch.data.truncated,
+    accountSearchError: accountSearch.error,
     sourceStatusFilter,
     setSourceStatusFilter,
     kindFilter,

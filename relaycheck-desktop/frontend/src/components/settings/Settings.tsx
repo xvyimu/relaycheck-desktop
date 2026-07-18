@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { api } from "@/api/client";
+import { systemApi } from "@/api/system";
 import { formatBytes } from "@/lib/format";
 import type {
   AuditLogItem,
@@ -154,14 +154,15 @@ function SettingsBase({
     );
   }
 
+  /** 并行加载设置页只读数据；exports 失败时降级为空数组。 */
   async function refresh() {
     try {
       const [nextSettings, nextBackups, nextScheduler, nextAuditLogs, nextExports] = await Promise.all([
-        api<SystemSetting[]>("/api/system/settings"),
-        api<SystemBackup[]>("/api/system/backups"),
-        api<SchedulerStatus>("/api/system/scheduler-status"),
-        api<AuditLogItem[]>("/api/system/audit-log"),
-        api<ExportResult[]>("/api/system/exports").catch(() => []),
+        systemApi.listSettings(),
+        systemApi.listBackups(),
+        systemApi.schedulerStatus(),
+        systemApi.auditLog(),
+        systemApi.listExports().catch(() => []),
       ]);
       setSettings(nextSettings);
       setBackups(nextBackups);
@@ -177,7 +178,7 @@ function SettingsBase({
     setBusy("backup");
     setMessage("正在创建数据库备份…");
     try {
-      const backup = await api<SystemBackup>("/api/system/backup", { method: "POST" });
+      const backup = await systemApi.createBackup();
       setMessage("备份完成：" + backup.fileName);
       await refresh();
       onDone();
@@ -198,13 +199,8 @@ function SettingsBase({
     setBusy("restore");
     setMessage("正在恢复 " + backup.fileName + "…");
     try {
-      const result = await api<{ restored: boolean; fileName: string; beforeBackup: SystemBackup }>(
-        "/api/system/restore",
-        {
-          method: "POST",
-          body: JSON.stringify({ fileName: backup.fileName }),
-        },
-      );
+      // 恢复语义保持不变：仅提交 fileName，确认框仍由 UI 持有。
+      const result = await systemApi.restoreBackup(backup.fileName);
       setMessage("已恢复 " + result.fileName + "，恢复前快照已保存为 " + result.beforeBackup.fileName + "。");
       await refresh();
       onDone();
@@ -226,10 +222,7 @@ function SettingsBase({
     setBusy("delete");
     setMessage("正在删除选中的备份…");
     try {
-      const result = await api<{ deleted: number; skipped: string[] }>("/api/system/backups/delete", {
-        method: "POST",
-        body: JSON.stringify({ fileNames: selectedBackups }),
-      });
+      const result = await systemApi.deleteBackups(selectedBackups);
       setMessage(
         "已删除 " +
           result.deleted +
@@ -248,10 +241,9 @@ function SettingsBase({
 
   async function persistSettings(nextSettings = settings) {
     for (const setting of nextSettings) JSON.parse(setting.valueJson);
-    const result = await api<{ updated: number }>("/api/system/settings", {
-      method: "PUT",
-      body: JSON.stringify({ settings: nextSettings }),
-    });
+    const result = await systemApi.saveSettings(
+      nextSettings.map((item) => ({ key: item.key, valueJson: item.valueJson })),
+    );
     await refresh();
     onDone();
     return result;
@@ -276,10 +268,7 @@ function SettingsBase({
     setProxyTestResult(null);
     try {
       await persistSettings();
-      const result = await api<ProxyTestResult>("/api/system/proxy-test", {
-        method: "POST",
-        body: JSON.stringify({ targetUrl: proxyTestTarget }),
-      });
+      const result = await systemApi.proxyTest(proxyTestTarget);
       setProxyTestResult(result);
       setMessage(result.ok ? "代理测试通过：" + result.message : "代理测试失败：" + result.message);
     } catch (error) {
@@ -295,14 +284,9 @@ function SettingsBase({
     try {
       if (versionCheckURL !== currentVersionCheckURL) {
         upsertSetting("app.version_check_url", JSON.stringify(versionCheckURL));
-        await api("/api/system/settings", {
-          method: "PUT",
-          body: JSON.stringify({
-            settings: [{ key: "app.version_check_url", valueJson: JSON.stringify(versionCheckURL) }],
-          }),
-        });
+        await systemApi.saveSettings([{ key: "app.version_check_url", valueJson: JSON.stringify(versionCheckURL) }]);
       }
-      const result = await api<VersionCheckResult>("/api/system/version-check");
+      const result = await systemApi.versionCheck();
       setVersionCheckResult(result);
     } catch (error) {
       setVersionCheckResult({
@@ -320,7 +304,7 @@ function SettingsBase({
     setPortChecking(true);
     setPortCheckResult(null);
     try {
-      const result = await api<PortCheckResult>(`/api/system/port-check?port=${encodeURIComponent(portCheckPort)}`);
+      const result = await systemApi.portCheck(portCheckPort);
       setPortCheckResult(result);
     } catch {
       setPortCheckResult({ port: Number(portCheckPort) || 0, available: false, inUse: false, error: "检测失败" });
@@ -333,14 +317,11 @@ function SettingsBase({
     setExporting(true);
     setExportResult(null);
     try {
-      const result = await api<ExportResult>("/api/system/export", {
-        method: "POST",
-        body: JSON.stringify({ password: exportPassword }),
-      });
+      const result = await systemApi.exportDatabase(exportPassword);
       setExportResult(result);
       setExportPassword("");
       setMessage("加密导出成功");
-      setExports((await api<ExportResult[]>("/api/system/exports")) || []);
+      setExports((await systemApi.listExports()) || []);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "导出失败");
     } finally {
@@ -352,10 +333,7 @@ function SettingsBase({
     if (!window.confirm("导入将覆盖当前数据库，确定继续？")) return;
     setImporting(true);
     try {
-      await api("/api/system/import", {
-        method: "POST",
-        body: JSON.stringify({ password: importPassword, fileName: importFileName }),
-      });
+      await systemApi.importDatabase(importPassword, importFileName);
       setMessage("导入成功，正在刷新…");
       setTimeout(() => window.location.reload(), 1500);
     } catch (error) {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { accountApi } from "@/api/accounts";
 import { api } from "@/api/client";
 import type { UpstreamSite } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -63,7 +64,7 @@ export function AccountForm({
         setBusy(true);
         setMessage("");
         try {
-          await api("/api/accounts", {
+          await api(accountApi.collection, {
             method: "POST",
             body: JSON.stringify({
               upstreamSiteId: isCustomSite ? "" : upstreamSiteId,

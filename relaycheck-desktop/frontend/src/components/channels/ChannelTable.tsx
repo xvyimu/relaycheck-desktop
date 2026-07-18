@@ -1,4 +1,4 @@
-import { api } from "@/api/client";
+import { channelsApi } from "@/api/channels";
 import { CHANNELS_VISIBLE_INCREMENT } from "@/lib/constants";
 import { channelInitials, formatTime } from "@/lib/format";
 import { channelModelStatusLabel, channelSourceLabel, channelSourceSyncLabel, upstreamKindLabel } from "@/lib/labels";
@@ -31,6 +31,18 @@ export function ChannelTable({
   filters,
 }: ChannelTableProps) {
   const { displayedChannels, visibleChannels, hasMoreChannels, setVisibleLimit } = filters;
+
+  /** 识别渠道并生成上游站点；失败必须写入 message，避免空白。 */
+  async function detectChannel(channel: ImportedChannel) {
+    onSetMessage("");
+    try {
+      await channelsApi.detect(channel.id);
+      onSetMessage(`${channel.name} 已识别并同步到上游站点`);
+      await onRefresh();
+    } catch (err) {
+      onSetMessage(err instanceof Error ? `识别失败：${err.message}` : "识别失败");
+    }
+  }
 
   return (
     <>
@@ -125,18 +137,7 @@ export function ChannelTable({
               <button
                 className="channel-action"
                 disabled={!channel.baseUrl}
-                onClick={async () => {
-                  onSetMessage("");
-                  try {
-                    await api(`/api/channels/${channel.id}/detect`, { method: "POST" });
-                    onSetMessage(`${channel.name} 已识别并同步到上游站点`);
-                    await onRefresh();
-                  } catch (err) {
-                    // Without this catch a detect failure surfaces as an
-                    // unhandled rejection and the message area stays blank.
-                    onSetMessage(err instanceof Error ? `识别失败：${err.message}` : "识别失败");
-                  }
-                }}
+                onClick={() => void detectChannel(channel)}
               >
                 识别并生成站点
               </button>

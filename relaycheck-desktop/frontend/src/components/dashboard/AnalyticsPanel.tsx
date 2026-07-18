@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
+import "@/styles/domains/analytics.css";
 import type { BalanceSnapshot, CheckinLog } from "@/types";
 
 type BalanceTrendPoint = { date: string; balance?: number };
@@ -311,7 +312,7 @@ function CheckinDonutChart({
             className={`donut-legend-item ${selectedStatus === item.status ? "active" : ""}`}
             onClick={() => onSelectStatus?.(item.status)}
           >
-            <span className="legend-dot" style={{ background: item.color }} />
+            <span className={`legend-dot status-${item.status}`} />
             <span className="legend-label">{item.label}</span>
             <span className="legend-count">{item.count}</span>
           </button>
@@ -327,35 +328,21 @@ function ResponseTimeChart({ data }: { data: ResponseTimePoint[] | null }) {
   }
 
   const maxLatency = Math.max(...data.map((d) => d.latencyMs), 1);
-  const barHeight = 18;
-  const gap = 4;
-  const labelWidth = 100;
-  const chartWidth = 200;
-
   return (
     <div className="response-time-chart">
-      {data.slice(0, 10).map((item, i) => {
-        const width = (item.latencyMs / maxLatency) * chartWidth;
-        const color =
-          item.status === "valid"
-            ? "var(--v4-green)"
-            : item.status === "rate_limited"
-              ? "var(--v4-amber)"
-              : "var(--v4-red)";
+      {data.slice(0, 10).map((item) => {
         return (
-          <div
-            key={`${item.accountName}-${item.siteName}`}
-            className="response-time-row"
-            style={{ top: i * (barHeight + gap) }}
-          >
-            <div className="response-time-label" style={{ width: labelWidth }}>
+          <div key={`${item.accountName}-${item.siteName}`} className="response-time-row">
+            <div className="response-time-label">
               <span className="response-time-name">{item.accountName}</span>
               <span className="response-time-site">{item.siteName}</span>
             </div>
-            <div className="response-time-bar-track" style={{ width: chartWidth }}>
-              <div
-                className="response-time-bar"
-                style={{ width: `${width}px`, background: color, height: barHeight - 4 }}
+            <div className="response-time-bar-track">
+              <progress
+                aria-label={`${item.accountName} 延迟 ${item.latencyMs}ms`}
+                className={`response-time-bar status-${item.status}`}
+                max={maxLatency}
+                value={item.latencyMs}
               />
               <span className="response-time-value">{item.latencyMs}ms</span>
             </div>
@@ -536,9 +523,9 @@ export function AnalyticsPanel() {
     return (
       <div className="analytics-panel">
         <div className="analytics-grid">
-          <div className="card analytics-card skeleton" style={{ height: 180 }} />
-          <div className="card analytics-card skeleton" style={{ height: 180 }} />
-          <div className="card analytics-card skeleton" style={{ height: 180 }} />
+          <div className="card analytics-card skeleton" />
+          <div className="card analytics-card skeleton" />
+          <div className="card analytics-card skeleton" />
         </div>
       </div>
     );

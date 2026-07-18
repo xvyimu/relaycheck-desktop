@@ -113,6 +113,21 @@
   flex-shrink: 0;
 }
 
+.legend-dot.status-success,
+.legend-dot.status-already_checked {
+  background: var(--v4-green);
+}
+
+.legend-dot.status-failed,
+.legend-dot.status-auth_expired,
+.legend-dot.status-manual_required {
+  background: var(--v4-red);
+}
+
+.legend-dot.status-unsupported {
+  background: var(--v4-muted);
+}
+
 .legend-label {
   flex: 1;
   color: var(--v4-text);
@@ -139,6 +154,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  width: 100px;
 }
 
 .response-time-name {
@@ -160,12 +176,36 @@
   align-items: center;
   gap: 6px;
   position: relative;
+  width: 200px;
 }
 
 .response-time-bar {
+  width: 100%;
+  height: 14px;
+  appearance: none;
+  overflow: hidden;
+  border: 0;
   border-radius: 3px;
-  min-width: 2px;
-  transition: width 0.3s;
+  background: var(--v4-card-soft);
+}
+
+.response-time-bar::-webkit-progress-bar {
+  background: var(--v4-card-soft);
+}
+
+.response-time-bar::-webkit-progress-value,
+.response-time-bar::-moz-progress-bar {
+  background: var(--v4-red);
+}
+
+.response-time-bar.status-valid::-webkit-progress-value,
+.response-time-bar.status-valid::-moz-progress-bar {
+  background: var(--v4-green);
+}
+
+.response-time-bar.status-rate_limited::-webkit-progress-value,
+.response-time-bar.status-rate_limited::-moz-progress-bar {
+  background: var(--v4-amber);
 }
 
 .response-time-value {

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "@/api/client";
-import type { AccountSearchIndexItem, ChannelModelOverview, DetailDrawerState, ImportedChannel } from "@/types";
+import { channelsApi } from "@/api/channels";
+import type { ChannelModelOverview, DetailDrawerState, ImportedChannel } from "@/types";
 
 export interface ChannelActionsResult {
   channels: ImportedChannel[];
-  searchIndex: AccountSearchIndexItem[];
   modelOverview: ChannelModelOverview | null;
   modelSyncing: boolean;
   message: string;
@@ -26,14 +25,13 @@ export type UseChannelActionsOptions = {
   active?: boolean;
   /** Prefer inventory channels to avoid dual-fetch on mount. */
   initialChannels?: ImportedChannel[];
-  /** Prefer inventory search index to avoid dual-fetch on mount. */
-  initialSearchIndex?: AccountSearchIndexItem[];
+  /** Inventory owns channels; mutations invalidate it through this callback. */
+  onInventoryRefresh?: () => Promise<void>;
 };
 
 export function useChannelActions(options: UseChannelActionsOptions = {}): ChannelActionsResult {
-  const { active = true, initialChannels, initialSearchIndex } = options;
-  const [channels, setChannels] = useState<ImportedChannel[]>(() => initialChannels ?? []);
-  const [searchIndex, setSearchIndex] = useState<AccountSearchIndexItem[]>(() => initialSearchIndex ?? []);
+  const { active = true, initialChannels, onInventoryRefresh } = options;
+  const channels = initialChannels ?? [];
   const [modelOverview, setModelOverview] = useState<ChannelModelOverview | null>(null);
   const [modelSyncing, setModelSyncing] = useState(false);
   const [message, setMessage] = useState("");
@@ -41,24 +39,11 @@ export function useChannelActions(options: UseChannelActionsOptions = {}): Chann
   const [loaded, setLoaded] = useState(seeded);
   const [drawer, setDrawer] = useState<DetailDrawerState | null>(null);
 
-  // Keep local state aligned when parent inventory refresh lands.
-  useEffect(() => {
-    if (initialChannels) setChannels(initialChannels);
-  }, [initialChannels]);
-  useEffect(() => {
-    if (initialSearchIndex) setSearchIndex(initialSearchIndex);
-  }, [initialSearchIndex]);
-
   const refresh = useCallback(async () => {
     try {
-      const [nextChannels, nextModels, nextSearchIndex] = await Promise.all([
-        api<ImportedChannel[]>("/api/channels"),
-        api<ChannelModelOverview>("/api/channels/models/overview"),
-        api<AccountSearchIndexItem[]>("/api/accounts/search-index"),
-      ]);
-      setChannels(nextChannels);
+      // 模型概览契约归 channelsApi，避免 hook 直接拼 URL。
+      const nextModels = await channelsApi.modelsOverview();
       setModelOverview(nextModels);
-      setSearchIndex(nextSearchIndex);
       setLoaded(true);
     } catch (err) {
       setMessage(err instanceof Error ? `加载失败：${err.message}` : "加载渠道数据失败");
@@ -66,20 +51,16 @@ export function useChannelActions(options: UseChannelActionsOptions = {}): Chann
     }
   }, []);
 
-  // Inventory only seeds channels. Models + compact search-index still load once while active.
+  // Inventory owns channels. This hook loads only channel-specific model state.
   useEffect(() => {
     if (!active) return;
     if (!seeded) return;
     let cancelled = false;
     void (async () => {
       try {
-        const [overview, nextSearchIndex] = await Promise.all([
-          api<ChannelModelOverview>("/api/channels/models/overview"),
-          api<AccountSearchIndexItem[]>("/api/accounts/search-index"),
-        ]);
+        const overview = await channelsApi.modelsOverview();
         if (!cancelled) {
           setModelOverview(overview);
-          setSearchIndex(nextSearchIndex);
           setLoaded(true);
         }
       } catch {
@@ -95,19 +76,17 @@ export function useChannelActions(options: UseChannelActionsOptions = {}): Chann
     setModelSyncing(true);
     setMessage("正在同步渠道模型…");
     try {
-      const overview = await api<ChannelModelOverview>("/api/channels/models/sync", {
-        method: "POST",
-        body: JSON.stringify({ limit: 100 }),
-      });
+      // 默认 limit 由 channelsApi 持有，与 Onboarding 的 limit=10 覆盖路径共用契约。
+      const overview = await channelsApi.syncModels();
       setModelOverview(overview);
       setMessage(`已同步 ${overview.syncedChannels || 0} 个渠道，识别 ${overview.modelCount} 个模型`);
-      setChannels(await api<ImportedChannel[]>("/api/channels"));
+      await onInventoryRefresh?.();
     } catch (err) {
       setMessage(err instanceof Error ? `同步失败：${err.message}` : "同步渠道模型失败");
     } finally {
       setModelSyncing(false);
     }
-  }, []);
+  }, [onInventoryRefresh]);
 
   const updateChannelSourceStatus = useCallback(
     async (channel: ImportedChannel, action: "restore-source-status" | "archive-source-status") => {
@@ -120,14 +99,19 @@ export function useChannelActions(options: UseChannelActionsOptions = {}): Chann
       }
       setMessage(`${channel.name} 正在${nextLabel}…`);
       try {
-        await api(`/api/channels/${channel.id}/${action}`, { method: "POST" });
+        // 源状态写路径归 channelsApi；归档仅改本地状态，不删业务数据。
+        if (action === "restore-source-status") {
+          await channelsApi.restoreSourceStatus(channel.id);
+        } else {
+          await channelsApi.archiveSourceStatus(channel.id);
+        }
         setMessage(`${channel.name} 已${nextLabel}`);
-        await refresh();
+        await onInventoryRefresh?.();
       } catch (err) {
         setMessage(err instanceof Error ? `${nextLabel}失败：${err.message}` : `${nextLabel}失败`);
       }
     },
-    [refresh],
+    [onInventoryRefresh],
   );
 
   const bulkUpdateSourceStatus = useCallback(
@@ -141,22 +125,18 @@ export function useChannelActions(options: UseChannelActionsOptions = {}): Chann
       if (!confirmed) return;
       setMessage(`正在批量${actionLabel} ${statusLabel} 渠道…`);
       try {
-        const result = await api<{ affected: number }>("/api/channels/bulk-source-status", {
-          method: "POST",
-          body: JSON.stringify({ fromStatus, toStatus }),
-        });
+        const result = await channelsApi.bulkSourceStatus({ fromStatus, toStatus });
         setMessage(`已批量${actionLabel} ${result.affected} 条渠道`);
-        await refresh();
+        await onInventoryRefresh?.();
       } catch (err) {
         setMessage(err instanceof Error ? `批量${actionLabel}失败：${err.message}` : `批量${actionLabel}失败`);
       }
     },
-    [refresh],
+    [onInventoryRefresh],
   );
 
   return {
     channels,
-    searchIndex,
     modelOverview,
     modelSyncing,
     message,

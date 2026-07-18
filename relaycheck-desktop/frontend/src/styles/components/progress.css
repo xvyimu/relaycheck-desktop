@@ -1,0 +1,19 @@
+.app-progress {
+  width: 100%;
+  appearance: none;
+  border: 0;
+}
+
+.app-progress::-webkit-progress-bar {
+  background: var(--muted);
+}
+
+.app-progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.app-progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--primary);
+}

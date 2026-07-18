@@ -1,7 +1,7 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useMemo, useState } from "react";
 import { Empty } from "@/components/ui/empty";
 import { HubRadar } from "@/components/dashboard/HubRadar";
-import { AnalyticsPanel } from "@/components/dashboard/AnalyticsPanel";
+import { ActionPriorityItem } from "@/components/dashboard/ActionPriorityItem";
 import { UpdateBanner } from "@/components/ui/UpdateBanner";
 import { Badge as UiBadge } from "@/components/ui/badge";
 import type { InventoryDataState } from "@/hooks/useInventoryData";
@@ -10,10 +10,13 @@ import type { OpsHealthState } from "@/hooks/useOpsHealth";
 import { useSchedulerPreview } from "@/hooks/useSchedulerPreview";
 import type { SystemOverviewState } from "@/hooks/useSystemOverview";
 import { formatDuration, formatTime } from "@/lib/format";
-import { actionItemNavigationIntent, actionSampleNavigationIntent } from "@/lib/navigation";
 import { statusTone, toneBadgeVariant } from "@/lib/tone";
-import type { ActionItem, ActionSample, NavigationIntent, TabKey } from "@/types";
+import type { ActionItem, NavigationIntent, TabKey } from "@/types";
 import { Button } from "@/components/ui/button";
+
+const AnalyticsPanel = lazy(() =>
+  import("@/components/dashboard/AnalyticsPanel").then((module) => ({ default: module.AnalyticsPanel })),
+);
 
 export interface DashboardProps {
   system: SystemOverviewState;
@@ -75,39 +78,12 @@ function Row({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-function actionCategoryLabel(category?: string) {
-  const labels: Record<string, string> = {
-    auth: "授权",
-    key: "Key",
-    checkin: "签到",
-    balance: "余额",
-    channel: "渠道",
-    health: "健康",
-    site: "站点",
-    notification: "通知",
-    setup: "接入",
-  };
-  return labels[category || ""] || "运营";
-}
-
 function actionCenterSubtitle(items: ActionItem[]) {
   if (!items.length) return "当前没有需要立即处理的运营事项";
   if (items.every((item) => item.category === "setup")) {
     return `按接入顺序处理 ${items.length} 项`;
   }
   return `按风险优先处理 ${items.length} 项`;
-}
-
-function navigateAction(onNavigate: DashboardProps["onNavigate"], item: ActionItem) {
-  const intent = actionItemNavigationIntent(item);
-  const { target, ...nextIntent } = intent;
-  onNavigate(target, nextIntent);
-}
-
-function navigateActionSample(onNavigate: DashboardProps["onNavigate"], item: ActionItem, sample: ActionSample) {
-  const intent = actionSampleNavigationIntent(item, sample);
-  const { target, ...nextIntent } = intent;
-  onNavigate(target, nextIntent);
 }
 
 function DashboardBase({ system, inventory, ops, modelUsage, onNavigate, onRefresh }: DashboardProps) {
@@ -209,45 +185,7 @@ function DashboardBase({ system, inventory, ops, modelUsage, onNavigate, onRefre
         {priorityActions.length ? (
           <div className="dashboard-priority-list">
             {priorityActions.map((item) => (
-              <article className={`dashboard-priority-item level-${item.level}`} key={item.id}>
-                <div>
-                  <div className="dashboard-priority-head">
-                    <span className="action-category">{actionCategoryLabel(item.category)}</span>
-                    <b>{item.count}</b>
-                  </div>
-                  <strong>{item.title}</strong>
-                  <span>{item.impact || item.description}</span>
-                </div>
-                {item.samples?.length ? (
-                  <div className="task-samples">
-                    {item.samples.slice(0, 3).map((sample, sampleIndex) => {
-                      const clickable = Boolean(sample.entityType && sample.entityId);
-                      if (clickable) {
-                        return (
-                          <button
-                            key={`${sample.entityType}:${sample.entityId}:${sample.label}:${sampleIndex}`}
-                            type="button"
-                            className="task-sample-link"
-                            onClick={() => navigateActionSample(onNavigate, item, sample)}
-                          >
-                            {sample.label}
-                          </button>
-                        );
-                      }
-                      return <span key={`${sample.label}:${sampleIndex}`}>{sample.label}</span>;
-                    })}
-                  </div>
-                ) : null}
-                <em>{item.recommendedAction || item.action}</em>
-                <div className="dashboard-priority-actions">
-                  <button type="button" onClick={() => navigateAction(onNavigate, item)}>
-                    处理
-                  </button>
-                  <Button variant="ghost" type="button" onClick={() => navigateAction(onNavigate, item)}>
-                    查看列表
-                  </Button>
-                </div>
-              </article>
+              <ActionPriorityItem item={item} onNavigate={onNavigate} key={item.id} />
             ))}
           </div>
         ) : (
@@ -314,7 +252,11 @@ function DashboardBase({ system, inventory, ops, modelUsage, onNavigate, onRefre
             {analyticsOpen ? "收起分析" : "展开分析"}
           </Button>
         </div>
-        {analyticsOpen ? <AnalyticsPanel /> : null}
+        {analyticsOpen ? (
+          <Suspense fallback={<Empty message="正在加载分析…" />}>
+            <AnalyticsPanel />
+          </Suspense>
+        ) : null}
       </section>
     </>
   );

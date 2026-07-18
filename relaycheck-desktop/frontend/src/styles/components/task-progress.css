@@ -63,10 +63,22 @@
 }
 
 .task-progress-bar {
+  width: 100%;
   height: 100%;
+  appearance: none;
+  border: 0;
   background: var(--v4-primary, #2563eb);
   border-radius: 3px;
   transition: width 0.3s ease;
+}
+
+.task-progress-bar::-webkit-progress-bar {
+  background: transparent;
+}
+
+.task-progress-bar::-webkit-progress-value,
+.task-progress-bar::-moz-progress-bar {
+  background: var(--v4-primary, #2563eb);
 }
 
 .task-progress-stats {
@@ -75,6 +87,7 @@
   font-size: 13px;
   color: var(--v4-muted, #64748b);
   margin-bottom: 8px;
+  font-variant-numeric: tabular-nums;
 }
 
 .task-progress-ok {
@@ -112,6 +125,30 @@
 .task-progress-item-status {
   font-weight: 600;
   white-space: nowrap;
+}
+
+.task-progress-item-status.status-success,
+.task-progress-item-status.status-valid {
+  color: var(--v4-success, #16a34a);
+}
+
+.task-progress-item-status.status-already_checked {
+  color: var(--v4-info, #2563eb);
+}
+
+.task-progress-item-status.status-failed,
+.task-progress-item-status.status-expired {
+  color: var(--v4-danger, #dc2626);
+}
+
+.task-progress-item-status.status-auth_expired,
+.task-progress-item-status.status-manual_required {
+  color: var(--v4-warning, #d97706);
+}
+
+.task-progress-item-status.status-unsupported,
+.task-progress-item-status.status-unknown {
+  color: var(--v4-neutral, #6b7280);
 }
 
 .task-progress-item-msg {

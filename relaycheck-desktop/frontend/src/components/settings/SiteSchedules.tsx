@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api } from "@/api/client";
+import { schedulerApi } from "@/api/scheduler";
+import { sitesApi } from "@/api/sites";
 import { formatTime } from "@/lib/format";
 import type { ChannelSchedule, ScheduleCalendarItem, NextRunItem, UpstreamSite } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -48,12 +49,10 @@ export function SiteSchedules() {
   // Per-site skip-date temp input
   const [skipInputs, setSkipInputs] = useState<Record<string, string>>({});
 
+  /** 加载排程与站点列表，并为缺失站点补默认表单。 */
   async function refresh() {
     try {
-      const [nextSchedules, nextSites] = await Promise.all([
-        api<ChannelSchedule[]>("/api/scheduler/channel-schedules"),
-        api<UpstreamSite[]>("/api/upstream-sites"),
-      ]);
+      const [nextSchedules, nextSites] = await Promise.all([schedulerApi.listChannelSchedules(), sitesApi.list()]);
       setSchedules(nextSchedules);
       setSites(nextSites);
 
@@ -94,12 +93,10 @@ export function SiteSchedules() {
     }
   }
 
+  /** 刷新日历与下次运行预览；失败只影响预览区。 */
   async function refreshCalendar() {
     try {
-      const [cal, runs] = await Promise.all([
-        api<{ generatedAt: string; items: ScheduleCalendarItem[] }>("/api/scheduler/calendar?days=7"),
-        api<{ generatedAt: string; items: NextRunItem[] }>("/api/scheduler/next-runs"),
-      ]);
+      const [cal, runs] = await Promise.all([schedulerApi.calendar(7), schedulerApi.nextRuns()]);
       setCalendarItems(cal.items);
       setNextRuns(runs.items);
       setPreviewError("");
@@ -115,10 +112,8 @@ export function SiteSchedules() {
     setBusy("saving");
     setMessage("");
     try {
-      const result = await api<{ ok: boolean }>("/api/scheduler/channel-schedules", {
-        method: "PUT",
-        body: JSON.stringify(form),
-      });
+      // 排程写路径归 schedulerApi；表单字段不得扩未知键。
+      const result = await schedulerApi.saveChannelSchedule(form);
       if (result.ok) {
         setMessage("已保存 " + (sites.find((s) => s.id === siteId)?.name || siteId) + " 的签到排程。");
         await refresh();
@@ -212,7 +207,7 @@ export function SiteSchedules() {
         </div>
 
         {sites.length === 0 ? (
-          <div className="detail-hint problem-hint" style={{ padding: "16px 0" }}>
+          <div className="detail-hint problem-hint schedule-empty-hint">
             暂无站点。请先在"站点"标签页导入或扫描添加上游站点。
           </div>
         ) : (
@@ -341,9 +336,7 @@ export function SiteSchedules() {
                             ))}
                           </div>
                         ) : (
-                          <span className="detail-hint" style={{ fontSize: 11 }}>
-                            无跳过日期
-                          </span>
+                          <span className="detail-hint schedule-compact-hint">无跳过日期</span>
                         )}
                       </div>
 
@@ -378,7 +371,7 @@ export function SiteSchedules() {
           </div>
         )}
 
-        <div className="problem-hint detail-hint" style={{ marginTop: 12 }}>
+        <div className="problem-hint detail-hint spacing-top-md">
           为每个站点设置独立的签到时间后，该站点将按自己的排程运行，不受全局"自动签到"时间影响。
           取消启用即恢复为全局调度。
         </div>

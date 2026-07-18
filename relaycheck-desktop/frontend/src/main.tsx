@@ -143,12 +143,10 @@ function App() {
     );
   }
 
-  const show = (key: Tab) => (tab === key ? undefined : "none");
-
   return (
     <div className="app-shell">
       <Suspense fallback={null}>
-        <OnboardingWizard />
+        <OnboardingWizard onNavigate={handleNavigate} />
       </Suspense>
       <Sidebar activeTab={tab} onTabChange={handleTabChange} />
       <main className="main-panel">
@@ -159,7 +157,12 @@ function App() {
           </div>
         ) : null}
         {visitedTabs.has("dashboard") ? (
-          <div style={{ display: show("dashboard") }} aria-hidden={tab !== "dashboard"} inert={tab !== "dashboard"}>
+          <div
+            className="panel-host"
+            hidden={tab !== "dashboard"}
+            aria-hidden={tab !== "dashboard"}
+            inert={tab !== "dashboard"}
+          >
             <Dashboard
               system={system}
               inventory={inventory}
@@ -171,10 +174,15 @@ function App() {
           </div>
         ) : null}
         {visitedTabs.has("channels") ? (
-          <div style={{ display: show("channels") }} aria-hidden={tab !== "channels"} inert={tab !== "channels"}>
+          <div
+            className="panel-host"
+            hidden={tab !== "channels"}
+            aria-hidden={tab !== "channels"}
+            inert={tab !== "channels"}
+          >
             <Suspense fallback={<PanelFallback />}>
               <ChannelsPanel
-                onRefresh={reload}
+                onRefresh={inventory.refresh}
                 intent={navigationIntent?.target === "channels" ? navigationIntent : null}
                 active={tab === "channels"}
                 dialogEpoch={dialogEpoch}
@@ -184,7 +192,7 @@ function App() {
           </div>
         ) : null}
         {visitedTabs.has("sites") ? (
-          <div style={{ display: show("sites") }} aria-hidden={tab !== "sites"} inert={tab !== "sites"}>
+          <div className="panel-host" hidden={tab !== "sites"} aria-hidden={tab !== "sites"} inert={tab !== "sites"}>
             <Suspense fallback={<PanelFallback />}>
               <SitesPanel
                 sites={inventory.sites}
@@ -197,26 +205,33 @@ function App() {
           </div>
         ) : null}
         {visitedTabs.has("checkins") ? (
-          <div style={{ display: show("checkins") }} aria-hidden={tab !== "checkins"} inert={tab !== "checkins"}>
+          <div
+            className="panel-host"
+            hidden={tab !== "checkins"}
+            aria-hidden={tab !== "checkins"}
+            inert={tab !== "checkins"}
+          >
             <Suspense fallback={<PanelFallback />}>
               <CheckinsPanel
                 checkins={ops.checkins}
                 onRefresh={reload}
                 intent={navigationIntent?.target === "checkins" ? navigationIntent : null}
+                onNavigate={handleNavigate}
               />
             </Suspense>
           </div>
         ) : null}
         {visitedTabs.has("scan") ? (
-          <div style={{ display: show("scan") }} aria-hidden={tab !== "scan"} inert={tab !== "scan"}>
+          <div className="panel-host" hidden={tab !== "scan"} aria-hidden={tab !== "scan"} inert={tab !== "scan"}>
             <Suspense fallback={<PanelFallback />}>
-              <ScanPanel onRefresh={reload} />
+              <ScanPanel onRefresh={reload} onNavigate={handleNavigate} />
             </Suspense>
           </div>
         ) : null}
         {visitedTabs.has("notifications") ? (
           <div
-            style={{ display: show("notifications") }}
+            className="panel-host"
+            hidden={tab !== "notifications"}
             aria-hidden={tab !== "notifications"}
             inert={tab !== "notifications"}
           >
@@ -233,7 +248,12 @@ function App() {
           </div>
         ) : null}
         {visitedTabs.has("settings") ? (
-          <div style={{ display: show("settings") }} aria-hidden={tab !== "settings"} inert={tab !== "settings"}>
+          <div
+            className="panel-host"
+            hidden={tab !== "settings"}
+            aria-hidden={tab !== "settings"}
+            inert={tab !== "settings"}
+          >
             <Suspense fallback={<PanelFallback />}>
               {system.status ? (
                 <SettingsPanel status={system.status} onDone={reload} dialogEpoch={dialogEpoch} />

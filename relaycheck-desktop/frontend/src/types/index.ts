@@ -1,35 +1,14 @@
-export type LineIconName =
-  | "dashboard"
-  | "channels"
-  | "sites"
-  | "accounts"
-  | "checkins"
-  | "balances"
-  | "notifications"
-  | "scan"
-  | "settings"
-  | "success"
-  | "warning"
-  | "danger"
-  | "info";
+import type { ActionCenter, UsageOverview } from "@/types/dashboard";
 
-export type TabKey =
-  | "dashboard"
-  | "channels"
-  | "sites"
-  | "accounts"
-  | "checkins"
-  | "balances"
-  | "notifications"
-  | "scan"
-  | "settings";
-
-export type NavItem = {
-  key: TabKey;
-  label: string;
-  icon: LineIconName;
-  description: string;
-};
+export type {
+  ActionCenter,
+  ActionItem,
+  ActionSample,
+  UsageAccountItem,
+  UsageOverview,
+  UsageSiteItem,
+} from "@/types/dashboard";
+export type { LineIconName, NavigationIntent, NavItem, TabKey } from "@/types/navigation";
 
 export type Summary = {
   localNewApiCount: number;
@@ -142,32 +121,23 @@ export type SchedulerJobStatus = {
   updatedAt?: string;
 };
 
-export type ActionCenter = {
-  generatedAt: string;
-  overall: string;
-  items: ActionItem[];
+export type DashboardOpsOverview = {
+  checkins: CheckinStatus;
+  notifications: NotificationPage;
+  diagnostics: SystemDiagnostics;
+  actionCenter: ActionCenter;
 };
 
-export type ActionItem = {
-  id: string;
-  priority: number;
-  level: "success" | "info" | "warning" | "danger" | string;
-  category: string;
-  title: string;
-  description: string;
-  impact?: string;
-  count: number;
-  target: TabKey;
-  filter?: string;
-  action: string;
-  recommendedAction?: string;
-  samples?: ActionSample[];
+export type DashboardInventoryOverview = {
+  channels: ImportedChannel[];
+  sites: UpstreamSite[];
+  accountSummary: AccountSummary;
 };
 
-export type ActionSample = {
-  label: string;
-  entityType?: "site" | "account" | "channel" | string;
-  entityId?: string;
+export type DashboardModelUsageOverview = {
+  model: ModelOverview;
+  pricing: ModelPricingOverview;
+  usage: UsageOverview;
 };
 
 export type DetailDrawerKind = "account" | "channel" | "site";
@@ -496,7 +466,6 @@ export type Account = {
   lastCheckinAt?: string;
   lastCheckinStatus?: string;
   lastCheckinMessage?: string;
-  browserProfilePath?: string;
   lastLoginAt?: string;
   lastValidatedAt?: string;
   cookieExpiryAt?: string;
@@ -565,41 +534,15 @@ export type AccountSearchIndexItem = {
   searchText: string;
 };
 
-export type UsageAccountItem = {
-  accountId: string;
-  accountName: string;
-  siteId: string;
-  siteName: string;
-  balance?: number;
-  previousBalance?: number;
-  balanceDelta?: number;
-  unit: string;
-  estimatedDailyUse?: number;
-  lowBalance: boolean;
-  trend: string;
-  lastSnapshotAt?: string;
-  previousSnapshotAt?: string;
+export type AccountSiteSearchItem = {
+  upstreamSiteId: string;
+  upstreamSiteName: string;
+  upstreamSiteBaseUrl: string;
 };
 
-export type UsageSiteItem = {
-  siteId: string;
-  siteName: string;
-  accountCount: number;
-  lowBalanceCount: number;
-  decliningCount: number;
-  balanceByUnit: Record<string, number>;
-  estimatedDailyUse: Record<string, number>;
-};
-
-export type UsageOverview = {
-  generatedAt: string;
-  accountCount: number;
-  siteCount: number;
-  lowBalanceCount: number;
-  decliningCount: number;
-  estimatedDailyUse: Record<string, number>;
-  sites: UsageSiteItem[];
-  accounts: UsageAccountItem[];
+export type AccountSiteSearchResult = {
+  items: AccountSiteSearchItem[];
+  truncated: boolean;
 };
 
 export type NotificationItem = {
@@ -888,7 +831,6 @@ export type BrowserLoginOpenResponse = {
   loginUrlConfidence?: number;
   loginUrlReason?: string;
   debugPort?: number;
-  profilePath?: string;
 };
 
 export type BulkBrowserSaveResponse = {
@@ -953,25 +895,4 @@ export type GlobalApiError = {
   url: string;
   method: string;
   occurredAt: number;
-};
-
-export type NavigationIntent = {
-  target: TabKey;
-  sourceStatus?: string;
-  channelKind?: string;
-  accountStatus?: string;
-  checkinStatus?: string;
-  siteHealth?: string;
-  siteKind?: string;
-  /** Prefer accounts belonging to this upstream site (client or server filter). */
-  upstreamSiteId?: string;
-  unreadOnly?: boolean;
-  query?: string;
-  /**
-   * IA-2: sites and accounts are merged into one tab. When set, the merged
-   * "站点与账号" panel opens on its "全部账号" subview instead of the
-   * site-centric master-detail. Legacy intents targeting the old accounts tab
-   * are rewritten to `{ target: "sites", accountsView: "all" }`.
-   */
-  accountsView?: "all";
 };
