@@ -3,7 +3,7 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-17 (review follow-ups: format/budget/action-center/usage/SSRF/site truncate)
+**Last updated:** 2026-07-17 (07-17 full P1-P3 optimization, dependency hardening, release package verified locally)
 
 ---
 
@@ -11,9 +11,30 @@ Read this first, then `CLAUDE.md` for architecture.
 
 1. [x] **Commit + push FE-4/BE-2** — 5147d2b already on SSH main.
 2. [x] **2026-07-16 review follow-ups (2026-07-17)** — Prettier CI; Action Center COUNT batch; usage per-account window; search-index cap; list Deprecation; SSRF resolve+redirect pin; site truncate UI; bundle budget CI; runbook token ACL. Local Go still 1.26.4 (release wants 1.26.5).
-3. [ ] **Optional re-release** — upgrade Go to 1.26.5 then verify-release + package-release.
+3. [x] **Optional re-release** — Go 1.26.5 + Node 22.23.1 + npm 10.9.8 package created and verified; final dirty verification zip SHA256 `221d99b32f5e7e1aa51e1d4d9e016274347c9e0753deaa1f314a65701cbd8a66`.
+4. [x] **Continue frontend coverage** — floor is now **53/45/40/54** and current coverage is **54.99/46.36/42.28/56.11**; 44 files / 309 tests.
+5. [x] **2026-07-17 review S1/P2/P3** — FTS/indexes, channel owner, usage limits, Action Center lazy samples, Windows DACL, CSP, dashboard aggregation, observability and CI hardening completed. See `docs/full-stack-code-review-optimization-2026-07-17.md`.
+6. [ ] **External measurement only** — collect representative RUM/startup waterfall and API p95 after deployment; local synthetic results cannot prove the <2s / -50% production targets.
 
 **已完成（勿重做）**
+
+- [x] **P1-P3 close-out + dependency/release hardening (2026-07-17, uncommitted)**
+  - Go module baseline 1.25.0; `golang.org/x/sys` 0.35.0→0.44.0 and vendor refreshed; `govulncheck@v1.5.0` reports no vulnerabilities.
+  - Frontend floor 53/45/40/54; 44 files / 309 tests; actual 54.99/46.36/42.28/56.11. `AccountCardEditor` behavior coverage added.
+  - Full `verify-release.ps1 -BrowserPort 5174` passed, including Go test/vet, build/audit/vuln scan, binary health and all browser smoke suites.
+  - Exact-toolchain dirty package verified: Go 1.26.5, Node 22.23.1, npm 10.9.8; manifest/source inputs/internal checksums/zip sidecar all pass.
+
+- [x] **2026-07-17 review S0 + business result hardening (uncommitted)**
+  - FE: AccountDetail 登录态测试端点修为 `/test-login` 并补点击请求断言；coverage floor 提至 **50/45/35/50**。
+  - SSRF: 初始目标与 redirect 均保存已解析 IP，DialContext 仅拨已验证地址；allowLocal 只放宽本机目标策略，不再让远端域名绕过 pin；rebinding 回归测试已覆盖。
+  - Public contract: health DB 错误、browser profile 绝对路径、账号验证上游 body、browser/batch/checkin/balance/task/scheduler/proxy raw error 全部收敛为稳定文案；日志只留 operation/entity/causeType。
+  - Import: accounts domain 增加 path/format/upstream-auth/upstream-unavailable/storage typed errors；SQLite 损坏不再误报路径越界，NewAPI 401/403 与网络/5xx 分开，响应不拼接上游 body。
+  - Gates: `go vet` PASS；Go internal **1071 passed**；core **457 passed / 56.3%**；frontend **36 files / 289 tests**；coverage **52.36/47.72/38.58/53.54**；format/lint/tsc/build/budget/audit 全绿，audit 0 vulnerabilities。
+
+- [x] **P1 coverage + accounts import error contract (2026-07-17, uncommitted)**
+  - FE: `useAccountsPage` mount/disabled requests, `useChannelActions` refresh/seed and `useSiteAccounts` selected/all-site boundaries; explicit regression guards against full `/api/accounts` fetch. DialogShell focus/scroll behavior, 2FA guide, task progress, account diagnostics and Settings populated states now have contracts. Frontend coverage **41% → 52.36% statements**；289 tests.
+  - BE: `writePublicError` logs request metadata plus error type (never a potentially secret upstream payload) while four account import handlers return stable Chinese public messages (SQLite/Admin API/legacy config/Chrome CSV). `import_error_contract_test.go` proves no source path, SQL or token fragments reach the response. Encrypted backup handlers remain protected by existing 5xx `writeError` redaction.
+  - Gates: Go internal PASS; core **56.3%**; frontend format/lint/tsc/tests/coverage/build/budget PASS.
 
 - [x] **2026-07-16 full-stack review follow-ups (2026-07-17)** — 见 
   - FE-A Prettier 3 文件；FE-E 站点 truncated 提示；FE-C Insights 标明当前页
@@ -68,7 +89,7 @@ Read this first, then `CLAUDE.md` for architecture.
 
 **Git/remote 备忘**
 
-当前 committed `HEAD` 与 SSH 远端 `main` 均为 `24d9ed4`。不要因为本地 stale `origin/main` 显示 `ahead 14` 就重复 push；后续确需发布时仍使用 SSH 别名远端，勿依赖 HTTPS + 7897。本 `HANDOFF.md` 状态修正若未提交，属于本地文档收尾，不代表产品代码未发布。
+当前 committed `HEAD` 与 SSH 远端 `main` 基线均为 `1b95b0d`。不要因为本地 stale `origin/main` 而重复 push；后续确需发布时先 `git ls-remote` / fetch 核对，再使用 SSH 别名远端，勿依赖 HTTPS + 7897。当前 07-17 S0/P1 改动尚未 commit/push。
 
 ```powershell
 cd E:\zidqiandao\relaycheck-desktop
@@ -80,7 +101,7 @@ git push "ssh://git@github.com-obsidian/xvyimu/relaycheck-desktop.git" main
 ## Current state
 
 Layout optimization **alpha** is complete; **beta MVP (IA-1 master-detail)**, **IA-2** (accounts tab physically merged into 站点与账号), **#8.3 channel-sync UI**, **#9 Phase 2 bulk re-login**, **#8.4/#8.2**, **Action Center site sample deep-links**, **#9 R2 session indicator**, and **2026-07-12 frontend optimization + S0–S2 review** are on branch `main`.  
-**Committed local/remote tip:** `24d9ed4` (SSH remote synced). **Committed/remote tip:** `5147d2b` (FE-4/BE-2 + review follow-ups). Working tree should be clean after push. Optional next: re-release (note Go 1.26.4 vs 1.26.5).
+**Committed local/remote baseline:** `1b95b0d` (SSH remote synced before this local work). Working tree contains the uncommitted 07-17 P1-P3 implementation. Exact-toolchain release verification and dirty package verification both pass; a clean release still requires commit/push authorization.
 
 ### P2 三项落地 (2026-07-13) — done
 

@@ -12,9 +12,9 @@
 
 ### Prerequisites
 
-- Go 1.26.5+ for release builds (`go.mod` retains the Go 1.24 language baseline)
-- Node.js 20+
-- npm
+- Go 1.26.5+ for release builds (`go.mod` requires Go 1.25.0+)
+- Node.js 22.23.1
+- npm 10.9.8
 
 ### Build & Run
 
@@ -133,6 +133,8 @@ See `CLAUDE.md` and `internal/core/PACKAGE_INDEX.md` for the full map.
 | Notifications | `/api/notifications`, `/api/notifications/page`, `/api/notifications/mark-all-read`, `/api/notifications/clear-read`, `/api/notifications/mark-read`, `/api/notifications/trim` |
 | Local NewAPI | `/api/local-newapi`, `/api/local-newapi/scan`, `/api/local-newapi/import-from-sqlite`, `/api/local-newapi/import-from-admin-api`, `/api/local-newapi/{id}` |
 | Health | `/api/health` (unauthenticated) |
+
+`POST /api/accounts/delete-unsupported-checkins` is a two-step destructive contract. A preview request sends `dryRun: true` and receives a five-minute, one-time `previewId`; confirmation sends only that `previewId`. Empty/legacy confirmation bodies return 400, expired/replayed/stale previews return 409, and preview-capacity exhaustion returns 429. These failures never reselect the current top candidates. External callers must migrate in preview -> confirm order.
 
 ## Commands
 

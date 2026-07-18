@@ -6,7 +6,7 @@ Guidance for Claude Code working in this repository.
 
 **RelayCheck Desktop** — local operations console for NewAPI/OneAPI/Sub2API relay sites. Single-binary Go backend + embedded React/Vite frontend + SQLite. Runs as a desktop app on `http://127.0.0.1:3001`.
 
-- Go 1.24+, `net/http` server, `modernc.org/sqlite` (no cgo)
+- Go 1.25+, release toolchain 1.26.5, `net/http` server, `modernc.org/sqlite` (no cgo)
 - React 19 + Vite, embedded via `//go:embed frontend/dist`
 - Single-user local tool, no login layer (`requireSession` is passthrough)
 
