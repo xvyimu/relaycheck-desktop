@@ -66,7 +66,24 @@ Writes gitignored JSON under `docs/perf/samples/`.
 
 ## Acceptance for closing this item
 
-- [ ] Operator host identified  
-- [ ] Cold start waterfall recorded with commit SHA  
-- [ ] API p95 table for ≥4 endpoints with N≥50  
-- [ ] Results stored outside secrets; HANDOFF links to them  
+- [x] Operator host identified — local machine `姜佳` (Win 10.0.26100, 24 CPU, 23.2 GB RAM) treated as representative **operator** host  
+- [ ] Cold start waterfall recorded with commit SHA (process spawn → first health only; no UI first-interactive timing yet)  
+- [x] API p95 table for ≥4 endpoints with N≥50 — see below  
+- [x] Results stored under gitignored `docs/perf/samples/local-api-p95-*.json`; HANDOFF links  
+
+## Local representative sample (2026-07-18)
+
+- **Commit:** `fd5a87a`  
+- **DB size:** ~1.1 MB (`data/relaycheck.db`)  
+- **Binary:** `dist/relaycheck.exe` (unsigned; packaging path, not Store)  
+- **Sample file (gitignored):** `docs/perf/samples/local-api-p95-20260718-195231.json`  
+
+| endpoint | n | errors | p50 ms | p95 ms | avg ms |
+|---|---:|---:|---:|---:|---:|
+| `/api/health` | 50 | 0 | 41 | 139 | 61 |
+| `/api/system/status` | 50 | 0 | 35 | 58 | 45 |
+| `/api/accounts/page?limit=50` | 50 | 0 | 46 | **496** | 91 |
+| `/api/checkins/status` | 50 | 0 | 31 | 41 | 33 |
+| `/api/dashboard/ops` | 50 | 0 | 35 | 55 | 38 |
+
+**Caveats:** loopback only; warm process after spawn; small DB; not multi-host / not third-party browser RUM. `accounts-page` p95 spike likely cold-cache / page assembly — re-measure on larger inventory before claiming production SLO.

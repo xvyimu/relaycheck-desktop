@@ -22,11 +22,11 @@ Read this first, then `CLAUDE.md` for architecture.
 - AccountCard / AccountForm / AccountInsights / BulkRelogin still use `api()` + `accountApi` URL builders; `accountApi.page/postAction/remove` helpers exist for incremental migration.
 - `useApi` path-string consumers (system status) can later take constants from `systemApi`.
 
-**Still external / needs materials or real host:**
+**Still external / needs materials:**
 
-- Authenticode / store signing materials — scaffold: `scripts/sign-release.ps1` + `docs/deploy/code-signing-readiness-2026-07-18.md` (**blocked without PFX**)
-- Production RUM + multi-host API p95 — plan: `docs/perf/production-rum-collection-plan-2026-07-18.md` (local sampler only)
-- Full schema FK migration / historical orphan **cleanup** — **deferred** (precheck only: `scripts/precheck-site-orphans.ps1`); cascade delete + UI are live (`docs/sop/relaycheck-site-delete-cascade-2026-07-18.md`)
+- Authenticode signing — scaffold ready (`scripts/sign-release.ps1`, signtool present). **Blocked:** `RELAYCHECK_SIGN_PFX` + password unset. Do not invent certs.
+- Multi-host / larger-DB RUM — local representative API p95 captured on this operator host (`docs/perf/production-rum-collection-plan-2026-07-18.md` + gitignored `docs/perf/samples/local-api-p95-20260718-195231.json`). Cold-start UI waterfall + multi-machine still open.
+- Full schema FK migration / historical orphan **cleanup** — **deferred** (precheck + dry-run SQL only; local dry-run shows **18** orphan `checkin_logs`). Cascade delete + UI are live.
 
 **Do not without explicit confirm:** DB migration, delete `data/*`, orphan cleanup SQL that mutates, force-push, cloud deploy, real upstream checkin blasts.
 ---

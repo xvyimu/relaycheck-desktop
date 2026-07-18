@@ -1,7 +1,7 @@
 # Code signing readiness (Authenticode)
 
 - **Date:** 2026-07-18
-- **Status:** **Blocked on materials** — no PFX/cert env present in this environment (`RELAYCHECK_SIGN_CERT` / `RELAYCHECK_SIGN_PFX` unset; no package signing script yet).
+- **Status:** **Blocked on materials** — `signtool.exe` + `scripts/sign-release.ps1` ready; `RELAYCHECK_SIGN_PFX` / password still unset (2026-07-18 recheck). Binary may exist at `dist\relaycheck.exe` after local build but remains **unsigned**.
 
 ## Goal
 
