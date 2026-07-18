@@ -1,4 +1,4 @@
-# RelayCheck Desktop — Session Close (2026-07-18 evening)
+# RelayCheck Desktop — Session Close (2026-07-18 evening, final)
 
 ## Snapshot
 
@@ -6,9 +6,9 @@
 |---|---|
 | Path | `E:\zidqiandao\relaycheck-desktop` |
 | Branch | `main` = `origin/main` |
-| HEAD | `3cadcaf` |
+| HEAD | `d702383` |
 | Parent baseline | `081285c` (cascade delete service already on main) |
-| Data | `data/` preserved; orphan cleanup backup under `data/backups/pre-orphan-cleanup-20260718-195632/` |
+| Data | `data/` preserved; backups: `pre-orphan-cleanup-20260718-195632/`, `pre-fk-phase-ab-*/` |
 
 ## Delivered
 
@@ -23,10 +23,23 @@
 
 | SHA | Message |
 |---|---|
-| `fd5a87a` | feat(relaycheck): site delete UI, cache invalidate, orphan dry-run |
-| `4b51187` | docs(relaycheck): local representative API p95 + signing recheck |
-| `9d19352` | docs(relaycheck): record local orphan checkin_logs cleanup |
-| `3cadcaf` | docs(relaycheck): hard-block signing after exhaustive local cert search |
+| `fd5a87a` | feat: site delete UI, cache invalidate, orphan dry-run |
+| `4b51187` | docs: local representative API p95 + signing recheck |
+| `9d19352` | docs: record local orphan checkin_logs cleanup |
+| `3cadcaf` | docs: hard-block signing after exhaustive local cert search |
+| `5ce688d` | docs: evening session close handoff and archive |
+| `e3e50e9` | feat: accountApi residual migrate + cold-start sampler |
+| `2d824f3` | docs: SQLite full-table FK migration design |
+| `d702383` | **feat: implement SQLite FK Phase A+B rebuild** |
+
+## FK Phase A+B (implemented, operator-approved)
+
+- `internal/core/db_fk.go`: idempotent rebuild of accounts/logs/balances/pricing with ON DELETE CASCADE; gate `schema.fk_phase="2"`; orphan scrub before rewrite; FTS drop/recreate inside same TX.
+- `deleteAccount` now transactional cascade (logs+balances) + cache invalidate.
+- Fresh-install `CREATE TABLE` in `migrate()` carries the same FKs.
+- Local DB migrated after backup: `foreign_key_check` empty; logs 515→487 (28 account-orphans scrubbed); accounts 25 kept.
+- Tests: `db_fk_test.go` — fresh install, legacy no-FK upgrade, account/site delete under FK. Full `./internal/core` green.
+- **Deferred:** Phase C (channel/instance weak FKs, SET NULL semantics).
 
 ## Verification run this session
 
@@ -41,9 +54,9 @@
 | Item | Why |
 |---|---|
 | Authenticode Valid signature | No Code Signing PFX/cert on machine |
-| Multi-host / large-DB RUM + UI waterfall | Needs more hosts / larger data / cold UI marks |
-| Full SQLite FK rebuild migration | Product risk; deferred |
-| Optional typed-API call-site leftovers | Non-blocking polish |
+| Multi-host / large-DB RUM + UI first-interactive | Needs more hosts / larger data / UI marks (process spawn→health done) |
+| FK Phase C (channel/instance weak links) | Product SET NULL semantics undecided |
+| Optional `useApi` path-string leftovers | Non-blocking polish |
 
 ## Hygiene at close
 

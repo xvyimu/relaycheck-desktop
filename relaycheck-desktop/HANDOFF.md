@@ -3,28 +3,28 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-**Last updated:** 2026-07-18 (SQLite FK Phase A+B implemented + local migrate)  
-**HEAD:** see `git rev-parse --short HEAD` on `main` / `origin/main`
+**Last updated:** 2026-07-18 final close — FK Phase A+B + full evening batch  
+**HEAD:** `d702383` on `main` / `origin/main`  
 **Worktree policy:** local `dist/` / `frontend/dist/` / `frontend/coverage/` may be deleted anytime (gitignored). Never delete `data/`.
 
 ---
 
 ## TODO (next session)
 
-**Code track for this product loop is closed.** Next work is external materials or optional residual polish.
+**Code track for this product loop is closed.** Only external materials / optional residual polish remain.
 
 **Optional residual code (non-blocking):**
 
-- `useApi` path-string consumers can later take constants from `systemApi` (accounts residual `api()` call sites migrated to `accountApi.create/update/postAction/postBulk/remove`).
-- Desktop **UI** first-interactive timing still open (process spawn→health is done via `scripts/sample-cold-start.ps1`).
+- `useApi` path-string consumers can later take constants from `systemApi`.
+- Desktop **UI** first-interactive timing (process spawn→health is done via `scripts/sample-cold-start.ps1`).
 
 **Still external / needs materials:**
 
 | Item | Status | Unlock |
 |---|---|---|
-| Authenticode | **Hard block** — no PFX on disk, no Code Signing EKU in stores | Operator places Code Signing PFX + sets `RELAYCHECK_SIGN_PFX` / `_PASSWORD`, then `scripts/sign-release.ps1` |
+| Authenticode | **Hard block** — no PFX / no Code Signing EKU | Operator sets `RELAYCHECK_SIGN_PFX` + password, then `scripts/sign-release.ps1` |
 | Multi-host / large-DB RUM | Local API p95 + process cold-start done | Larger inventory + multi-machine + UI first-interactive |
-| Full SQLite FK table rebuild | **Phase A+B live** (`schema.fk_phase=2`) | Phase C (channel weak FKs) still deferred. Plan: `docs/sop/relaycheck-sqlite-fk-migration-plan-2026-07-18.md` |
+| FK Phase C | Deferred | Explicit product confirm (channel/instance weak FKs SET NULL) |
 
 **Do not without explicit confirm:** Phase C FK, delete `data/*`, force-push, cloud deploy, real upstream checkin blasts, minting self-signed “production” certs.
 
@@ -34,12 +34,16 @@ Read this first, then `CLAUDE.md` for architecture.
 
 | Commit | Summary |
 |---|---|
-| `fd5a87a` | Site delete UI (confirm + cascade copy) + read-cache invalidate + orphan precheck scripts/SOP |
-| `4b51187` | Local representative API p95 (N=50) recorded in RUM plan |
-| `9d19352` | Local cleanup of 18 orphan `checkin_logs` after backup + confirm |
-| `3cadcaf` | Signing hard-block after exhaustive cert/PFX search |
+| `fd5a87a` | Site delete UI + read-cache invalidate + orphan precheck |
+| `4b51187` | Local representative API p95 (N=50) |
+| `9d19352` | Local cleanup of 18 orphan `checkin_logs` |
+| `3cadcaf` | Signing hard-block after exhaustive cert search |
+| `5ce688d` | Evening session close archive |
+| `e3e50e9` | accountApi residual migrate + cold-start sampler |
+| `2d824f3` | SQLite FK migration design |
+| `d702383` | **FK Phase A+B rebuild implemented + local migrate** |
 
-**Also earlier same day (already on main):** cascade delete service (`081285c`), typed APIs, planning archive, security loops — see Done history below and `docs/archives/session-close-2026-07-18.md` + `session-close-2026-07-18-evening.md`.
+**Also earlier same day:** cascade delete service (`081285c`), typed APIs, planning archive, security loops — `docs/archives/session-close-2026-07-18.md` + `session-close-2026-07-18-evening.md`.
 
 ### Site delete
 
