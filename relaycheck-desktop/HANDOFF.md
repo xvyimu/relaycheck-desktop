@@ -26,7 +26,7 @@ Read this first, then `CLAUDE.md` for architecture.
 
 - Authenticode signing — scaffold ready (`scripts/sign-release.ps1`, signtool present). **Blocked:** `RELAYCHECK_SIGN_PFX` + password unset. Do not invent certs.
 - Multi-host / larger-DB RUM — local representative API p95 captured on this operator host (`docs/perf/production-rum-collection-plan-2026-07-18.md` + gitignored `docs/perf/samples/local-api-p95-20260718-195231.json`). Cold-start UI waterfall + multi-machine still open.
-- Full schema FK migration / historical orphan **cleanup** — **deferred** (precheck + dry-run SQL only; local dry-run shows **18** orphan `checkin_logs`). Cascade delete + UI are live.
+- Full schema FK migration — still deferred. Local historical orphan **cleanup done** (18 `checkin_logs`; backup under `data/backups/pre-orphan-cleanup-20260718-195632/`; precheck now 0). Cascade delete + UI live.
 
 **Do not without explicit confirm:** DB migration, delete `data/*`, orphan cleanup SQL that mutates, force-push, cloud deploy, real upstream checkin blasts.
 ---

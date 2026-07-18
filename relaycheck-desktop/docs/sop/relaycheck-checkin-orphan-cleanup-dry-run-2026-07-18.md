@@ -1,7 +1,7 @@
 # checkin_logs orphan cleanup — dry-run only
 
 - **Date:** 2026-07-18
-- **Status:** Dry-run SQL shipped. **No mutating cleanup executed.**
+- **Status:** Dry-run SQL shipped. **Local cleanup executed 2026-07-18** after explicit operator confirm + file backup (see “Executed cleanup” below).
 
 ## Context
 
@@ -34,7 +34,19 @@ Lists summary count, up to 50 sample rows (`started_at`/`finished_at`), and dist
 
 Local dry-run snapshot (2026-07-18, readonly): **18** orphan logs for **1** missing `upstream_site_id`; sample JSON under gitignored `docs/perf/samples/orphan-checkin-logs-dry-run-2026-07-18.json` when regenerated.
 
-## Mutating cleanup (blocked until explicit confirm)
+## Executed cleanup (local data only, 2026-07-18)
+
+Operator authorized: cleanup of 18 orphan `checkin_logs` only.
+
+1. Backup dir (gitignored under `data/`):  
+   `data/backups/pre-orphan-cleanup-20260718-195632/` (`relaycheck.db` + shm/wal copies)
+2. Transactional DELETE matching dry-run predicate.
+3. Result: `before=18`, `deleted=18`, `after=0`, remaining `checkin_logs=515`.
+4. Full precheck after: all five tables `orphan_rows=0`.
+
+Re-run precheck anytime: `scripts/precheck-site-orphans.ps1` / Python readonly.
+
+## Mutating cleanup procedure (for other hosts)
 
 1. Settings → 立即备份，或 copy `data\relaycheck.db*`.
 2. Operator says clearly: allow cleanup of orphan checkin_logs only.
