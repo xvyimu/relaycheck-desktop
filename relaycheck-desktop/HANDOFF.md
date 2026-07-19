@@ -3,10 +3,10 @@
 Authoritative handoff document for RelayCheck Desktop. Updated each session.
 Read this first, then `CLAUDE.md` for architecture.
 
-> **PROJECT ENDED 2026-07-19.** Code track closed (last feature `42f21c8`, closeout `0d400d4`). Reopen keys: PFX 签名材料 / 代表主机 RUM / 「批准 Phase C」。Full closeout: `docs/archives/PROJECT-CLOSEOUT-2026-07-19.md`.
+> **PROJECT ENDED 2026-07-19.** Code track closed (last feature `42f21c8`, closeout `0d400d4`). Reopen keys: PFX 签名材料 / 代表主机 RUM / 「批准 Phase C」。Full closeout: `docs/archives/PROJECT-CLOSEOUT-2026-07-19.md`. Post-close audit: `docs/archives/full-audit-optimal-path-2026-07-19.md`.
 
-**Last updated:** 2026-07-19 project closeout  
-**HEAD:** `0d400d4` on `main` / `origin/main`  
+**Last updated:** 2026-07-19 full audit + proxy public-URL redaction  
+**HEAD:** local worktree may be ahead of `origin/main` with audit hardening; feature closeout remains `0d400d4` / `42f21c8`  
 **Worktree policy:** local `dist/` / `frontend/dist/` / `frontend/coverage/` may be deleted anytime (gitignored). Never delete `data/`.
 
 ---
@@ -15,7 +15,7 @@ Read this first, then `CLAUDE.md` for architecture.
 
 **Code track for this product loop is closed.** Only external materials / optional residual polish remain.
 
-**Optional residual code:** **done this pass** — `useApi` consumers now take `systemApi.statusPath` / `dashboardApi.*Path`; UI first-interactive instrumented (`lib/firstInteractive.ts`, local mark + localStorage). Remaining polish: none mandatory.
+**Optional residual code:** **done** — path owners + first-interactive; **2026-07-19 audit** confirmed 5xx client messages already scrubbed in `writeError`; public `NetworkProxyStatus` no longer JSON-emits full proxy `url` (edit form still uses settings `network.proxy`).
 
 **Still external / needs materials:**
 
@@ -24,6 +24,7 @@ Read this first, then `CLAUDE.md` for architecture.
 | Authenticode | **Hard block** — no PFX / no Code Signing EKU | Operator sets `RELAYCHECK_SIGN_PFX` + password, then `scripts/sign-release.ps1` |
 | Multi-host / large-DB RUM | Local p95 + cold-start + **UI first-interactive mark shipped** | Representative extra hosts + larger data volume（外部材料） |
 | FK Phase C | Deferred | Explicit product confirm (channel/instance weak FKs SET NULL) |
+| Host Go install | Prefer **1.26.5** (`GOTOOLCHAIN=go1.26.5` works) for `verify-release.ps1` | Install/align toolchain |
 
 **Do not without explicit confirm:** Phase C FK, delete `data/*`, force-push, cloud deploy, real upstream checkin blasts, minting self-signed “production” certs.
 

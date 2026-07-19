@@ -80,7 +80,8 @@ export type AutoStartStatus = {
 
 export type NetworkProxyStatus = {
   enabled: boolean;
-  url: string;
+  /** Omitted/empty on public status APIs; edit form uses NetworkProxyConfig.url. */
+  url?: string;
   urlMasked: string;
   bypassLocal: boolean;
 };

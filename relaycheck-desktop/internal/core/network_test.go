@@ -77,6 +77,62 @@ func TestValidateNetworkProxyConfigAcceptsLocalHTTPProxy(t *testing.T) {
 	}
 }
 
+func TestNetworkProxyStatusJSONOmitsFullURL(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	app.networkProxy.Set(NetworkProxyConfig{
+		Enabled:     true,
+		URL:         "http://127.0.0.1:7897",
+		BypassLocal: true,
+	})
+
+	status := app.networkProxyStatus()
+	raw, err := json.Marshal(status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := decoded["url"]; ok {
+		t.Fatalf("public NetworkProxyStatus must not include url field: %s", raw)
+	}
+	if got, _ := decoded["urlMasked"].(string); got != "http://127.0.0.1:7897" {
+		t.Fatalf("urlMasked = %q, want full masked host URL", got)
+	}
+	if enabled, _ := decoded["enabled"].(bool); !enabled {
+		t.Fatalf("enabled = false, want true")
+	}
+}
+
+func TestSystemStatusProxyJSONOmitsFullURL(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	app.networkProxy.Set(NetworkProxyConfig{
+		Enabled:     true,
+		URL:         "http://proxy.example:8080",
+		BypassLocal: true,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system/status", nil)
+	rec := httptest.NewRecorder()
+	app.handleSystemStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, `"url":"http://proxy.example:8080"`) || strings.Contains(body, `"url": "http://proxy.example:8080"`) {
+		t.Fatalf("system status leaked full proxy url: %s", body)
+	}
+	if !strings.Contains(body, `"urlMasked":"http://proxy.example:8080"`) && !strings.Contains(body, `"urlMasked": "http://proxy.example:8080"`) {
+		// maskProxyURL keeps host:port for non-userinfo URLs
+		if !strings.Contains(body, "urlMasked") {
+			t.Fatalf("expected urlMasked in system status: %s", body)
+		}
+	}
+}
+
 func TestValidateNetworkProxyConfigRejectsMissingHost(t *testing.T) {
 	config := NetworkProxyConfig{
 		Enabled: true,

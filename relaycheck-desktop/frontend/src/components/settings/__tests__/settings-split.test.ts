@@ -29,7 +29,6 @@ describe("S2 FE-7 panel contracts", () => {
         message: "ok",
         proxy: {
           enabled: true,
-          url: "http://127.0.0.1:7897",
           urlMasked: "http://127.0.0.1:7897",
           bypassLocal: true,
         },

@@ -23,9 +23,12 @@ type NetworkProxyConfig struct {
 	BypassLocal bool   `json:"bypassLocal"`
 }
 
+// NetworkProxyStatus is the public/read view of proxy settings.
+// Full proxy URL stays out of JSON (json:"-"); clients only see urlMasked.
+// Editable full URL remains in system_settings network.proxy value_json.
 type NetworkProxyStatus struct {
 	Enabled     bool   `json:"enabled"`
-	URL         string `json:"url"`
+	URL         string `json:"-"`
 	URLMasked   string `json:"urlMasked"`
 	BypassLocal bool   `json:"bypassLocal"`
 }
