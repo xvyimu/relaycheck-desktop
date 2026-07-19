@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { accountApi, buildAccountsPageUrl } from "@/api/accounts";
+import { accountApi } from "@/api/accounts";
 import type { AccountPage } from "@/types";
 
 export { buildAccountsPageUrl } from "@/api/accounts";
