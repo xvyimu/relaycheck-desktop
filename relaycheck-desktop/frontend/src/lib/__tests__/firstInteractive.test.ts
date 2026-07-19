@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  markFirstInteractive,
-  readFirstInteractive,
-  resetFirstInteractiveForTest,
-} from "../firstInteractive";
+import { markFirstInteractive, readFirstInteractive, resetFirstInteractiveForTest } from "../firstInteractive";
 
 // vitest node 环境无 window/localStorage；提供最小 stub 验证存取闭环。
 function installWindowStub() {

@@ -19,10 +19,7 @@ export function markFirstInteractive(): number | null {
   }
   try {
     if (typeof window !== "undefined" && window.localStorage) {
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ ms, at: new Date().toISOString() }),
-      );
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ms, at: new Date().toISOString() }));
     }
   } catch {
     /* storage 拒绝写时静默 */

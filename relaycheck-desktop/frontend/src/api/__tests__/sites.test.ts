@@ -28,7 +28,14 @@ describe("sitesApi", () => {
   });
 
   it("get/detect 对 ID 编码", async () => {
-    const fetchMock = mockOk({ site: { id: "s" }, detection: {}, accounts: [], balanceSnapshots: [], checkinLogs: [], suggestions: [] });
+    const fetchMock = mockOk({
+      site: { id: "s" },
+      detection: {},
+      accounts: [],
+      balanceSnapshots: [],
+      checkinLogs: [],
+      suggestions: [],
+    });
     await sitesApi.get("site/a b");
     await sitesApi.detect("site/a b");
     expect(fetchMock).toHaveBeenCalledWith("/api/upstream-sites/site%2Fa%20b", {

@@ -43,10 +43,7 @@ describe("account API contract", () => {
     await accountApi.update("id/1", { displayName: "n2" });
     await accountApi.postBulk("bulk-open-browser-login", { limit: 5 });
     expect(fetchMock).toHaveBeenCalledWith("/api/accounts/page?limit=10", expect.objectContaining({}));
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/accounts/id%2F1/checkin",
-      expect.objectContaining({ method: "POST" }),
-    );
+    expect(fetchMock).toHaveBeenCalledWith("/api/accounts/id%2F1/checkin", expect.objectContaining({ method: "POST" }));
     expect(fetchMock).toHaveBeenCalledWith("/api/accounts/id%2F1", expect.objectContaining({ method: "DELETE" }));
     expect(fetchMock).toHaveBeenCalledWith("/api/accounts", expect.objectContaining({ method: "POST" }));
     expect(fetchMock).toHaveBeenCalledWith("/api/accounts/id%2F1", expect.objectContaining({ method: "PUT" }));

@@ -281,9 +281,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
             type="button"
             disabled={isBusy}
             aria-label={`为 ${account.displayName} 执行签到`}
-            onClick={() =>
-              void runAction("签到", () => accountApi.postAction(account.id, "checkin"))
-            }
+            onClick={() => void runAction("签到", () => accountApi.postAction(account.id, "checkin"))}
           >
             {accountActionButtonLabel("签到", busy)}
           </button>
@@ -477,9 +475,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
                   type="button"
                   disabled={isBusy}
                   aria-label={`为 ${account.displayName} 执行签到`}
-                  onClick={() =>
-                    void runAction("签到", () => accountApi.postAction(account.id, "checkin"))
-                  }
+                  onClick={() => void runAction("签到", () => accountApi.postAction(account.id, "checkin"))}
                 >
                   {accountActionButtonLabel("签到", busy)}
                 </Button>
@@ -489,9 +485,7 @@ export function AccountCard({ account, onDone, onOpenDetail }: AccountCardProps)
                 type="button"
                 disabled={isBusy}
                 aria-label={`刷新 ${account.displayName} 的余额`}
-                onClick={() =>
-                  void runAction("刷新余额", () => accountApi.postAction(account.id, "refresh-balance"))
-                }
+                onClick={() => void runAction("刷新余额", () => accountApi.postAction(account.id, "refresh-balance"))}
               >
                 {accountActionButtonLabel("刷新余额", busy)}
               </Button>

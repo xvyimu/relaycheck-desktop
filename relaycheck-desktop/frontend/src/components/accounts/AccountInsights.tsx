@@ -342,7 +342,9 @@ export function AccountInsights({
             type="button"
             onClick={async () => {
               setMessage("正在批量打开网页登录窗口…");
-              const result = await accountApi.postBulk<BulkBrowserOpenResponse>("bulk-open-browser-login", { limit: 5 });
+              const result = await accountApi.postBulk<BulkBrowserOpenResponse>("bulk-open-browser-login", {
+                limit: 5,
+              });
               setMessage(
                 `网页登录已打开/复用 ${result.opened} 个，失败 ${result.failed} 个。登录完成后点"批量保存已登录"。`,
               );
@@ -690,7 +692,9 @@ export function AccountInsights({
               type="button"
               onClick={async () => {
                 setMessage("正在用已保存密码重登…");
-                const result = await accountApi.postBulk<BulkPasswordLoginResponse>("bulk-password-login", { limit: 20 });
+                const result = await accountApi.postBulk<BulkPasswordLoginResponse>("bulk-password-login", {
+                  limit: 20,
+                });
                 setMessage(
                   `密码重登处理 ${result.processed} 个，成功 ${result.success} 个，失败 ${result.failed} 个。`,
                 );
