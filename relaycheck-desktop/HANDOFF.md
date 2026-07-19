@@ -5,8 +5,8 @@ Read this first, then `CLAUDE.md` for architecture.
 
 > **PROJECT ENDED 2026-07-19.** Code track closed (last feature `42f21c8`, closeout `0d400d4`). Reopen keys: PFX 签名材料 / 代表主机 RUM / 「批准 Phase C」。Full closeout: `docs/archives/PROJECT-CLOSEOUT-2026-07-19.md`. Post-close audit: `docs/archives/full-audit-optimal-path-2026-07-19.md`.
 
-**Last updated:** 2026-07-19 full audit + proxy public-URL redaction  
-**HEAD:** local worktree may be ahead of `origin/main` with audit hardening; feature closeout remains `0d400d4` / `42f21c8`  
+**Last updated:** 2026-07-19 release gate + package (unsigned)  
+**HEAD:** release gate commits on `main` after closeout `0d400d4` / feature `42f21c8`  
 **Worktree policy:** local `dist/` / `frontend/dist/` / `frontend/coverage/` may be deleted anytime (gitignored). Never delete `data/`.
 
 ---
@@ -25,6 +25,12 @@ Read this first, then `CLAUDE.md` for architecture.
 | Multi-host / large-DB RUM | Local p95 + cold-start + **UI first-interactive mark shipped** | Representative extra hosts + larger data volume（外部材料） |
 | FK Phase C | Deferred | Explicit product confirm (channel/instance weak FKs SET NULL) |
 | Host Go install | Prefer **1.26.5** (`GOTOOLCHAIN=go1.26.5` works) for `verify-release.ps1` | Install/align toolchain |
+| Node for package | Portable **v22.23.1** + npm **10.9.8** (host may be Node 24) | Put Node 22 first on PATH for `package-release.ps1` |
+
+**Local operator package (2026-07-19, unsigned):**  
+`dist/releases/relaycheck-desktop-1.1.0-cbaaedfaf225-20260719-032513.zip`  
+SHA256 `1c7b703bc0c74c3b054a31159653148de181ba114ff23ebd69224933b9a19ee5`  
+`verify-release.ps1` + `verify-package.ps1` passed on Go 1.26.5 / Node 22.23.1. Authenticode still **NotSigned** (no PFX).
 
 **Do not without explicit confirm:** Phase C FK, delete `data/*`, force-push, cloud deploy, real upstream checkin blasts, minting self-signed “production” certs.
 
